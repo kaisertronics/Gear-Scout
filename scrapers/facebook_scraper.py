@@ -7,6 +7,8 @@ Two modes:
                                               a list for the user to pick from
 """
 import json
+from contextlib import contextmanager
+import threading
 import logging
 import os
 import re
@@ -59,12 +61,80 @@ def _new_context(browser, playwright_instance=None):
     return context
 
 
+_session_lock = threading.Lock()
+
+
 def _save_session(context):
-    """Save browser cookies so the session persists across runs."""
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    """Save browser cookies so the session persists across runs. Several
+    Facebook scrapes can run at once, so writes are serialized and atomic
+    (temp file + rename) — a reader never sees a half-written file."""
     cookies = context.cookies()
-    SESSION_FILE.write_text(json.dumps(cookies, indent=2))
+    with _session_lock:
+        SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SESSION_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cookies, indent=2))
+        tmp.replace(SESSION_FILE)
     logger.info("Facebook session saved to %s", SESSION_FILE)
+
+
+# One Chromium per worker thread, reused for every Facebook scrape that
+# thread runs (see scrapers/runner.py) — launching a fresh browser for each
+# of 12+ Facebook sources was a big share of a run's time.
+_tls = threading.local()
+
+
+@contextmanager
+def fb_browser_session():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = _get_browser(pw, headless=True)
+        _tls.browser = browser
+        try:
+            yield
+        finally:
+            _tls.browser = None
+            browser.close()
+
+
+@contextmanager
+def _browser():
+    shared = getattr(_tls, "browser", None)
+    if shared is not None:
+        yield shared
+        return
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = _get_browser(pw, headless=True)
+        try:
+            yield browser
+        finally:
+            browser.close()
+
+
+def _wait_for(page, selector: str, timeout_ms: int = 8000):
+    """Continue as soon as `selector` appears (plus a short settle), instead
+    of always sleeping a fixed 3s. Missing selector (login wall, empty
+    results) just means we move on after the timeout."""
+    try:
+        page.wait_for_selector(selector, timeout=timeout_ms)
+        page.wait_for_timeout(400)
+    except Exception:
+        pass
+
+
+def _scroll_for_more(page, selector: str, times: int, step_px: int, max_wait_ms: int):
+    """Scroll `times` times, each time waiting only until more `selector`
+    elements have loaded (up to max_wait_ms), not a fixed pause."""
+    for _ in range(times):
+        before = len(page.query_selector_all(selector))
+        page.evaluate(f"window.scrollBy(0, {step_px})")
+        try:
+            page.wait_for_function(
+                "([sel, n]) => document.querySelectorAll(sel).length > n",
+                arg=[selector, before], timeout=max_wait_ms,
+            )
+        except Exception:
+            pass
 
 
 def _is_logged_in(page) -> bool:
@@ -235,8 +305,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
         )
 
     try:
-        with sync_playwright() as pw:
-            browser = _get_browser(pw, headless=True)
+        with _browser() as browser:
             context = _new_context(browser)
             page = context.new_page()
 
@@ -253,11 +322,11 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                     "with a 90s timeout: %s", url,
                 )
                 page.goto(url, wait_until="domcontentloaded", timeout=90000)
-            page.wait_for_timeout(3000)
+            _wait_for(page, 'div[role="article"]')
 
             # Check if we got redirected to login — session expired
             if "login" in page.url.lower() or page.query_selector('[data-testid="royal_login_button"]'):
-                browser.close()
+                context.close()
                 return ScrapeResult(
                     source_name=name, source_url=url, success=False,
                     error="Facebook session expired — redirected to login page.",
@@ -272,7 +341,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
             # Check if group requires membership
             join_btn = page.query_selector('[aria-label="Join group"], [data-testid="group-join-button"]')
             if join_btn:
-                browser.close()
+                context.close()
                 return ScrapeResult(
                     source_name=name, source_url=url, success=False,
                     error="Not a member of this Facebook group.",
@@ -284,27 +353,30 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                 )
 
             # Scroll to load posts
-            for _ in range(3):
-                page.evaluate("window.scrollBy(0, 1500)")
-                page.wait_for_timeout(1500)
+            _scroll_for_more(page, 'div[role="article"]', times=3, step_px=1500, max_wait_ms=1500)
 
             # Extract posts
             # FB group posts are in article elements or role="article" divs
-            posts = page.query_selector_all('div[role="article"]')
+            # One round trip for every post's text/links/image — reading
+            # them element by element was most of a Facebook scrape's time.
+            posts = page.eval_on_selector_all('div[role="article"]', """els => els.slice(0, 40).map(e => ({
+                text: e.innerText || "",
+                links: [...e.querySelectorAll("a[href*='/groups/'][href*='/posts/'], a[href*='story_fbid']")]
+                         .map(a => a.getAttribute('href') || ''),
+                img: (e.querySelector("img[src*='fbcdn']") || {getAttribute: () => null}).getAttribute('src'),
+            }))""")
             listings = []
 
-            for post in posts[:40]:  # limit to 40 most recent
+            for post in posts:  # already limited to the 40 most recent
                 try:
-                    text_content = post.inner_text()
+                    text_content = post["text"]
                     if not keyword_match(text_content, keywords):
                         continue
 
                     # Extract post link
-                    links = post.query_selector_all("a[href*='/groups/'][href*='/posts/'], a[href*='story_fbid']")
                     post_url = ""
                     post_id = ""
-                    for link in links:
-                        href = link.get_attribute("href") or ""
+                    for href in post["links"]:
                         if "/posts/" in href or "story_fbid" in href:
                             post_url = href.split("?")[0]
                             # Extract numeric ID
@@ -325,8 +397,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                     description = " ".join(lines[1:4]) if len(lines) > 1 else ""
 
                     # Image
-                    img_el = post.query_selector("img[src*='fbcdn']")
-                    image_url = img_el.get_attribute("src") if img_el else None
+                    image_url = post["img"]
 
                     listings.append(Listing(
                         source_name=name,
@@ -344,7 +415,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
 
             # Refresh session cookies
             _save_session(context)
-            browser.close()
+            context.close()
 
             return ScrapeResult(
                 source_name=name, source_url=url, success=True,
@@ -423,8 +494,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
         )
 
     try:
-        with sync_playwright() as pw:
-            browser = _get_browser(pw, headless=True)
+        with _browser() as browser:
             context = _new_context(browser)
             page = context.new_page()
 
@@ -436,10 +506,10 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     "retrying with a 90s timeout: %s", url,
                 )
                 page.goto(url, wait_until="domcontentloaded", timeout=90000)
-            page.wait_for_timeout(3000)
+            _wait_for(page, "a[href*='/marketplace/item/']")
 
             if "login" in page.url.lower() or page.query_selector('[data-testid="royal_login_button"]'):
-                browser.close()
+                context.close()
                 return ScrapeResult(
                     source_name=name, source_url=url, success=False,
                     error="Facebook session expired — redirected to login page.",
@@ -448,20 +518,23 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                 )
 
             # Scroll a few times to load more of the feed
-            for _ in range(3):
-                page.evaluate("window.scrollBy(0, 1800)")
-                page.wait_for_timeout(1200)
+            _scroll_for_more(page, "a[href*='/marketplace/item/']", times=3, step_px=1800, max_wait_ms=1200)
 
             # Marketplace item cards are always wrapped in a
             # /marketplace/item/{id}/ anchor — this URL scheme is far more
             # stable than any class name on a React-rendered page.
-            cards = page.query_selector_all("a[href*='/marketplace/item/']")
+            cards = page.eval_on_selector_all("a[href*='/marketplace/item/']", """els => els.map(e => ({
+                href: e.getAttribute('href') || '',
+                aria: e.getAttribute('aria-label') || '',
+                text: e.innerText || '',
+                img: (e.querySelector('img') || {getAttribute: () => null}).getAttribute('src'),
+            }))""")
             listings = []
             seen_ids = set()
 
             for card in cards:
                 try:
-                    href = card.get_attribute("href") or ""
+                    href = card["href"]
                     id_match = re.search(r'/marketplace/item/(\d+)', href)
                     if not id_match:
                         continue
@@ -482,7 +555,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     # real product name, since there was no "$" line to
                     # anchor off of and the two were run together with no
                     # separator at all in inner_text()).
-                    aria_label = card.get_attribute("aria-label") or ""
+                    aria_label = card["aria"]
                     title = None
                     price = None
                     location = None
@@ -505,7 +578,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                             if len(rest) >= 2 and re.fullmatch(r"[A-Z]{2}", rest[-1]):
                                 location = f"{rest[-2]}, {rest[-1]}"
 
-                    text_content = card.inner_text()
+                    text_content = card["text"]
                     match_text = aria_label or text_content
                     if not match_text or not keyword_match(match_text, keywords):
                         continue
@@ -529,8 +602,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                             title = candidates[0] if candidates else (lines[0] if lines else "FB Marketplace Listing")
                     title = title[:120]
 
-                    img_el = card.query_selector("img")
-                    image_url = img_el.get_attribute("src") if img_el else None
+                    image_url = card["img"]
 
                     listing_url = href.split("?")[0]
                     if not listing_url.startswith("http"):
@@ -550,7 +622,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     continue
 
             _save_session(context)
-            browser.close()
+            context.close()
 
             if not cards:
                 return ScrapeResult(

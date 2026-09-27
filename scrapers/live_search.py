@@ -16,7 +16,7 @@ from typing import Callable, Optional
 
 from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
-from scrapers.dispatch import dispatch_scrape
+from scrapers.runner import run_sources
 from scrapers.store import mark_seen
 
 logger = logging.getLogger(__name__)
@@ -48,32 +48,10 @@ def run_live_search(
             sources = sources + [region_source]
 
     keywords = [query]
-    results: list[ScrapeResult] = []
-
-    for i, source in enumerate(sources):
-        name = source["name"]
-        if on_progress:
-            on_progress(i, len(sources), name)
-        start = time.time()
-        try:
-            result = dispatch_scrape(source, keywords, cfg)
-            if result is None:
-                continue
-        except Exception as e:
-            logger.exception("Live search: unhandled exception scraping %s", name)
-            result = ScrapeResult(
-                source_name=name,
-                source_url=source.get("url", ""),
-                success=False,
-                error=str(e),
-                duration_seconds=time.time() - start,
-            )
+    results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
+    for result in results:
         result.listings = drop_excluded(result.listings, cfg)
-        results.append(result)
         for listing in result.listings:
             mark_seen(listing, live_only=True)
-
-    if on_progress:
-        on_progress(len(sources), len(sources), None)
 
     return results

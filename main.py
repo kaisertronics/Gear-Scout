@@ -23,7 +23,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
-from scrapers.dispatch import dispatch_scrape
+from scrapers.runner import run_sources
 from scrapers.emailer import build_email_html, send_email
 from scrapers.run_status import write_run_status
 from scrapers.enrich import build_price_index
@@ -76,41 +76,23 @@ def _run_scrape_cycle():
     logger.info("%d sources active, %d keywords", len(sources), len(keywords))
     logger.info("=" * 60)
 
-    results: list[ScrapeResult] = []
+    scrape_start = time.time()
+    results: list[ScrapeResult] = run_sources(sources, keywords, cfg)
+    logger.info("Scraped %d sources in %.0fs", len(results), time.time() - scrape_start)
 
-    for source in sources:
-        stype = source.get("type", "rss")
-        name = source["name"]
-        logger.info("Scraping: %s [%s]", name, stype)
-
-        try:
-            result = dispatch_scrape(source, keywords, cfg)
-            if result is None:
-                continue
-        except Exception as e:
-            logger.exception("Unhandled exception scraping %s", name)
-            result = ScrapeResult(
-                source_name=name,
-                source_url=source.get("url", ""),
-                success=False,
-                error=str(e),
-                fix_hint="Unhandled exception — check the Docker logs for a full traceback.",
-            )
-
+    for result in results:
         if result.success:
             logger.info(
                 "  ✓ %s: %d listings found in %.1fs",
-                name, len(result.listings), result.duration_seconds,
+                result.source_name, len(result.listings), result.duration_seconds,
             )
         else:
             logger.warning(
                 "  ✗ %s: FAILED in %.1fs — %s",
-                name, result.duration_seconds, result.error,
+                result.source_name, result.duration_seconds, result.error,
             )
             if result.fix_hint:
                 logger.warning("    FIX: %s", result.fix_hint)
-
-        results.append(result)
 
     # Deduplicate — only keep listings we haven't seen before
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)

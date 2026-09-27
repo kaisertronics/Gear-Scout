@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
-from scrapers.dispatch import dispatch_scrape
+from scrapers.runner import run_sources
 from scrapers.run_status import write_run_status
 from scrapers.store import filter_new, purge_old
 
@@ -30,28 +30,7 @@ def run_manual_scrape(
     but never touches email."""
     keywords = cfg.get("keywords", [])
     sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
-    results: list[ScrapeResult] = []
-
-    for i, source in enumerate(sources):
-        name = source["name"]
-        if on_progress:
-            on_progress(i, len(sources), name)
-        start = time.time()
-        try:
-            result = dispatch_scrape(source, keywords, cfg)
-            if result is None:
-                continue
-        except Exception as e:
-            logger.exception("Manual scrape: unhandled exception scraping %s", name)
-            result = ScrapeResult(
-                source_name=name,
-                source_url=source.get("url", ""),
-                success=False,
-                error=str(e),
-                fix_hint="Unhandled exception — check the Docker logs for a full traceback.",
-                duration_seconds=time.time() - start,
-            )
-        results.append(result)
+    results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
 
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
     new_listings = filter_new(all_listings)

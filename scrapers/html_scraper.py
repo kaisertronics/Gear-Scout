@@ -35,8 +35,13 @@ HEADERS = {
 }
 
 
-def _playwright_get(url: str, wait_ms: int = 3000) -> Optional[str]:
-    """Fetch a page using Playwright (bypasses bot detection)."""
+def _playwright_get(url: str, wait_ms: int = 3000, ready_js: Optional[str] = None) -> Optional[str]:
+    """Fetch a page using Playwright (bypasses bot detection).
+
+    ready_js: a JS expression that's truthy once the page has rendered what
+    we need. With it, we continue as soon as it's true (up to 20s) instead of
+    a fixed wait_ms — a fixed wait under-waits when several browsers share
+    the CPU (confirmed: Reverb came back empty in a parallel run)."""
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:
@@ -56,7 +61,14 @@ def _playwright_get(url: str, wait_ms: int = 3000) -> Optional[str]:
             )
             page = context.new_page()
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(wait_ms)
+            if ready_js:
+                try:
+                    page.wait_for_function(ready_js, timeout=20000)
+                    page.wait_for_timeout(300)
+                except Exception:
+                    pass
+            else:
+                page.wait_for_timeout(wait_ms)
             html = page.content()
             browser.close()
             return html
@@ -65,10 +77,11 @@ def _playwright_get(url: str, wait_ms: int = 3000) -> Optional[str]:
         return None
 
 
-def _get_html(url: str, use_playwright: bool = False) -> tuple[Optional[str], Optional[str]]:
+def _get_html(url: str, use_playwright: bool = False,
+              ready_js: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
     """Return (html, error). Tries requests first, Playwright as fallback."""
     if use_playwright:
-        html = _playwright_get(url)
+        html = _playwright_get(url, ready_js=ready_js)
         return html, None if html else "Playwright fetch failed"
 
     try:
@@ -553,6 +566,15 @@ def _cl_error(name, url, error, start) -> ScrapeResult:
 # Reverb (HTML scrape — they dropped RSS)
 # ---------------------------------------------------------------------------
 
+# Reverb renders its listing grid client-side: ready once cards exist, or
+# the page says there are none / is a Cloudflare challenge.
+_REVERB_READY = (
+    "() => [...document.querySelectorAll('.rc-listing-card__title-element')]"
+    ".filter(e => e.textContent.trim()).length >= 3 || "
+    "/nothing here at the moment|just a moment|are you human/i.test(document.body.innerText || '')"
+)
+
+
 def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
     name = source["name"]
     url = source["url"]
@@ -568,7 +590,7 @@ def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}query={quote_plus(keywords[0].strip())}"
 
-    html, error = _get_html(url, use_playwright=True)
+    html, error = _get_html(url, use_playwright=True, ready_js=_REVERB_READY)
     if not html:
         return ScrapeResult(
             source_name=name, source_url=url, success=False,
@@ -643,7 +665,7 @@ def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
         }
         known = page_hrefs(cards)
         for page in range(2, 6):
-            page_html, _ = _get_html(f"{url}&page={page}", use_playwright=True)
+            page_html, _ = _get_html(f"{url}&page={page}", use_playwright=True, ready_js=_REVERB_READY)
             if not page_html:
                 break
             page_cards = BeautifulSoup(page_html, "html.parser").select(".rc-listing-card")
@@ -697,6 +719,20 @@ def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
             image_url=img_el.get("src") if img_el else None,
             listing_id=listing_id,
         ))
+
+    titled = sum(
+        1 for c in cards
+        if (c.select_one(".rc-listing-card__title-element") or c.select_one("h3") or c).get_text(strip=True)
+    )
+    if cards and not titled:
+        # Cards were on the page but still empty placeholders — the grid
+        # hadn't finished rendering. Report it rather than a silent "0 new".
+        return ScrapeResult(
+            source_name=name, source_url=url, success=False,
+            error="Reverb's page hadn't finished loading its listings.",
+            fix_hint="Usually temporary (a busy moment on this machine or on Reverb) — it should work next run.",
+            duration_seconds=time.time() - start,
+        )
 
     return ScrapeResult(
         source_name=name, source_url=url, success=True,
