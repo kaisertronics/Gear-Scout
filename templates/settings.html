@@ -7,10 +7,13 @@
       <button type="button" class="settings-tab active" data-tab="email">Email & Schedule</button>
       <button type="button" class="settings-tab" data-tab="keywords">Search Terms</button>
       <button type="button" class="settings-tab" data-tab="data">Data</button>
+      <button type="button" class="settings-tab" data-tab="ebay">eBay</button>
     </div>
 
     {% if saved == 'email' %}
       <div class="settings-saved">✓ Email &amp; schedule settings saved.</div>
+    {% elif saved == 'ebay' %}
+      <div class="settings-saved">✓ eBay settings saved — takes effect on the next scrape or live search.</div>
     {% elif saved == 'keywords' %}
       <div class="settings-saved">✓ Search terms saved — {{ keyword_count }} keyword{{ 's' if keyword_count != 1 else '' }}.</div>
     {% elif saved and saved.startswith('cleanup:') %}
@@ -163,6 +166,50 @@
         <button type="submit" class="btn btn-danger">Delete all {{ db_stats.total_seen }} stored listings</button>
       </form>
     </div>
+
+    <div class="settings-panel" id="tab-ebay" style="display:none;">
+      <h3>eBay results</h3>
+      <p>
+        {% if ebay_client_id and ebay_has_secret %}
+          <span class="badge badge-ok">Connected</span> eBay listings (used, open box, seller
+          refurbished) come in through eBay's official search service, in scheduled runs and
+          live searches.
+        {% else %}
+          <span class="badge badge-blocked">Not set up</span> eBay blocks scraping, so until
+          this is set up eBay shows as "manual check only".
+        {% endif %}
+      </p>
+      <p class="muted">
+        eBay's official search service is free but needs your own keys. One-time setup:
+      </p>
+      <ol class="muted">
+        <li>Go to <a href="https://developer.ebay.com/" target="_blank" rel="noopener">developer.ebay.com</a>,
+          sign in with your eBay account and join the (free) Developers Program. Approval can take up to a day.</li>
+        <li>Open <strong>Application Keys</strong> and create a <strong>Production</strong> keyset (not Sandbox) — any app name works.</li>
+        <li>If eBay asks about "marketplace account deletion" notifications before enabling the
+          keyset, answer that question for yourself — Gear Scout only stores listings (title,
+          price, link), never eBay users' account details.</li>
+        <li>Copy the Production <strong>App ID (Client ID)</strong> and <strong>Cert ID (Client Secret)</strong> into the fields below.</li>
+      </ol>
+      <form method="post" action="{{ url_for('settings_ebay') }}" class="settings-form">
+        <div class="form-row">
+          <label class="grow">App ID (Client ID)
+            <input type="text" name="client_id" value="{{ ebay_client_id }}" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="grow">Cert ID (Client Secret)
+            <input type="password" name="client_secret" autocomplete="new-password"
+                   placeholder="{{ 'Leave blank to keep the current one' if ebay_has_secret else '' }}">
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary">Save eBay keys</button>
+        {% if ebay_client_id or ebay_has_secret %}
+          <button type="submit" name="clear" value="1" class="btn btn-danger"
+                  onclick="return confirm('Remove the saved eBay keys?');">Remove keys</button>
+        {% endif %}
+      </form>
+    </div>
   </section>
 
   <script>
@@ -171,6 +218,7 @@
       email: document.getElementById('tab-email'),
       keywords: document.getElementById('tab-keywords'),
       data: document.getElementById('tab-data'),
+      ebay: document.getElementById('tab-ebay'),
     };
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -181,6 +229,9 @@
         });
       });
     });
+    {% if saved == 'ebay' %}
+      document.querySelector('.settings-tab[data-tab="ebay"]').click();
+    {% endif %}
   </script>
 
 {% endblock %}

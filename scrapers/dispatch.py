@@ -47,6 +47,10 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
             from scrapers.html_scraper import scrape_usaudiomart
             return scrape_usaudiomart(source, keywords)
         elif "ebay.com" in url:
+            api_cfg = cfg.get("ebay_api") or {}
+            if api_cfg.get("client_id") and api_cfg.get("client_secret"):
+                from scrapers.ebay_api import scrape_ebay_api
+                return scrape_ebay_api(source, keywords, api_cfg)
             from scrapers.html_scraper import scrape_ebay
             return scrape_ebay(source, keywords)
         else:

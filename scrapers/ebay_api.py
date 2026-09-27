@@ -1,0 +1,148 @@
+"""
+eBay results via eBay's official Browse API instead of scraping the site
+(which Akamai blocks outright for headless browsers).
+
+Needs a free eBay developer "Production" keyset (App ID + Cert ID), stored
+in config.yaml under `ebay_api:`. Without one, dispatch falls back to the
+old scraper, which reports eBay as "manual check only".
+
+Docs: https://developer.ebay.com/api-docs/buy/browse/resources/item_summary/methods/search
+"""
+import base64
+import logging
+import re
+import time
+from datetime import datetime
+from typing import Optional
+
+import requests
+
+from .base import Listing, ScrapeResult, keyword_match, truncate
+
+logger = logging.getLogger(__name__)
+
+TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+PRO_AUDIO_CATEGORY = "180014"
+# 1500 Open box (eBay's B-stock equivalent), 2500 Seller refurbished,
+# 3000 Used — same set as the manual-check eBay link.
+CONDITION_FILTER = "conditionIds:{1500|2500|3000}"
+
+_token_cache: dict[str, tuple[str, float]] = {}
+
+
+def _get_token(client_id: str, client_secret: str) -> str:
+    cached = _token_cache.get(client_id)
+    if cached and cached[1] > time.time() + 60:
+        return cached[0]
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    resp = requests.post(
+        TOKEN_URL,
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "grant_type": "client_credentials",
+            "scope": "https://api.ebay.com/oauth/api_scope",
+        },
+        timeout=20,
+    )
+    if resp.status_code != 200:
+        raise PermissionError(
+            f"eBay rejected the API keys (HTTP {resp.status_code}): {resp.text[:200]}"
+        )
+    data = resp.json()
+    token = data["access_token"]
+    _token_cache[client_id] = (token, time.time() + int(data.get("expires_in", 7200)))
+    return token
+
+
+def _format_price(price: Optional[dict]) -> Optional[str]:
+    if not price or "value" not in price:
+        return None
+    try:
+        amount = float(price["value"])
+    except (TypeError, ValueError):
+        return None
+    symbol = "$" if price.get("currency", "USD") == "USD" else f"{price.get('currency')} "
+    return f"{symbol}{amount:,.0f}" if amount == int(amount) else f"{symbol}{amount:,.2f}"
+
+
+def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeResult:
+    name = source["name"]
+    start = time.time()
+    # A single term (live search) goes to eBay's own search; the full keyword
+    # list (scheduled runs) fetches the newest listings in the category and
+    # filters locally — one API call per run instead of one per keyword.
+    is_live_search = len(keywords) == 1 and keywords[0].strip()
+    params = {
+        "category_ids": PRO_AUDIO_CATEGORY,
+        "filter": CONDITION_FILTER,
+        "sort": "newlyListed",
+        "limit": "200",
+    }
+    if is_live_search:
+        params["q"] = keywords[0].strip()
+    manual_url = (
+        "https://www.ebay.com/sch/i.html?_sacat=180014"
+        "&LH_ItemCondition=1500%7C2500%7C3000&_sop=10"
+        + (f"&_nkw={requests.utils.quote(keywords[0].strip())}" if is_live_search else "")
+    )
+
+    try:
+        token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
+        resp = requests.get(
+            SEARCH_URL,
+            params=params,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+            },
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
+        items = resp.json().get("itemSummaries", []) or []
+    except PermissionError as e:
+        return ScrapeResult(
+            source_name=name, source_url=manual_url, success=False, error=str(e),
+            fix_hint="Check the eBay App ID and Cert ID in Settings → eBay (use the Production keyset, not Sandbox).",
+            duration_seconds=time.time() - start,
+        )
+    except Exception as e:
+        logger.warning("eBay API error for %s: %s", name, e)
+        return ScrapeResult(
+            source_name=name, source_url=manual_url, success=False, error=str(e),
+            fix_hint="Usually temporary — it should work again next run.",
+            duration_seconds=time.time() - start,
+        )
+
+    listings = []
+    for item in items:
+        title = item.get("title") or ""
+        if not title or not keyword_match(title, keywords):
+            continue
+        item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
+        posted_at = None
+        if item.get("itemCreationDate"):
+            try:
+                posted_at = datetime.fromisoformat(item["itemCreationDate"].replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        condition = item.get("condition")
+        listings.append(Listing(
+            source_name=name,
+            title=truncate(title, 120),
+            url=item.get("itemWebUrl") or f"https://www.ebay.com/itm/{item_id}",
+            price=_format_price(item.get("price")),
+            description=condition,
+            image_url=(item.get("image") or {}).get("imageUrl"),
+            posted_at=posted_at,
+            listing_id=item_id,
+        ))
+
+    return ScrapeResult(
+        source_name=name, source_url=manual_url, success=True,
+        listings=listings, duration_seconds=time.time() - start,
+    )

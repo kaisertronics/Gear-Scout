@@ -293,11 +293,13 @@ def search():
     q = request.args.get("q", "").strip()
     listings = search_listings(q, limit=300) if q else []
     grouped_listings = _group_by_source(listings)
+    ebay_api = load_config_raw().get("ebay_api") or {}
     return render_template(
         "search.html",
         q=q,
         grouped_listings=grouped_listings,
         result_count=len(listings),
+        ebay_api_configured=bool(ebay_api.get("client_id") and ebay_api.get("client_secret")),
     )
 
 
@@ -373,8 +375,27 @@ def settings():
         keyword_count=len(keywords),
         db_stats=db_stats(),
         mismatched_count=count_mismatched(keywords),
+        ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
+        ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
         saved=request.args.get("saved"),
     )
+
+
+@app.route("/settings/ebay", methods=["POST"])
+def settings_ebay():
+    cfg = load_config_raw()
+    ebay_cfg = cfg.setdefault("ebay_api", {})
+    ebay_cfg["client_id"] = request.form.get("client_id", "").strip()
+    # Same as the email app password: the field ships blank, so only a newly
+    # typed secret replaces the saved one.
+    new_secret = request.form.get("client_secret", "").strip()
+    if new_secret:
+        ebay_cfg["client_secret"] = new_secret
+    if request.form.get("clear") == "1":
+        ebay_cfg["client_id"] = ""
+        ebay_cfg["client_secret"] = ""
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="ebay"))
 
 
 @app.route("/settings/cleanup", methods=["POST"])

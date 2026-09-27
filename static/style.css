@@ -629,6 +629,8 @@ code {
 .manual-source-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .manual-source-links .btn { margin: 0; text-decoration: none; }
 
+.manual-search-links { margin: 14px 0 10px; display: flex; flex-direction: column; gap: 8px; }
+
 /* ---------- Phones ----------
    Everything above is laid out for desktop widths; this reflows it for
    narrow screens instead of letting the nav, tables and forms run off the

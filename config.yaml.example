@@ -23,6 +23,15 @@ reddit_oauth:
   username: ""      # your Reddit username
   password: ""      # your Reddit password
 
+# --- eBay (optional) ----------------------------------------
+# eBay blocks scraping, so without these it shows as "manual check only".
+# With a free eBay developer Production keyset, eBay listings come in via
+# eBay's official search service instead — set up in the dashboard under
+# Settings → eBay (step-by-step instructions there), or paste them here.
+ebay_api:
+  client_id: ""       # App ID (Client ID)
+  client_secret: ""   # Cert ID (Client Secret)
+
 # --- Facebook Credentials ------------------------------------
 # Only needed if you add "facebook" type sources (Facebook groups/marketplace
 # searches) below. Used only for the in-dashboard Facebook login — stored
