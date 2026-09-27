@@ -78,17 +78,35 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
             return True
 
     # A single term means a live search, where the site's own search already
-    # did the real matching and normalizes spacing/hyphens ("KM 184", "KM-184"
-    # and "KM184NI" all count as "km184" on Reverb). Compare with those
-    # stripped so we don't discard results the site correctly returned. Only
-    # for alphanumeric model-number-style terms (has a digit, 4+ chars) —
-    # short/plain words like "eq" or "mic" must keep strict word matching.
+    # did the real matching and normalizes spacing/hyphens and model suffixes
+    # ("KM 184", "KM-184" and "KM184NI" all count as "km184" on Reverb). Only
+    # model-number-style terms (letters + digits) get this looser match —
+    # plain words like "eq" or "mic" keep strict word matching.
     if len(keywords) == 1:
-        compact_kw = re.sub(r'[^a-z0-9]', '', keywords[0].lower())
-        if len(compact_kw) >= 4 and any(c.isdigit() for c in compact_kw):
-            if compact_kw in re.sub(r'[^a-z0-9]', '', text_lower):
-                return True
+        model = _model_pattern(keywords[0])
+        if model and model.search(text_lower):
+            return True
     return False
+
+
+_model_pattern_cache: dict[str, Optional[re.Pattern]] = {}
+
+
+def _model_pattern(term: str) -> Optional[re.Pattern]:
+    """For a model-number search (letters + digits, e.g. "c38", "u87",
+    "la2a"): also match that model's lettered variants and spacing, so "c38"
+    finds "C38A", "C38B", "C-38B" and "C 38 A" — but not a different model
+    number like "C380". Returns None for anything that isn't model-style."""
+    compact = re.sub(r'[^a-z0-9]', '', term.lower())
+    if compact in _model_pattern_cache:
+        return _model_pattern_cache[compact]
+    pattern = None
+    if re.search(r'[a-z]', compact) and re.search(r'\d', compact):
+        runs = re.findall(r'[a-z]+|\d+', compact)
+        body = r'[\s\-_./]?'.join(re.escape(r) for r in runs)
+        pattern = re.compile(r'(?<![a-z0-9])' + body + r'[a-z]*(?![a-z0-9])')
+    _model_pattern_cache[compact] = pattern
+    return pattern
 
 
 def clean_price(raw: str) -> Optional[str]:

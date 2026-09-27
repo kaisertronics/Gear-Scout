@@ -148,13 +148,13 @@ def search_listings(query_text: str, limit: int = 300) -> list[dict]:
     from scrapers.base import keyword_match
 
     like = f"%{query_text}%"
-    # Model-number-style queries ("km184") should also find "KM 184" /
-    # "KM-184" — same rule as keyword_match's compact fallback — so widen the
+    # Model-number-style queries ("km184", "c38") should also find "KM 184" /
+    # "KM-184" / "C38A" — same rule as keyword_match's model pattern — so widen the
     # prefilter to compare with spaces/hyphens stripped from the stored text.
     compact = re.sub(r'[^a-z0-9]', '', query_text.lower())
     strip = lambda col: f"lower(replace(replace(coalesce({col},''),' ',''),'-',''))"
     extra_sql, extra_params = "", ()
-    if len(compact) >= 4 and any(c.isdigit() for c in compact):
+    if re.search(r'[a-z]', compact) and re.search(r'\d', compact):
         extra_sql = f" OR {strip('title')} LIKE ? OR {strip('description')} LIKE ?"
         extra_params = (f"%{compact}%", f"%{compact}%")
     with _conn() as conn:
