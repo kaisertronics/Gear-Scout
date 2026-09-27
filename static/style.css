@@ -663,6 +663,16 @@ code {
 .distance-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 16px; }
 .distance-filter select { margin-left: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
 
+.listing-card.is-deal { border: 2px solid var(--green-text); box-shadow: 0 0 0 3px var(--green-bg); }
+.deals-panel { border: 2px solid var(--green-bg); }
+.deals-toggle {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 16px;
+  border: 1px solid var(--border); background: var(--panel); font-size: 13px; font-weight: 600;
+  cursor: pointer; color: var(--text, inherit);
+}
+.deals-toggle input { margin: 0; }
+.deals-toggle.is-on { background: var(--green-bg); border-color: var(--green-text); color: var(--green-text); }
+
 /* ---------- Phones ----------
    Everything above is laid out for desktop widths; this reflows it for
    narrow screens instead of letting the nav, tables and forms run off the

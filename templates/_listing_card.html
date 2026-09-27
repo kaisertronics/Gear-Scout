@@ -1,5 +1,5 @@
 {% macro listing_card(l) %}
-<div class="listing-card">
+<div class="listing-card{{ ' is-deal' if l.is_deal else '' }}">
   {% set card_body %}
     {% if l.image_url %}
       <img src="{{ l.image_url }}" alt="" class="listing-img" loading="lazy">
@@ -30,7 +30,7 @@
       {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold %}
         <div class="listing-flags">
           {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>{% endif %}
-          {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">Deal</span>{% endif %}
+          {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">🔥 Deal · {{ l.price_ctx.pct_under }}% under</span>{% endif %}
           {% if l.previous_price %}<span class="flag flag-drop">Price drop</span>{% endif %}
           {% if l.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
         </div>

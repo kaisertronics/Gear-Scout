@@ -1,6 +1,11 @@
-{% if home_zip_set %}
+{% from "_listing_card.html" import listing_card %}
 <form method="get" class="distance-filter">
   {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+  <label class="deals-toggle {{ 'is-on' if deals_only else '' }}">
+    <input type="checkbox" name="deals" value="1" {{ 'checked' if deals_only else '' }} onchange="this.form.submit()">
+    🔥 Deals only
+  </label>
+  {% if home_zip_set %}
   <label class="muted">Local pickup within
     <select name="within" onchange="this.form.submit()">
       {% for v, label in [('', 'any distance'), ('25', '25 mi'), ('50', '50 mi'), ('100', '100 mi'), ('250', '250 mi'), ('500', '500 mi')] %}
@@ -8,6 +13,17 @@
       {% endfor %}
     </select>
   </label>
-  <span class="muted">— Facebook &amp; Craigslist listings with a known town; shipped listings always show.</span>
+  {% endif %}
 </form>
+
+{% if deals and not deals_only %}
+<section class="panel deals-panel">
+  <h2>🔥 Deals <span class="muted">— {{ deals|length }} priced 25%+ under their typical price, biggest discount first</span></h2>
+  <div class="listing-grid">
+    {% for l in deals[:24] %}{{ listing_card(l) }}{% endfor %}
+  </div>
+  {% if deals|length > 24 %}
+    <p class="muted" style="margin-top:12px;">+{{ deals|length - 24 }} more — tick <strong>Deals only</strong> above to see them all.</p>
+  {% endif %}
+</section>
 {% endif %}

@@ -20,6 +20,30 @@ _REPAIR_PATTERNS = [
 _REPAIR_RE = re.compile(r"\b(?:" + "|".join(_REPAIR_PATTERNS) + r")\b", re.I)
 
 
+# Parts and pieces of a model ("U47 head", "M70 capsule", "body only",
+# "PSU only") — priced nothing like the complete unit, so they're left out
+# of typical prices and never tagged as a deal against complete units.
+_PARTIAL_RE = re.compile(
+    r"\b(?:heads?|capsules?|(?:body|psu|case|pcb|chassis|faceplate|tube|transformer|grille|cable)s? only"
+    r"|only (?:the )?(?:body|psu|capsule|case|head)|power suppl(?:y|ies) only|parts? only|for parts"
+    r"|diy kit|kit only|replacement (?:capsule|grille|part|parts|tube)|empty (?:case|box|body))\b",
+    re.I,
+)
+
+
+def is_partial(title: Optional[str]) -> bool:
+    if not title:
+        return False
+    for m in _PARTIAL_RE.finditer(title):
+        before = title[:m.start()].lower().rstrip()
+        # "U87 with capsule" / "mic w/ head" / "body and capsule" describe a
+        # complete unit, not a part sold on its own.
+        if m.group(0).lower().startswith(("capsule", "head")) and before.endswith(("with", "w/", "and", "+", "&")):
+            continue
+        return True
+    return False
+
+
 def needs_repair(*texts: Optional[str]) -> bool:
     return any(t and _REPAIR_RE.search(t) for t in texts)
 
@@ -129,7 +153,8 @@ def build_price_index(rows: list[dict]) -> dict[str, float]:
     for r in rows:
         key = model_key(r.get("title"))
         value = parse_price(r.get("price"))
-        if key and value and value >= 20 and not needs_repair(r.get("title"), r.get("description")):
+        if (key and value and value >= 20 and not is_partial(r.get("title"))
+                and not needs_repair(r.get("title"), r.get("description"))):
             by_model.setdefault(key, []).append(value)
     return {k: statistics.median(v) for k, v in by_model.items() if len(v) >= 4}
 
@@ -139,7 +164,11 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
     reliable to compare against. A deal is 25%+ under the typical price."""
     key = model_key(title)
     value = parse_price(price)
-    if not key or key not in index or not value:
+    if not key or key not in index or not value or is_partial(title):
         return {}
     typical = index[key]
-    return {"typical": format_price(typical), "deal": value <= typical * 0.75 and value >= 20}
+    return {
+        "typical": format_price(typical),
+        "deal": value <= typical * 0.75 and value >= 20,
+        "pct_under": round((1 - value / typical) * 100),
+    }

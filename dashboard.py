@@ -282,7 +282,8 @@ def _distance_filter_context():
         home_zip = str(load_config_raw().get("home_zip") or "")
     except Exception:
         home_zip = ""
-    return {"home_zip_set": bool(home_zip), "within_value": request.args.get("within", "")}
+    return {"home_zip_set": bool(home_zip), "within_value": request.args.get("within", ""),
+            "deals_only": request.args.get("deals") == "1"}
 
 
 def _decorate(listings: list[dict]) -> list[dict]:
@@ -299,6 +300,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
         within = int(request.args.get("within") or 0)
     except ValueError:
         within = 0
+    deals_only = request.args.get("deals") == "1"
     index = build_price_index(all_priced_rows())
     out = []
     for l in listings:
@@ -313,8 +315,18 @@ def _decorate(listings: list[dict]) -> list[dict]:
         # stay visible — the radius only filters what can be measured.
         if within and l["distance"] is not None and l["distance"] > within:
             continue
+        l["is_deal"] = bool(l["price_ctx"] and l["price_ctx"].get("deal"))
+        if deals_only and not l["is_deal"]:
+            continue
         out.append(l)
     return out
+
+
+def _deals_from(grouped: list[tuple]) -> list[dict]:
+    """Every deal across all sources, biggest discount first — shown in its
+    own section above the per-source groups."""
+    deals = [l for _, items in grouped for l in items if l.get("is_deal")]
+    return sorted(deals, key=lambda l: l["price_ctx"].get("pct_under", 0), reverse=True)
 
 
 def _group_by_source(listings: list[dict]) -> list[tuple]:
@@ -338,6 +350,7 @@ def index():
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
     return render_template(
         "index.html",
+        deals=_deals_from(grouped_listings),
         status=status,
         grouped_listings=grouped_listings,
         db_stats=db_stats(),
@@ -372,6 +385,7 @@ def search():
     ebay_api = load_config_raw().get("ebay_api") or {}
     return render_template(
         "search.html",
+        deals=_deals_from(grouped_listings),
         q=q,
         grouped_listings=grouped_listings,
         result_count=len(listings),
@@ -405,6 +419,7 @@ def favorites():
     grouped_listings = _group_by_source(listings)
     return render_template(
         "favorites.html",
+        deals=_deals_from(grouped_listings),
         grouped_listings=grouped_listings,
         result_count=len(listings),
     )
