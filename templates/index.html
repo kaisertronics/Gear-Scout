@@ -87,8 +87,29 @@
   </section>
 
   {% if status %}
-  <section class="panel">
-    <h2>Source status <span class="muted">— {{ 'manual scrape' if status.manual else 'run #' + status.run_number|string }}</span></h2>
+  {% set manual_sources = status.sources | selectattr('blocked') | list %}
+  {% set ok_sources = status.sources | selectattr('success') | list %}
+  {% set failed_sources = status.sources | rejectattr('success') | rejectattr('blocked') | list %}
+
+  {% if manual_sources %}
+  <section class="panel manual-sources">
+    <h2>Check these manually <span class="muted">— they block automated scraping</span></h2>
+    <div class="manual-source-links">
+      {% for s in manual_sources %}
+        <a href="{{ s.url }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">{{ s.name }} &rarr;</a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <details class="panel status-panel">
+    <summary class="status-summary">
+      <span class="status-summary-title">Source status</span>
+      <span class="badge badge-ok">{{ ok_sources|length }} OK</span>
+      {% if manual_sources %}<span class="badge badge-blocked">{{ manual_sources|length }} manual</span>{% endif %}
+      {% if failed_sources %}<span class="badge badge-fail">{{ failed_sources|length }} failed</span>{% endif %}
+      <span class="muted status-summary-run">{{ 'manual scrape' if status.manual else 'run #' + status.run_number|string }}</span>
+    </summary>
     <table class="status-table">
       <thead>
         <tr><th>Source</th><th>Result</th><th>Time</th><th>Error</th></tr>
@@ -126,7 +147,7 @@
         {% endfor %}
       </tbody>
     </table>
-  </section>
+  </details>
   {% endif %}
 
   {% if not grouped_listings %}

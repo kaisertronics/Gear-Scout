@@ -601,6 +601,34 @@ code {
   border-radius: 8px;
 }
 
+/* Source status: collapsed to a single summary line, expand for details. */
+.panel.status-panel { padding: 0; }
+.status-panel > .status-table { margin: 0 20px 20px; width: calc(100% - 40px); }
+.status-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status-summary::-webkit-details-marker { display: none; }
+.status-summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+.status-panel[open] > .status-summary::before { transform: rotate(90deg); }
+.status-summary-title { font-size: 15px; font-weight: 700; margin-right: 4px; }
+.status-summary-run { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+
+.manual-sources h2 { margin-bottom: 12px; }
+.manual-source-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.manual-source-links .btn { margin: 0; text-decoration: none; }
+
 /* ---------- Phones ----------
    Everything above is laid out for desktop widths; this reflows it for
    narrow screens instead of letting the nav, tables and forms run off the
@@ -662,6 +690,12 @@ code {
   .form-row label.grow { flex: 1 1 100%; min-width: 0; }
   .form-row input,
   .form-row select { min-width: 0; width: 100%; box-sizing: border-box; }
+
+  .status-summary { padding: 12px 14px; gap: 6px; }
+  .status-summary-title { font-size: 14px; }
+  .status-summary-run { display: none; }
+  .status-panel > .status-table { margin: 0 14px 14px; width: calc(100% - 28px); }
+  .manual-source-links .btn { flex: 1 1 calc(50% - 8px); text-align: center; }
 
   .vnc-frame { height: 70vh; }
 
