@@ -1,6 +1,10 @@
 services:
   scout:
     build: .
+    # Reaps exited child processes. Every scrape launches headless browsers;
+    # without an init process their finished children were never cleaned up
+    # (100+ "zombie" chrome processes after a day of searching).
+    init: true
     container_name: gear-scout
     restart: unless-stopped
     volumes:
@@ -17,6 +21,10 @@ services:
 
   dashboard:
     build: .
+    # Reaps exited child processes. Every scrape launches headless browsers;
+    # without an init process their finished children were never cleaned up
+    # (100+ "zombie" chrome processes after a day of searching).
+    init: true
     container_name: gear-scout-dashboard
     restart: unless-stopped
     entrypoint: ["python3", "dashboard.py"]

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Lowest Price{% endblock %}
+
+{% macro ranked_list(top) %}
+  {% if top %}
+    <div class="lowest-list">
+      {% for c in top %}
+        <a class="lowest-row" href="{{ c.url }}" target="_blank" rel="noopener">
+          <span class="lowest-rank">#{{ loop.index }}</span>
+          {% if c.image_url %}<img src="{{ c.image_url }}" alt="" class="lowest-img" loading="lazy">{% else %}<span class="lowest-img lowest-img-empty"></span>{% endif %}
+          <span class="lowest-info">
+            <span class="lowest-title">{{ c.title }}</span>
+            <span class="muted">{{ c.source_name }}{% if c.location %} · 📍 {{ c.location }}{% endif %}</span>
+            {% if c.needs_repair or c.is_clone %}<span class="listing-flags">
+              {% if c.is_clone %}<span class="flag flag-clone">Clone</span>{% endif %}
+              {% if c.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
+            </span>{% endif %}
+          </span>
+          <span class="lowest-price">{{ c.price }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No priced listings found right now.</p>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+  <section class="panel">
+    <h2>💰 Lowest price</h2>
+    <p class="muted">
+      Finds the 3 cheapest listings of an item across every source right now. Track an item and
+      you'll get a push notification and an email whenever something is listed below its current
+      lowest price. Parts sold on their own, accessories, rentals, "wanted" posts and placeholder
+      prices like "$1 — make an offer" are left out; clones and needs-repair gear are included and
+      tagged.
+    </p>
+    <form method="post" action="{{ url_for('lowest_run') }}" class="search-form">
+      <input type="text" name="q" value="{{ q }}" placeholder="e.g. neumann u87ai" class="search-input" required>
+      <button type="submit">Find 3 lowest</button>
+    </form>
+    <div id="lowest-status" class="live-status-banner" style="display:none;"></div>
+  </section>
+
+  {% if q %}
+  <section class="panel">
+    <h2>“{{ q }}”
+      {% if current %}<span class="muted">— checked {{ current.checked_at[:16].replace('T', ' ') }} UTC</span>{% endif %}
+    </h2>
+    {% if current %}
+      {{ ranked_list(current.top) }}
+    {% else %}
+      <p class="muted">Not checked yet — click “Find 3 lowest”.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('lowest_untrack' if is_tracked else 'lowest_track') }}" style="margin-top:14px;">
+      <input type="hidden" name="q" value="{{ q }}">
+      {% if is_tracked %}
+        <span class="muted">🔔 Tracked — you'll be alerted when it's listed for less.</span>
+        <button type="submit" class="btn btn-sm">Stop tracking</button>
+      {% else %}
+        <button type="submit" class="btn btn-primary btn-sm">🔔 Track this item</button>
+      {% endif %}
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Tracked items <span class="muted">— re-checked with your saved searches (Settings → Alerts)</span></h2>
+    {% if tracked %}
+      {% for t, st in tracked %}
+        <div class="lowest-tracked">
+          <div class="lowest-tracked-head">
+            <a class="watch-query" href="{{ url_for('lowest', q=t) }}">{{ t }}</a>
+            <span class="muted">
+              {% if st and st.top %}lowest {{ st.top[0].price }}{% elif st %}no priced listings{% else %}not checked yet{% endif %}
+              {% if st %} · checked {{ st.checked_at[:16].replace('T', ' ') }} UTC{% endif %}
+            </span>
+            <form method="post" action="{{ url_for('lowest_untrack') }}" onsubmit="return confirm('Stop tracking &quot;{{ t }}&quot;?');">
+              <input type="hidden" name="q" value="{{ t }}">
+              <button type="submit" class="hide-btn" title="Stop tracking" aria-label="Stop tracking">✕</button>
+            </form>
+          </div>
+          {% if st %}{{ ranked_list(st.top) }}{% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">Nothing tracked yet — search for an item above, then click “Track this item”.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    const lowBanner = document.getElementById('lowest-status');
+    const currentQ = {{ q|tojson }};
+    let sawRunning = false;
+    async function pollLowest() {
+      try {
+        const data = await (await fetch("{{ url_for('lowest_status') }}")).json();
+        if (data.state === 'running' && (!currentQ || data.query === currentQ)) {
+          sawRunning = true;
+          lowBanner.style.display = '';
+          lowBanner.textContent = data.total
+            ? `Searching every site for “${data.query}” (${data.done}/${data.total})…`
+            : `Searching every site for “${data.query}”…`;
+          setTimeout(pollLowest, 2000);
+        } else if (sawRunning && data.state === 'done') {
+          lowBanner.textContent = 'Done — loading results…';
+          setTimeout(() => window.location.reload(), 800);
+        } else if (sawRunning && data.state === 'failed') {
+          lowBanner.textContent = '⚠️ Search failed: ' + (data.reason || 'unknown error');
+        }
+      } catch (e) { setTimeout(pollLowest, 3000); }
+    }
+    pollLowest();
+  </script>
+{% endblock %}

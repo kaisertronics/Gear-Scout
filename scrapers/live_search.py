@@ -54,4 +54,13 @@ def run_live_search(
         for listing in result.listings:
             mark_seen(listing, live_only=True)
 
+    try:
+        from scrapers.enrich import build_price_index
+        from scrapers.market import refresh_market_prices
+        from scrapers.store import all_priced_rows
+        refresh_market_prices([l.title for r in results for l in r.listings],
+                              build_price_index(all_priced_rows()), max_lookups=25)
+    except Exception:
+        logger.exception("Reverb market price refresh failed")
+
     return results

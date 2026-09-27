@@ -31,6 +31,20 @@ _PARTIAL_RE = re.compile(
 )
 
 
+# Multiples priced as a set ("4 Sennheiser 421", "pair of KM184", "2x SM57")
+# can't be compared with the typical price of one unit.
+_LOT_RE = re.compile(
+    r"^\W*(?:[2-9]|\d{2})\s+(?!ch|channel|track|space|band|way|input|output)[a-z]|"
+    r"\b(?:pair|pairs|matched|stereo set|lot of|set of|bundle of|qty|quantity)\b|"
+    r"\b[2-9]\s?x\b(?!\s?\d)|\bx\s?[2-9]\b|\(\s*[2-9]\s*\)",
+    re.I,
+)
+
+
+def is_lot(title: Optional[str]) -> bool:
+    return bool(title and _LOT_RE.search(title))
+
+
 def is_partial(title: Optional[str]) -> bool:
     if not title:
         return False
@@ -104,26 +118,76 @@ def drop_excluded(listings: list, cfg: dict) -> list:
 # --- Typical price / deal context -------------------------------------------
 
 def model_key(title: Optional[str]) -> Optional[str]:
-    """The first model-number-looking token in a title (letters + digits,
-    e.g. "wa47", "c38b", "u87ai", "la2a"), normalized — so listings of the
-    same model group together even when written "WA-47" or "WA 47"."""
-    text = (title or "").lower()
-    for m in re.finditer(r"\b([a-z]{1,8})([\s-]?)(\d{1,4})([a-z]{0,3})\b", text):
+    """The first model-number-looking token in a title, normalized and
+    prefixed with the brand ("neumann:u87ai", "sennheiser:421",
+    "tascam:portastudio414") — so listings of the same model group together
+    even when written "WA-47" or "WA 47"."""
+    found = _model_match(title)
+    return found[0] if found else None
+
+
+def model_query(title: Optional[str]) -> Optional[str]:
+    """The same model as readable search words ("Sennheiser 421",
+    "Tascam Portastudio 414") — used to look the model up on Reverb."""
+    found = _model_match(title)
+    return found[1] if found else None
+
+
+def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
+    raw = title or ""
+    text = raw.lower()
+    # "LOMO 19A9", "19-A19": number-letter-number models (common on Soviet gear).
+    m = re.search(r"\b(\d{1,3})-?((?!x\d)[a-z]{1,2})(\d{1,3})\b", text)
+    if m:
+        prior = [w for w in re.findall(r"[a-z][a-z0-9]+", text[:m.start()])
+                 if w not in _NOT_BRAND_WORDS and w not in _NOT_MODEL_WORDS]
+        if prior:
+            model = "".join(m.groups())
+            return f"{prior[0]}:{model}", f"{prior[0]} {raw[m.start():m.end()]}"
+    for m in re.finditer(r"\b([a-z]{1,15})([\s-]?)(\d{1,4})([a-z]{0,3})\b", text):
         letters, sep, digits, suffix = m.groups()
-        if letters in _NOT_MODEL_WORDS:
+        if letters in _NOT_MODEL_WORDS or letters in _NOT_BRAND_WORDS:
             continue
         # "LA-2A"/"LA2A" is a model; "model 7" or "channel 8" is not — a
         # word followed by a spaced number needs at least 2 digits.
         if sep == " " and len(digits) < 2:
             continue
+        # "circa 1965", "from 1972": a year, not a model number.
+        if len(digits) == 4 and 1920 <= int(digits) <= 2035 and not suffix:
+            continue
+        # "12 channel", "16 track", "8 input": a count, not a model number.
+        if not suffix and _COUNT_WORD_AFTER.match(text[m.end():]):
+            continue
+        # Brand = first real word before the model ("Vintage Neumann U87"
+        # -> neumann), so an Audioscape "LA-2A" clone and a Teletronix LA-2A
+        # don't share a price range.
+        prior = [w for w in re.findall(r"[a-z][a-z0-9]+", text[:m.start()])
+                 if w not in _NOT_BRAND_WORDS and w not in _NOT_MODEL_WORDS and w != letters]
+        brand = prior[0] if prior else ""
         model = f"{letters}{digits}{suffix}"
-        # Group by brand too: an Audioscape "LA-2A" clone and a Teletronix
-        # LA-2A share a model name but not a price range. Brand = first real
-        # word before the model ("Vintage Neumann U87" -> neumann).
-        brand = next((w for w in re.findall(r"[a-z][a-z0-9]+", text[:m.start()])
-                      if w not in _NOT_BRAND_WORDS and w != letters), "")
-        return f"{brand}:{model}" if brand else model
+        if not brand and len(letters) >= 3 and sep == " ":
+            # "Sennheiser 421", "Mackie 1604", "Neve 1073": the word IS the
+            # brand and the number is the model.
+            brand, model = letters, f"{digits}{suffix}"
+        key = f"{brand}:{model}" if brand else model
+        shown = raw[m.start():m.end()]
+        query = f"{brand} {shown}" if brand and not shown.lower().startswith(brand) else shown
+        return key, query.strip()
+    # "Electro-Voice Model 664": the number after "model"/"type" is the model.
+    m = re.search(r"\b(?:model|type|mod)\s*#?\s*(\d{2,4}[a-z]{0,3})\b", text)
+    if m:
+        prior = [w for w in re.findall(r"[a-z][a-z0-9]+", text[:m.start()])
+                 if w not in _NOT_BRAND_WORDS and w not in _NOT_MODEL_WORDS]
+        if prior:
+            return f"{prior[0]}:{m.group(1)}", f"{prior[0]} {m.group(1)}"
     return None
+
+
+_COUNT_WORD_AFTER = re.compile(
+    r"[\s-]*(?:ch|chan|channels?|tracks?|inputs?|outputs?|in|out|bands?|ways?|pieces?|pcs|pack|"
+    r"space|spaces|slots?|units?|strings?|keys?|watts?|w|ohms?|ft|feet|inch|in\.|mm|lbs?|x)\b",
+    re.I,
+)
 
 
 _NOT_BRAND_WORDS = {
@@ -133,6 +197,10 @@ _NOT_BRAND_WORDS = {
     "and", "with", "for", "sale", "selling", "clean", "working", "tested", "near",
     "perfect", "condition", "good", "nice", "rack", "rackmount", "free", "shipping", "open",
     "box", "demo", "blemished", "clearance", "just", "serviced", "restored", "modded",
+    "microphone", "microphones", "mic", "mics", "condenser", "dynamic", "ribbon", "tube",
+    "preamp", "compressor", "mixer", "console", "interface", "monitor", "monitors",
+    "speaker", "speakers", "amp", "amplifier", "equalizer", "studio", "audio", "pro",
+    "analog", "digital", "channel", "input", "output", "pack", "bundle", "kit", "vtg",
 }
 
 
@@ -153,22 +221,33 @@ def build_price_index(rows: list[dict]) -> dict[str, float]:
     for r in rows:
         key = model_key(r.get("title"))
         value = parse_price(r.get("price"))
-        if (key and value and value >= 20 and not is_partial(r.get("title"))
+        if (key and value and value >= 20 and not is_partial(r.get("title")) and not is_lot(r.get("title"))
                 and not needs_repair(r.get("title"), r.get("description"))):
             by_model.setdefault(key, []).append(value)
     return {k: statistics.median(v) for k, v in by_model.items() if len(v) >= 4}
 
 
-def price_context(title: Optional[str], price: Optional[str], index: dict[str, float]) -> dict:
-    """{'typical': '$1,200', 'deal': True/False} or {} when there's nothing
-    reliable to compare against. A deal is 25%+ under the typical price."""
+def price_context(title: Optional[str], price: Optional[str], index: dict[str, float],
+                  market: Optional[dict[str, float]] = None) -> dict:
+    """{'typical': '$1,200', 'deal': bool, 'pct_under': int, 'source': 'local'|'reverb'}
+    or {} when there's nothing reliable to compare against.
+
+    Local history (what Gear Scout has seen listed) comes first. Otherwise,
+    Reverb asking prices — those run higher than real sale prices, so a
+    Reverb-based deal needs 35%+ under instead of 25%."""
     key = model_key(title)
     value = parse_price(price)
-    if not key or key not in index or not value or is_partial(title):
+    if not key or not value or is_partial(title) or is_lot(title):
         return {}
-    typical = index[key]
+    if key in index:
+        typical, source, threshold = index[key], "local", 0.75
+    elif market and key in market:
+        typical, source, threshold = market[key], "reverb", 0.65
+    else:
+        return {}
     return {
         "typical": format_price(typical),
-        "deal": value <= typical * 0.75 and value >= 20,
+        "deal": value <= typical * threshold and value >= 20,
         "pct_under": round((1 - value / typical) * 100),
+        "source": source,
     }

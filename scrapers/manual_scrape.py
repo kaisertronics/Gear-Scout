@@ -35,6 +35,15 @@ def run_manual_scrape(
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
     new_listings = filter_new(all_listings)
 
+    try:
+        from scrapers.enrich import build_price_index
+        from scrapers.market import refresh_market_prices
+        from scrapers.store import all_priced_rows
+        refresh_market_prices([l.title for l in all_listings],
+                              build_price_index(all_priced_rows()), max_lookups=40)
+    except Exception:
+        logger.exception("Reverb market price refresh failed")
+
     write_run_status(
         run_number=0,
         run_time=datetime.now(timezone.utc),

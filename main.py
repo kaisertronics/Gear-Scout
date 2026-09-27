@@ -27,6 +27,7 @@ from scrapers.runner import run_sources
 from scrapers.emailer import build_email_html, send_email
 from scrapers.run_status import write_run_status
 from scrapers.enrich import build_price_index
+from scrapers.market import load_market, refresh_market_prices
 from scrapers.notify import push_enabled, send_push
 from scrapers.store import (
     all_priced_rows,
@@ -109,6 +110,14 @@ def _run_scrape_cycle():
 
     write_run_status(run_number, run_time, results, new_listings)
 
+    # Typical prices for models seen too rarely locally: look them up on
+    # Reverb (cached, capped per run) so this run's listings and email get one.
+    local_index = build_price_index(all_priced_rows())
+    try:
+        refresh_market_prices([l.title for l in all_listings], local_index, max_lookups=40)
+    except Exception:
+        logger.exception("Reverb market price refresh failed")
+
     # Favorites: re-check each one's own page for a price change, then gather
     # any drops not yet reported (from this check or from scrapes above).
     try:
@@ -141,7 +150,8 @@ def _run_scrape_cycle():
             max_listings_per_source=email_cfg.get("max_listings_per_source", 8),
             max_total_listings=email_cfg.get("max_total_listings", 40),
             dashboard_url=email_cfg.get("dashboard_url", "http://localhost:8420"),
-            price_index=build_price_index(all_priced_rows()),
+            price_index=local_index,
+            market_index=load_market(),
             price_drops=price_drops,
         )
         success = send_email(
@@ -177,11 +187,14 @@ def run_watch_cycle():
         logger.info("Saved searches skipped this interval — a scrape is already running.")
         return
     try:
+        from scrapers.lowest import run_trackers, tracked_queries
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
-        if not any(w["enabled"] for w in get_watches(cfg)):
-            return
-        notify_watch_hits(cfg, run_watches(cfg))
+        if any(w["enabled"] for w in get_watches(cfg)):
+            notify_watch_hits(cfg, run_watches(cfg))
+        # Lowest-price trackers share the same timer (and lock).
+        if tracked_queries(cfg):
+            run_trackers(cfg)
     except Exception:
         logger.exception("Saved-search cycle failed")
     finally:

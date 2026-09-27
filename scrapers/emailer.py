@@ -33,6 +33,7 @@ def build_email_html(
     max_total_listings: int = 40,
     dashboard_url: str = "http://localhost:8420",
     price_index: Optional[dict] = None,
+    market_index: Optional[dict] = None,
     price_drops: Optional[list[dict]] = None,
 ) -> str:
     """
@@ -180,10 +181,11 @@ def build_email_html(
                 <span style="display:inline-block;margin-top:6px;padding:2px 10px;
                     background:#dcfce7;color:#166534;border-radius:12px;
                     font-size:13px;font-weight:600;">{item.price}</span>"""
-                ctx = price_context(item.title, item.price, price_index or {})
+                ctx = price_context(item.title, item.price, price_index or {}, market_index)
                 if ctx:
+                    label = "Reverb" if ctx.get("source") == "reverb" else "typically"
                     price_html += f"""
-                <span style="font-size:11px;color:#94a3b8;">&nbsp;typically ~{ctx['typical']}</span>"""
+                <span style="font-size:11px;color:#94a3b8;">&nbsp;{label} ~{ctx['typical']}</span>"""
                     if ctx.get("deal"):
                         price_html += _flag_html("Deal", "#dcfce7", "#166534")
             if needs_repair(item.title, item.description):

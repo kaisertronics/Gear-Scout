@@ -302,12 +302,14 @@ def _decorate(listings: list[dict]) -> list[dict]:
         within = 0
     deals_only = request.args.get("deals") == "1"
     index = build_price_index(all_priced_rows())
+    from scrapers.market import load_market
+    market = load_market()
     out = []
     for l in listings:
         if exclude_match(l.get("title"), exclude_words):
             continue
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
-        l["price_ctx"] = price_context(l.get("title"), l.get("price"), index)
+        l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market)
         if l.get("sold") and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
@@ -506,6 +508,106 @@ def settings_notifications_test():
     ok = send_push(load_config_raw(), "Gear Scout test", "Notifications are working 🎛",
                    tags=["white_check_mark"])
     return redirect(url_for("settings", saved="push_ok" if ok else "push_fail"))
+
+
+LOWEST_STATUS_PATH = Path("/data/lowest_status.json")
+_lowest_thread = None
+
+
+def _write_lowest_status(status: dict):
+    LOWEST_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOWEST_STATUS_PATH.write_text(json.dumps(status))
+
+
+def _load_lowest_status() -> dict:
+    try:
+        return json.loads(LOWEST_STATUS_PATH.read_text())
+    except Exception:
+        return {"state": "idle"}
+
+
+def _run_lowest_job(query: str):
+    from scrapers.lowest import check_lowest
+
+    def on_progress(done, total, current):
+        _write_lowest_status({"state": "running", "query": query, "done": done,
+                              "total": total, "current_source": current})
+    try:
+        res = check_lowest(query, load_config_raw(), on_progress=on_progress)
+        _write_lowest_status({"state": "done", "query": query, "found": len(res["top"])})
+    except Exception as e:
+        logging.exception("Lowest-price lookup failed")
+        _write_lowest_status({"state": "failed", "query": query, "reason": str(e)})
+
+
+def _start_lowest_job(query: str) -> bool:
+    global _lowest_thread
+    if _lowest_thread is not None and _lowest_thread.is_alive():
+        return False
+    _write_lowest_status({"state": "running", "query": query, "done": 0, "total": 0})
+    _lowest_thread = threading.Thread(target=_run_lowest_job, args=(query,), daemon=True)
+    _lowest_thread.start()
+    return True
+
+
+@app.route("/lowest")
+def lowest():
+    from scrapers.lowest import get_state, normalize, tracked_queries
+    cfg = load_config_raw()
+    q = normalize(request.args.get("q", ""))
+    tracked = tracked_queries(cfg)
+    return render_template(
+        "lowest.html",
+        q=q,
+        current=get_state(q) if q else None,
+        is_tracked=q in tracked,
+        tracked=[(t, get_state(t)) for t in tracked],
+        status=_load_lowest_status(),
+    )
+
+
+@app.route("/lowest/run", methods=["POST"])
+def lowest_run():
+    from scrapers.lowest import normalize
+    q = normalize(request.form.get("q", ""))
+    if q:
+        _start_lowest_job(q)
+    return redirect(url_for("lowest", q=q) if q else url_for("lowest"))
+
+
+@app.route("/lowest/status")
+def lowest_status():
+    return jsonify(_load_lowest_status())
+
+
+@app.route("/lowest/track", methods=["POST"])
+def lowest_track():
+    from scrapers.lowest import get_state, normalize, tracked_queries
+    q = normalize(request.form.get("q", ""))
+    if not q:
+        return redirect(url_for("lowest"))
+    cfg = load_config_for_edit()
+    if q not in tracked_queries(cfg):
+        cfg.setdefault("price_trackers", []).append({"query": q, "enabled": True})
+        save_config_raw(cfg)
+    # First check records today's 3 lowest; alerts start from the next one.
+    if not get_state(q):
+        _start_lowest_job(q)
+    return redirect(url_for("lowest", q=q))
+
+
+@app.route("/lowest/untrack", methods=["POST"])
+def lowest_untrack():
+    from scrapers.lowest import forget, normalize
+    q = normalize(request.form.get("q", ""))
+    cfg = load_config_for_edit()
+    cfg["price_trackers"] = [
+        t for t in (cfg.get("price_trackers") or [])
+        if normalize(t.get("query", "") if isinstance(t, dict) else str(t)) != q
+    ]
+    save_config_raw(cfg)
+    forget(q)
+    return redirect(url_for("lowest"))
 
 
 @app.route("/listing/hide", methods=["POST"])

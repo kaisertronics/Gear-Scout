@@ -640,6 +640,7 @@ code {
 .flag-deal { background: var(--green-bg); color: var(--green-text); }
 .flag-drop { background: var(--blue-bg); color: var(--blue-text); }
 .flag-repair { background: var(--amber-bg); color: var(--amber-text); }
+.flag-clone { background: #f3e8ff; color: #6b21a8; }
 .flag-sold { background: var(--bg); color: var(--muted); text-decoration: line-through; }
 .listing-hide-form { position: absolute; top: 8px; left: 8px; margin: 0; }
 .hide-btn {
@@ -672,6 +673,24 @@ code {
 }
 .deals-toggle input { margin: 0; }
 .deals-toggle.is-on { background: var(--green-bg); border-color: var(--green-text); color: var(--green-text); }
+
+.lowest-list { display: flex; flex-direction: column; gap: 8px; }
+.lowest-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 10px; text-decoration: none; color: inherit; background: var(--panel);
+}
+.lowest-row:first-child { border: 2px solid var(--green-text); }
+.lowest-row:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+.lowest-rank { font-weight: 800; color: var(--muted); min-width: 28px; }
+.lowest-img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: var(--bg); }
+.lowest-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lowest-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+.lowest-price { font-weight: 800; font-size: 16px; color: var(--green-text); white-space: nowrap; }
+.lowest-tracked { padding: 12px 0; border-top: 1px solid var(--border); }
+.lowest-tracked:first-of-type { border-top: none; }
+.lowest-tracked-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.lowest-tracked-head .muted { flex: 1; }
+.lowest-tracked-head form { margin: 0; }
 
 /* ---------- Phones ----------
    Everything above is laid out for desktop widths; this reflows it for
