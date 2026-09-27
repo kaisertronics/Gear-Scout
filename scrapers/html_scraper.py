@@ -318,13 +318,16 @@ def _scrape_craigslist_listings(
     sep = "&" if "?" in url else "?"
     search_url = f"{url}{sep}sort=date"
     if len(keywords) == 1 and keywords[0].strip():
-        term = keywords[0].strip()
         # Craigslist only matches whole words, so "u87" misses "U87Ai" /
-        # "C38B"-style model variants; a trailing * makes it a prefix match
-        # (confirmed live: "u87*" returned every "u87" result plus U87A ones).
-        if " " not in term and re.search(r'[a-z]', term, re.I) and re.search(r'\d', term) and not term.endswith("*"):
-            term += "*"
-        search_url += f"&query={quote_plus(term)}"
+        # "C38B"-style model variants; a trailing * on each model-number word
+        # makes it a prefix match (confirmed live: "u87*" returned every
+        # "u87" result plus U87A ones).
+        words = []
+        for word in keywords[0].split():
+            if re.search(r'[a-z]', word, re.I) and re.search(r'\d', word) and not word.endswith("*"):
+                word += "*"
+            words.append(word)
+        search_url += f"&query={quote_plus(' '.join(words))}"
 
     html, error = _get_html(search_url)
     if not html:

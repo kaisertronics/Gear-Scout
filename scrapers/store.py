@@ -147,24 +147,30 @@ def search_listings(query_text: str, limit: int = 300) -> list[dict]:
     (legacy pre-migration rows with nothing to show)."""
     from scrapers.base import keyword_match
 
-    like = f"%{query_text}%"
-    # Model-number-style queries ("km184", "c38") should also find "KM 184" /
-    # "KM-184" / "C38A" — same rule as keyword_match's model pattern — so widen the
-    # prefilter to compare with spaces/hyphens stripped from the stored text.
-    compact = re.sub(r'[^a-z0-9]', '', query_text.lower())
+    # Coarse SQL prefilter, one clause per word (all must hit, any order) —
+    # same rule as keyword_match for a single search phrase. Model-number
+    # words ("c38", "km184") also compare with spaces/hyphens stripped from
+    # the stored text, so "C-38B" and "KM 184" pass through to the real check.
     strip = lambda col: f"lower(replace(replace(coalesce({col},''),' ',''),'-',''))"
-    extra_sql, extra_params = "", ()
-    if re.search(r'[a-z]', compact) and re.search(r'\d', compact):
-        extra_sql = f" OR {strip('title')} LIKE ? OR {strip('description')} LIKE ?"
-        extra_params = (f"%{compact}%", f"%{compact}%")
+    clauses, params = [], []
+    words = [w for w in query_text.split() if re.search(r'[a-z0-9]', w, re.I)] or [query_text]
+    for word in words:
+        like = f"%{word}%"
+        clause = "title LIKE ? OR description LIKE ? OR tags LIKE ?"
+        params += [like, like, like]
+        compact = re.sub(r'[^a-z0-9]', '', word.lower())
+        if re.search(r'[a-z]', compact) and re.search(r'\d', compact):
+            clause += f" OR {strip('title')} LIKE ? OR {strip('description')} LIKE ?"
+            params += [f"%{compact}%", f"%{compact}%"]
+        clauses.append(f"({clause})")
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             f"""SELECT * FROM seen
                WHERE url IS NOT NULL AND url != ''
-                 AND (title LIKE ? OR description LIKE ? OR tags LIKE ?{extra_sql})
+                 AND {' AND '.join(clauses)}
                ORDER BY first_seen DESC""",
-            (like, like, like, *extra_params),
+            params,
         ).fetchall()
 
     keywords = [query_text]

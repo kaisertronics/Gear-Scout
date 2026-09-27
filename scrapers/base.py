@@ -83,10 +83,26 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
     # model-number-style terms (letters + digits) get this looser match —
     # plain words like "eq" or "mic" keep strict word matching.
     if len(keywords) == 1:
-        model = _model_pattern(keywords[0])
-        if model and model.search(text_lower):
+        # Multi-word searches ("sony c38") need every word, in any order —
+        # like the sites' own search boxes — not the exact phrase, so
+        # "Sony C-38B" and "C38B mic by Sony" both match.
+        words = [w for w in re.split(r'\s+', keywords[0].strip()) if re.search(r'[a-z0-9]', w, re.I)]
+        if words and all(_word_matches(w, text_lower) for w in words):
             return True
     return False
+
+
+def _word_matches(word: str, text_lower: str) -> bool:
+    model = _model_pattern(word)
+    if model:
+        return bool(model.search(text_lower))
+    digits = word.strip().lower()
+    if digits.isdigit() and len(digits) >= 3:
+        # Bare model numbers also take letter suffixes: 512 -> 512c,
+        # 1176 -> 1176LN — but not a longer number (1073 != 10730).
+        return bool(re.search(r'(?<![a-z0-9])' + digits + r'[a-z]*(?![a-z0-9])', text_lower))
+    pattern = _keyword_pattern(word)
+    return bool(pattern and pattern.search(text_lower))
 
 
 _model_pattern_cache: dict[str, Optional[re.Pattern]] = {}
