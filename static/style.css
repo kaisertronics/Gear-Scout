@@ -631,6 +631,38 @@ code {
 
 .manual-search-links { margin: 14px 0 10px; display: flex; flex-direction: column; gap: 8px; }
 
+/* Listing card extras: price context, flags, hide button. */
+.listing-price-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.listing-was { font-size: 12px; color: var(--muted); text-decoration: line-through; }
+.listing-typical { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.listing-flags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.flag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+.flag-deal { background: var(--green-bg); color: var(--green-text); }
+.flag-drop { background: var(--blue-bg); color: var(--blue-text); }
+.flag-repair { background: var(--amber-bg); color: var(--amber-text); }
+.flag-sold { background: var(--bg); color: var(--muted); text-decoration: line-through; }
+.listing-hide-form { position: absolute; top: 8px; left: 8px; margin: 0; }
+.hide-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.85); color: var(--muted); font-size: 12px; line-height: 26px;
+  padding: 0; opacity: 0.75;
+}
+.hide-btn:hover { opacity: 1; color: var(--red-text); }
+
+.save-watch-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.save-watch-form .btn { margin: 0; }
+.save-watch-price { flex: 0 1 170px; }
+.watch-list { display: flex; flex-direction: column; }
+.watch-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.watch-row:first-child { border-top: none; }
+.watch-query { font-weight: 700; color: var(--navy); text-decoration: none; }
+.watch-meta { flex: 1; }
+.watch-row form { margin: 0; }
+
+.listing-location { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.distance-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 16px; }
+.distance-filter select { margin-left: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+
 /* ---------- Phones ----------
    Everything above is laid out for desktop widths; this reflows it for
    narrow screens instead of letting the nav, tables and forms run off the
@@ -698,6 +730,9 @@ code {
   .status-summary-run { display: none; }
   .status-panel > .status-table { margin: 0 14px 14px; width: calc(100% - 28px); }
   .manual-source-links .btn { flex: 1 1 calc(50% - 8px); text-align: center; }
+
+  .settings-tabs { flex-wrap: wrap; }
+  .settings-tab { flex: 1 1 auto; }
 
   .vnc-frame { height: 70vh; }
 

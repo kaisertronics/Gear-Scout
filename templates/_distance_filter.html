@@ -1,0 +1,13 @@
+{% if home_zip_set %}
+<form method="get" class="distance-filter">
+  {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+  <label class="muted">Local pickup within
+    <select name="within" onchange="this.form.submit()">
+      {% for v, label in [('', 'any distance'), ('25', '25 mi'), ('50', '50 mi'), ('100', '100 mi'), ('250', '250 mi'), ('500', '500 mi')] %}
+        <option value="{{ v }}" {{ 'selected' if within_value == v else '' }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <span class="muted">— Facebook &amp; Craigslist listings with a known town; shipped listings always show.</span>
+</form>
+{% endif %}

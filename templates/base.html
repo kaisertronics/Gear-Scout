@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Gear Scout{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <meta name="theme-color" content="#1e3a5f">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Gear Scout">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body data-endpoint="{{ request.endpoint }}">
   <header class="topbar">
@@ -62,6 +70,21 @@
         return;
       }
 
+      if (form.classList.contains('listing-hide-form')) {
+        e.preventDefault();
+        const card = form.closest('.listing-card');
+        card.style.opacity = '0.3';
+        try {
+          const resp = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+          if (!resp.ok) throw new Error('bad status');
+          card.remove();
+        } catch (err) {
+          card.style.opacity = '';
+          form.submit();
+        }
+        return;
+      }
+
       if (form.closest('.tag-edit')) {
         e.preventDefault();
         try {
@@ -84,6 +107,12 @@
         details.removeAttribute('open');
       }
     });
+
+    // Lets Chrome/Android offer "Install app". The worker only passes
+    // requests through — nothing is cached, so the dashboard is never stale.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   </script>
 </body>
 </html>

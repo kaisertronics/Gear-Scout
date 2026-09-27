@@ -9,6 +9,7 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 from .base import Listing, ScrapeResult
+from .enrich import needs_repair, price_context
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ def build_email_html(
     max_listings_per_source: int = 8,
     max_total_listings: int = 40,
     dashboard_url: str = "http://localhost:8420",
+    price_index: Optional[dict] = None,
+    price_drops: Optional[list[dict]] = None,
 ) -> str:
     """
     Build a full HTML email.
@@ -177,6 +180,14 @@ def build_email_html(
                 <span style="display:inline-block;margin-top:6px;padding:2px 10px;
                     background:#dcfce7;color:#166534;border-radius:12px;
                     font-size:13px;font-weight:600;">{item.price}</span>"""
+                ctx = price_context(item.title, item.price, price_index or {})
+                if ctx:
+                    price_html += f"""
+                <span style="font-size:11px;color:#94a3b8;">&nbsp;typically ~{ctx['typical']}</span>"""
+                    if ctx.get("deal"):
+                        price_html += _flag_html("Deal", "#dcfce7", "#166534")
+            if needs_repair(item.title, item.description):
+                price_html += _flag_html("Needs repair", "#fffbeb", "#b45309")
             desc_html = ""
             if item.description:
                 desc_html = f"""
@@ -276,6 +287,8 @@ def build_email_html(
 
       {failed_alert}
 
+      {_price_drops_html(price_drops)}
+
       <!-- New listings -->
       <div style="margin-bottom:32px;">
         <h2 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#1e293b;">
@@ -307,6 +320,55 @@ def build_email_html(
     return html
 
 
+def _flag_html(text: str, bg: str, fg: str) -> str:
+    return (f'<span style="display:inline-block;margin:6px 0 0 6px;padding:1px 8px;background:{bg};'
+            f'color:{fg};border-radius:10px;font-size:11px;font-weight:700;">{text}</span>')
+
+
+def _price_drops_html(drops: Optional[list[dict]]) -> str:
+    if not drops:
+        return ""
+    rows = "".join(
+        f"""<div style="padding:10px 0;border-bottom:1px solid #e2e8f0;">
+              <a href="{d['url']}" style="color:#1e3a5f;font-weight:600;text-decoration:none;">{d['title']}</a><br>
+              <span style="color:#166534;font-weight:700;">{d['price']}</span>
+              <span style="color:#94a3b8;text-decoration:line-through;">&nbsp;{d.get('previous_price') or ''}</span>
+              <span style="color:#94a3b8;font-size:12px;">&nbsp;· {d['source_name']}</span>
+            </div>"""
+        for d in drops
+    )
+    return f"""
+      <div style="margin-bottom:28px;padding:14px 18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;">
+        <h2 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#1d4ed8;">⬇️ Price drops on your favorites</h2>
+        {rows}
+      </div>"""
+
+
+def build_watch_alert_html(new_by_watch: dict[str, list[dict]], dashboard_url: str) -> str:
+    from urllib.parse import quote_plus
+    sections = ""
+    for q, hits in new_by_watch.items():
+        items = "".join(
+            f"""<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #e2e8f0;">
+                  {f'<img src="{h["image_url"]}" width="64" height="64" style="width:64px;height:64px;object-fit:cover;border-radius:6px;">' if h.get("image_url") else ''}
+                  <div><a href="{h['url']}" style="color:#1e3a5f;font-weight:600;text-decoration:none;">{h['title']}</a><br>
+                  <span style="color:#166534;font-weight:700;">{h['price'] or ''}</span>
+                  <span style="color:#94a3b8;font-size:12px;">&nbsp;· {h['source_name']}</span>
+                  {_flag_html('Needs repair', '#fffbeb', '#b45309') if h.get('needs_repair') else ''}</div>
+                </div>"""
+            for h in hits
+        )
+        sections += f"""
+          <h2 style="margin:18px 0 6px;font-size:16px;color:#1e293b;">🔔 {len(hits)} new for “{q}”</h2>
+          {items}
+          <p style="margin:8px 0 0;font-size:13px;"><a href="{dashboard_url}/search?q={quote_plus(q)}">See all results for “{q}” →</a></p>"""
+    return f"""<!DOCTYPE html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+      <div style="max-width:640px;margin:0 auto;padding:20px;">
+        <div style="background:#1e3a5f;color:#fff;padding:18px 22px;border-radius:12px 12px 0 0;font-size:18px;font-weight:700;">🎛 Gear Scout — saved search alert</div>
+        <div style="background:#fff;padding:6px 22px 20px;border-radius:0 0 12px 12px;">{sections}</div>
+      </div></body></html>"""
+
+
 def send_email(
     html: str,
     subject: str,
@@ -315,10 +377,14 @@ def send_email(
     failed_count: int,
 ):
     """Send the digest via Gmail SMTP."""
-    msg = MIMEMultipart("alternative")
     subject_line = f"{subject} — {new_count} new listing{'s' if new_count != 1 else ''}"
     if failed_count:
         subject_line += f" | ⚠️ {failed_count} source error{'s' if failed_count != 1 else ''}"
+    return send_html_email(html, subject_line, cfg)
+
+
+def send_html_email(html: str, subject_line: str, cfg: dict) -> bool:
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject_line
     msg["From"] = cfg["from"]
     msg["To"] = cfg["to"]

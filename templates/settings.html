@@ -8,10 +8,23 @@
       <button type="button" class="settings-tab" data-tab="keywords">Search Terms</button>
       <button type="button" class="settings-tab" data-tab="data">Data</button>
       <button type="button" class="settings-tab" data-tab="ebay">eBay</button>
+      <button type="button" class="settings-tab" data-tab="notify">Alerts</button>
     </div>
 
     {% if saved == 'email' %}
       <div class="settings-saved">✓ Email &amp; schedule settings saved.</div>
+    {% elif saved == 'notifications' %}
+      <div class="settings-saved">✓ Alert settings saved.</div>
+    {% elif saved == 'push_ok' %}
+      <div class="settings-saved">✓ Test notification sent — it should be on your phone now.</div>
+    {% elif saved == 'push_fail' %}
+      <div class="settings-warning">Couldn't send the test notification — check the channel name is saved, then try again.</div>
+    {% elif saved == 'location' %}
+      <div class="settings-saved">✓ Location saved.</div>
+    {% elif saved == 'exclude' %}
+      <div class="settings-saved">✓ Exclude words saved.</div>
+    {% elif saved and saved.startswith('unhide:') %}
+      <div class="settings-saved">✓ Unhid {{ saved.split(':')[1] }} listing(s).</div>
     {% elif saved == 'ebay' %}
       <div class="settings-saved">✓ eBay settings saved — takes effect on the next scrape or live search.</div>
     {% elif saved == 'keywords' %}
@@ -122,6 +135,32 @@
         <textarea name="keywords" class="settings-keywords-textarea" rows="20" spellcheck="false">{{ keywords_text }}</textarea>
         <button type="submit" class="btn btn-primary">Save search terms</button>
       </form>
+
+      <form method="post" action="{{ url_for('settings_location') }}" class="settings-form" style="margin-top:28px;">
+        <h3>Your location</h3>
+        <p class="muted">
+          Your ZIP code, used only to show how far Facebook Marketplace and Craigslist listings
+          are from you and to filter by distance. Stays on this machine.
+        </p>
+        <div class="form-row">
+          <label>ZIP code
+            <input type="text" name="home_zip" value="{{ home_zip }}" inputmode="numeric" maxlength="5" placeholder="e.g. 78205">
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary">Save location</button>
+      </form>
+
+      <form method="post" action="{{ url_for('settings_exclude') }}" class="settings-form" style="margin-top:28px;">
+        <h3>Exclude words</h3>
+        <p class="muted">
+          One per line. Any listing whose title contains one of these is dropped everywhere —
+          scheduled runs, live search, the Dashboard and the email. Good for things like
+          <code>wanted</code>, <code>wtb</code> or <code>looking for</code>. Broken gear isn't
+          hidden — it's tagged <strong>Needs repair</strong> instead.
+        </p>
+        <textarea name="exclude_words" class="settings-keywords-textarea" rows="6" spellcheck="false">{{ exclude_text }}</textarea>
+        <button type="submit" class="btn btn-primary">Save exclude words</button>
+      </form>
     </div>
 
     <div class="settings-panel" id="tab-data" style="display:none;">
@@ -155,6 +194,12 @@
         </button>
       </form>
 
+      <h3>Hidden listings</h3>
+      <p class="muted">Listings you've dismissed with the ✕ button: {{ hidden_count }}.</p>
+      <form method="post" action="{{ url_for('settings_unhide') }}">
+        <button type="submit" class="btn" {{ 'disabled' if hidden_count == 0 else '' }}>Unhide all {{ hidden_count }}</button>
+      </form>
+
       <h3>Reset everything</h3>
       <p class="muted">
         Deletes <strong>all</strong> stored listings, favorites, and tags — every source will
@@ -165,6 +210,54 @@
             onsubmit="return confirm('This deletes ALL {{ db_stats.total_seen }} stored listings, favorites, and tags. This cannot be undone. Continue?');">
         <button type="submit" class="btn btn-danger">Delete all {{ db_stats.total_seen }} stored listings</button>
       </form>
+    </div>
+
+    <div class="settings-panel" id="tab-notify" style="display:none;">
+      <h3>Phone notifications</h3>
+      <p class="muted">
+        Instant alerts on your phone for new matches on your <strong>saved searches</strong> and
+        <strong>price drops on your favorites</strong>, using the free <strong>ntfy</strong> app — no
+        account needed.
+      </p>
+      <ol class="muted">
+        <li>Install <strong>ntfy</strong> from the App Store or Google Play.</li>
+        <li>In the app tap <strong>+</strong> (Subscribe to topic) and enter the channel name below exactly.</li>
+        <li>Click <strong>Save alert settings</strong> here, then <strong>Send test notification</strong>.</li>
+      </ol>
+      <p class="muted">
+        Anyone who knows the channel name can see these alerts, so keep the random one suggested
+        below rather than something guessable.
+      </p>
+      <form method="post" action="{{ url_for('settings_notifications') }}" class="settings-form">
+        <div class="form-row">
+          <label class="grow">Channel (ntfy topic) name
+            <input type="text" name="ntfy_topic" value="{{ notif_cfg.get('ntfy_topic') or suggested_topic }}" spellcheck="false" autocomplete="off">
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="grow">Check saved searches every (minutes)
+            <input type="number" name="watch_interval_minutes" min="15" value="{{ notif_cfg.get('watch_interval_minutes', 60) }}">
+          </label>
+        </div>
+        <p class="muted">
+          Each check searches every site (including 8 Facebook regions) once per saved search, so
+          very short intervals with many saved searches mean a lot of activity on your Facebook
+          account. Changing the interval takes effect after <code>docker compose restart scout</code>.
+        </p>
+        <div class="form-row">
+          <label style="flex-direction:row;align-items:center;gap:8px;">
+            <input type="checkbox" name="watch_email" value="1" {{ 'checked' if notif_cfg.get('watch_email', True) else '' }} style="min-width:0;width:auto;">
+            Also email me saved-search alerts
+          </label>
+        </div>
+        <input type="hidden" name="ntfy_server" value="{{ notif_cfg.get('ntfy_server', 'https://ntfy.sh') }}">
+        <button type="submit" class="btn btn-primary">Save alert settings</button>
+      </form>
+      {% if notif_cfg.get('ntfy_topic') %}
+      <form method="post" action="{{ url_for('settings_notifications_test') }}" style="margin-top:10px;">
+        <button type="submit" class="btn">Send test notification</button>
+      </form>
+      {% endif %}
     </div>
 
     <div class="settings-panel" id="tab-ebay" style="display:none;">
@@ -219,6 +312,7 @@
       keywords: document.getElementById('tab-keywords'),
       data: document.getElementById('tab-data'),
       ebay: document.getElementById('tab-ebay'),
+      notify: document.getElementById('tab-notify'),
     };
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -231,6 +325,12 @@
     });
     {% if saved == 'ebay' %}
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
+    {% elif saved in ('notifications', 'push_ok', 'push_fail') %}
+      document.querySelector('.settings-tab[data-tab="notify"]').click();
+    {% elif saved in ('exclude', 'location') %}
+      document.querySelector('.settings-tab[data-tab="keywords"]').click();
+    {% elif saved and saved.startswith('unhide:') %}
+      document.querySelector('.settings-tab[data-tab="data"]').click();
     {% endif %}
   </script>
 

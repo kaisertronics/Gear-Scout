@@ -413,11 +413,10 @@ def _scrape_craigslist_listings(
             listing_id = row.get("data-pid", href[-20:] if href else None)
 
         row_source_name = name
-        if use_row_location:
-            loc_el = row.select_one(".location") or row.select_one(".result-hood")
-            loc = loc_el.get_text(strip=True).strip("()") if loc_el else ""
-            if loc:
-                row_source_name = f"Craigslist — {loc}"
+        loc_el = row.select_one(".location") or row.select_one(".result-hood")
+        loc = loc_el.get_text(strip=True).strip("()") if loc_el else ""
+        if use_row_location and loc:
+            row_source_name = f"Craigslist — {loc}"
 
         listings.append(Listing(
             source_name=row_source_name,
@@ -426,6 +425,7 @@ def _scrape_craigslist_listings(
             price=clean_price(price_el.get_text(strip=True)) if price_el else None,
             image_url=(img_el.get("src") if img_el else None) or image_map.get(title),
             listing_id=listing_id,
+            location=loc or None,
         ))
 
     return listings, None, None

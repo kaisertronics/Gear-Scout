@@ -11,6 +11,7 @@ Commands:
 """
 import logging
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,12 +19,23 @@ from pathlib import Path
 import yaml
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
+from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
 from scrapers.dispatch import dispatch_scrape
 from scrapers.emailer import build_email_html, send_email
 from scrapers.run_status import write_run_status
-from scrapers.store import filter_new, purge_old, stats as db_stats
+from scrapers.enrich import build_price_index
+from scrapers.notify import push_enabled, send_push
+from scrapers.store import (
+    all_priced_rows,
+    filter_new,
+    mark_price_drops_notified,
+    pending_favorite_price_drops,
+    purge_old,
+    stats as db_stats,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +56,11 @@ def load_config() -> dict:
 
 
 def run_scrape_cycle():
+    with _run_lock:
+        _run_scrape_cycle()
+
+
+def _run_scrape_cycle():
     global _run_counter
     _run_counter += 1
     run_number = _run_counter
@@ -96,7 +113,7 @@ def run_scrape_cycle():
         results.append(result)
 
     # Deduplicate — only keep listings we haven't seen before
-    all_listings = [l for r in results for l in r.listings]
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
     new_listings = filter_new(all_listings)
 
     failed_sources = [r for r in results if not r.success]
@@ -110,11 +127,30 @@ def run_scrape_cycle():
 
     write_run_status(run_number, run_time, results, new_listings)
 
+    # Favorites: re-check each one's own page for a price change, then gather
+    # any drops not yet reported (from this check or from scrapes above).
+    try:
+        from scrapers.price_check import check_favorite_prices
+        check_favorite_prices()
+    except Exception:
+        logger.exception("Favorite price check failed")
+    price_drops, seen_urls = [], set()
+    for d in pending_favorite_price_drops():
+        if d["url"] not in seen_urls:
+            seen_urls.add(d["url"])
+            price_drops.append(d)
+    if price_drops and push_enabled(cfg):
+        for d in price_drops:
+            send_push(cfg, "Price drop on a favorite",
+                      f"{d['title'][:90]}\n{d.get('previous_price') or '?'} → {d['price']}",
+                      url=d["url"], tags=["chart_with_downwards_trend"])
+
     # --- Email logic ---
     # Send email if:
     #   (a) there are new listings, OR
-    #   (b) one or more sources failed (so you're always notified of problems)
-    if has_new or has_failures:
+    #   (b) one or more sources failed (so you're always notified of problems), OR
+    #   (c) a favorite dropped in price
+    if has_new or has_failures or price_drops:
         html = build_email_html(
             new_listings=new_listings,
             results=results,
@@ -123,6 +159,8 @@ def run_scrape_cycle():
             max_listings_per_source=email_cfg.get("max_listings_per_source", 8),
             max_total_listings=email_cfg.get("max_total_listings", 40),
             dashboard_url=email_cfg.get("dashboard_url", "http://localhost:8420"),
+            price_index=build_price_index(all_priced_rows()),
+            price_drops=price_drops,
         )
         success = send_email(
             html=html,
@@ -138,10 +176,34 @@ def run_scrape_cycle():
     else:
         logger.info("No new listings and no failures — skipping email this run.")
 
+    if price_drops:
+        mark_price_drops_notified([d["global_id"] for d in pending_favorite_price_drops()])
+
     # Periodic DB cleanup
     purge_old(days=30)
 
     logger.info("Run #%d complete.\n", run_number)
+
+
+# A full scrape and a saved-search pass each drive several headless browsers
+# (and the Facebook account) — never let them overlap.
+_run_lock = threading.Lock()
+
+
+def run_watch_cycle():
+    if not _run_lock.acquire(blocking=False):
+        logger.info("Saved searches skipped this interval — a scrape is already running.")
+        return
+    try:
+        from scrapers.watches import get_watches, notify_watch_hits, run_watches
+        cfg = load_config()
+        if not any(w["enabled"] for w in get_watches(cfg)):
+            return
+        notify_watch_hits(cfg, run_watches(cfg))
+    except Exception:
+        logger.exception("Saved-search cycle failed")
+    finally:
+        _run_lock.release()
 
 
 def run_schedule():
@@ -173,7 +235,21 @@ def run_schedule():
         misfire_grace_time=300,
     )
 
-    logger.info("Scheduler started. Cron: '%s' (%s)", cron_expr, tz_name)
+    # Saved searches run on their own, more frequent timer so a hit can be
+    # pushed to the phone within the hour instead of waiting for the digest.
+    interval = int((cfg.get("notifications") or {}).get("watch_interval_minutes", 60) or 60)
+    interval = max(15, interval)
+    scheduler.add_job(
+        run_watch_cycle,
+        IntervalTrigger(minutes=interval, timezone=tz_name),
+        name="gear_scout_watches",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+
+    logger.info("Scheduler started. Cron: '%s' (%s); saved searches every %d min",
+                cron_expr, tz_name, interval)
 
     # Off by default: every container restart (rebuild, reboot, crash
     # recovery) would otherwise scrape and email immediately, on top of the

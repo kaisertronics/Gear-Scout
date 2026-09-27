@@ -15,7 +15,26 @@
     {% endif %}
     <div class="listing-body">
       <div class="listing-title">{{ l.title }}</div>
-      {% if l.price %}<div class="listing-price">{{ l.price }}</div>{% endif %}
+      {% if l.price %}
+        <div class="listing-price-row">
+          <span class="listing-price">{{ l.price }}</span>
+          {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
+        </div>
+      {% endif %}
+      {% if l.location %}
+        <div class="listing-location">📍 {{ l.location }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
+      {% endif %}
+      {% if l.price_ctx and l.price_ctx.typical %}
+        <div class="listing-typical">typically ~{{ l.price_ctx.typical }}</div>
+      {% endif %}
+      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold %}
+        <div class="listing-flags">
+          {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>{% endif %}
+          {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">Deal</span>{% endif %}
+          {% if l.previous_price %}<span class="flag flag-drop">Price drop</span>{% endif %}
+          {% if l.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
+        </div>
+      {% endif %}
     </div>
   {% endset %}
   {% if l.url %}
@@ -29,6 +48,13 @@
     <input type="hidden" name="next" value="{{ request.full_path }}">
     <input type="hidden" name="favorite" value="{{ 0 if l.favorite else 1 }}">
     <button type="submit" class="fav-star {{ 'is-favorite' if l.favorite else '' }}" title="{{ 'Remove from favorites' if l.favorite else 'Add to favorites' }}">★</button>
+  </form>
+
+  <form method="post" action="{{ url_for('listing_hide') }}" class="listing-hide-form">
+    <input type="hidden" name="global_id" value="{{ l.global_id }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <input type="hidden" name="hidden" value="1">
+    <button type="submit" class="hide-btn" title="Hide this listing" aria-label="Hide this listing">✕</button>
   </form>
 
   <div class="listing-tags">

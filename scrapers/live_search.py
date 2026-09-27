@@ -14,6 +14,7 @@ import logging
 import time
 from typing import Callable, Optional
 
+from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
 from scrapers.dispatch import dispatch_scrape
 from scrapers.store import mark_seen
@@ -67,6 +68,7 @@ def run_live_search(
                 error=str(e),
                 duration_seconds=time.time() - start,
             )
+        result.listings = drop_excluded(result.listings, cfg)
         results.append(result)
         for listing in result.listings:
             mark_seen(listing, live_only=True)

@@ -485,6 +485,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     aria_label = card.get_attribute("aria-label") or ""
                     title = None
                     price = None
+                    location = None
                     if aria_label:
                         label = re.sub(r',\s*listing\s+\d+\s*$', '', aria_label, flags=re.IGNORECASE)
                         # Search the raw label directly for the price token
@@ -498,6 +499,11 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                             title = label[:price_match.start()].strip().rstrip(',').strip()
                             matched = price_match.group(0)
                             price = None if matched.lower() == "free" else matched
+                            # After the price: ["reduced from $X",] City, ST
+                            rest = [p.strip() for p in label[price_match.end():].split(",")
+                                    if p.strip() and not p.strip().lower().startswith("reduced from")]
+                            if len(rest) >= 2 and re.fullmatch(r"[A-Z]{2}", rest[-1]):
+                                location = f"{rest[-2]}, {rest[-1]}"
 
                     text_content = card.inner_text()
                     match_text = aria_label or text_content
@@ -537,6 +543,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                         price=price,
                         image_url=image_url,
                         listing_id=item_id,
+                        location=location,
                     ))
                 except Exception as e:
                     logger.debug("Error parsing FB Marketplace card: %s", e)

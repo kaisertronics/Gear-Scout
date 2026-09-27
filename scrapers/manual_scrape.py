@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
+from scrapers.enrich import drop_excluded
 from scrapers.base import ScrapeResult
 from scrapers.dispatch import dispatch_scrape
 from scrapers.run_status import write_run_status
@@ -52,7 +53,7 @@ def run_manual_scrape(
             )
         results.append(result)
 
-    all_listings = [l for r in results for l in r.listings]
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
     new_listings = filter_new(all_listings)
 
     write_run_status(

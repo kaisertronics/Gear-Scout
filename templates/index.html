@@ -86,6 +86,29 @@
     <div id="fbm-manual-links" class="fbm-manual-links" style="display:none;"></div>
   </section>
 
+  {% if watches %}
+  <section class="panel watches-panel">
+    <h2>Saved searches <span class="muted">— checked about every hour; new matches alert you</span></h2>
+    <div class="watch-list">
+      {% for w in watches %}
+        <div class="watch-row">
+          <a class="watch-query" href="{{ url_for('search', q=w.query) }}">{{ w.query }}</a>
+          <span class="muted watch-meta">
+            {% if w.max_price %}under ${{ '{:,.0f}'.format(w.max_price) }} · {% endif %}
+            {% if w.last_run %}{{ w.total or 0 }} found{% if w.last_new %} · <strong>{{ w.last_new }} new</strong>{% endif %}{% else %}not checked yet{% endif %}
+            {% if w.error %} · <span class="error-cell">last check failed</span>{% endif %}
+          </span>
+          <form method="post" action="{{ url_for('watches_delete') }}" onsubmit="return confirm('Stop watching &quot;{{ w.query }}&quot;?');">
+            <input type="hidden" name="q" value="{{ w.query }}">
+            <input type="hidden" name="next" value="{{ url_for('index') }}">
+            <button type="submit" class="hide-btn" title="Delete saved search" aria-label="Delete saved search">✕</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   {% if status %}
   {% set manual_sources = status.sources | selectattr('blocked') | list %}
   {% set ok_sources = status.sources | selectattr('success') | list %}
@@ -149,6 +172,8 @@
     </table>
   </details>
   {% endif %}
+
+  {% include "_distance_filter.html" %}
 
   {% if not grouped_listings %}
   <section class="panel">

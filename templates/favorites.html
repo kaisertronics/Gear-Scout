@@ -10,6 +10,8 @@
     {% endif %}
   </section>
 
+  {% include "_distance_filter.html" %}
+
   {% for source_name, items in grouped_listings %}
   <section class="panel">
     <h2>{{ source_name }} <span class="muted">— {{ items|length }}</span></h2>

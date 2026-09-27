@@ -78,6 +78,23 @@ schedule:
   # starts (including rebuilds/reboots). Off by default.
   run_on_startup: false
 
+# --- Alerts (optional — all editable in the dashboard) --------
+# Phone push notifications via the free ntfy app (Settings -> Alerts has the
+# setup steps). Leave ntfy_topic blank to turn push off.
+notifications:
+  ntfy_topic: ""
+  ntfy_server: "https://ntfy.sh"
+  watch_interval_minutes: 60   # how often saved searches re-check every site
+  watch_email: true            # also email saved-search alerts
+# Saved searches — easiest to add from the Search page ("Save this search").
+watches: []
+#  - query: "sony c38"
+#    max_price: 1000
+# Your ZIP code, for "N mi away" on Facebook/Craigslist listings.
+home_zip: ""
+# Listings whose title contains any of these are dropped everywhere.
+exclude_words: []
+
 # --- Keywords ------------------------------------------------
 # This is the whole point of the app: it only ever surfaces a listing if its
 # title/description matches one of YOUR keywords below. This list ships

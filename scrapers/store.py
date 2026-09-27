@@ -42,8 +42,69 @@ def _conn() -> sqlite3.Connection:
     # hidden from the Dashboard's recent listings.
     if "live_only" not in existing_cols:
         conn.execute("ALTER TABLE seen ADD COLUMN live_only INTEGER NOT NULL DEFAULT 0")
+    # hidden: dismissed by the user. duplicate: the same item already stored
+    # from another source (same link, or same title + price cross-posted to a
+    # different site). previous_price/price_dropped_at: set when a listing is
+    # seen again cheaper; drop_notified tracks whether that was reported.
+    for col, ddl in (
+        ("hidden", "INTEGER NOT NULL DEFAULT 0"),
+        ("duplicate", "INTEGER NOT NULL DEFAULT 0"),
+        ("dup_key", "TEXT"),
+        ("previous_price", "TEXT"),
+        ("price_dropped_at", "TEXT"),
+        ("drop_notified", "INTEGER NOT NULL DEFAULT 1"),
+        ("location", "TEXT"),
+        ("sold", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        if col not in existing_cols:
+            conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_url ON seen(url)")
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_dup_key ON seen(dup_key)")
     conn.commit()
+    if "dup_key" not in existing_cols:
+        _backfill_duplicates(conn)
     return conn
+
+
+def _find_original(conn, global_id: str, url: str, key: str, family: str) -> bool:
+    """True if another stored row is the same item: identical link, or the
+    same title+price posted on a different site (a cross-post)."""
+    from scrapers.enrich import source_family
+    if url and conn.execute(
+        "SELECT 1 FROM seen WHERE url = ? AND global_id != ? AND duplicate = 0 LIMIT 1",
+        (url, global_id),
+    ).fetchone():
+        return True
+    # Title+price matching is only for private-seller cross-posts between
+    # Facebook and Craigslist — dealer listings on Reverb/eBay often use the
+    # bare product name, so the same title and price there can be two units.
+    if key and family in _CROSSPOST_FAMILIES:
+        for (other_url,) in conn.execute(
+            "SELECT url FROM seen WHERE dup_key = ? AND global_id != ? AND duplicate = 0",
+            (key, global_id),
+        ):
+            other = source_family(other_url)
+            if other != family and other in _CROSSPOST_FAMILIES:
+                return True
+    return False
+
+
+_CROSSPOST_FAMILIES = {"facebook", "craigslist"}
+
+
+def _backfill_duplicates(conn):
+    from scrapers.enrich import dup_key, source_family
+    rows = conn.execute(
+        "SELECT global_id, url, title, price FROM seen ORDER BY first_seen"
+    ).fetchall()
+    for gid, url, title, price in rows:
+        key = dup_key(title, price)
+        conn.execute("UPDATE seen SET dup_key = ? WHERE global_id = ?", (key, gid))
+    conn.execute("UPDATE seen SET duplicate = 0")
+    for gid, url, title, price in rows:
+        if _find_original(conn, gid, url, dup_key(title, price), source_family(url)):
+            conn.execute("UPDATE seen SET duplicate = 1 WHERE global_id = ?", (gid,))
+    conn.commit()
 
 
 def is_seen(global_id: str) -> bool:
@@ -54,13 +115,53 @@ def is_seen(global_id: str) -> bool:
         return row is not None
 
 
-def mark_seen(listing, live_only: bool = False):
+def mark_seen(listing, live_only: bool = False) -> str:
+    """Stores a listing. Returns "new", "duplicate" (same item already
+    stored from elsewhere), "price_drop" (seen before, now cheaper) or
+    "seen"."""
+    from scrapers.enrich import dup_key, parse_price, source_family
+
+    now = datetime.now(timezone.utc).isoformat()
     with _conn() as conn:
+        existing = conn.execute(
+            "SELECT price FROM seen WHERE global_id = ?", (listing.global_id,)
+        ).fetchone()
+        if existing:
+            status = "seen"
+            if getattr(listing, "location", None):
+                conn.execute(
+                    "UPDATE seen SET location = ? WHERE global_id = ? AND location IS NULL",
+                    (listing.location, listing.global_id),
+                )
+            old_value, new_value = parse_price(existing[0]), parse_price(listing.price)
+            if old_value and new_value and new_value < old_value * 0.99:
+                conn.execute(
+                    """UPDATE seen SET price = ?, previous_price = ?, price_dropped_at = ?,
+                       drop_notified = 0 WHERE global_id = ?""",
+                    (listing.price, existing[0], now, listing.global_id),
+                )
+                status = "price_drop"
+            if not live_only:
+                # A standing-keyword scrape found something a live search
+                # already stored — it's a real match, so show it on the
+                # Dashboard now.
+                conn.execute(
+                    "UPDATE seen SET live_only = 0 WHERE global_id = ? AND live_only = 1",
+                    (listing.global_id,),
+                )
+            conn.commit()
+            return status
+
+        key = dup_key(listing.title, listing.price)
+        duplicate = _find_original(
+            conn, listing.global_id, listing.url, key, source_family(listing.url)
+        )
         conn.execute(
-            """INSERT OR IGNORE INTO seen
+            """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
-                description, posted_at, first_seen, live_only)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                description, posted_at, first_seen, live_only, dup_key, duplicate,
+                location)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -70,35 +171,115 @@ def mark_seen(listing, live_only: bool = False):
                 listing.image_url,
                 listing.description,
                 listing.posted_at.isoformat() if listing.posted_at else None,
-                datetime.now(timezone.utc).isoformat(),
+                now,
                 1 if live_only else 0,
+                key,
+                1 if duplicate else 0,
+                getattr(listing, "location", None),
             ),
         )
-        if not live_only:
-            # A standing-keyword scrape found something a live search already
-            # stored — it's a real match, so show it on the Dashboard now.
-            conn.execute(
-                "UPDATE seen SET live_only = 0 WHERE global_id = ? AND live_only = 1",
-                (listing.global_id,),
-            )
         conn.commit()
+        return "duplicate" if duplicate else "new"
 
 
 def filter_new(listings) -> list:
-    """Return only listings not previously seen, and mark them."""
-    new = []
-    for listing in listings:
-        if not is_seen(listing.global_id):
-            new.append(listing)
-        mark_seen(listing)
-    return new
+    """Stores every listing and returns only the genuinely new ones — not
+    previously seen, and not a duplicate of an item already stored from
+    another source."""
+    return [l for l in listings if mark_seen(l) == "new"]
+
+
+def update_price(url: str, price: str) -> str:
+    """Records a re-checked price for every stored row with this link.
+    Returns "drop", "raise" or "same"."""
+    from scrapers.enrich import parse_price
+
+    new_value = parse_price(price)
+    result = "same"
+    with _conn() as conn:
+        for gid, old in conn.execute("SELECT global_id, price FROM seen WHERE url = ?", (url,)).fetchall():
+            old_value = parse_price(old)
+            if not new_value or not old_value or abs(new_value - old_value) < 0.5:
+                continue
+            if new_value < old_value:
+                conn.execute(
+                    """UPDATE seen SET price = ?, previous_price = ?, price_dropped_at = ?,
+                       drop_notified = 0 WHERE global_id = ?""",
+                    (price, old, datetime.now(timezone.utc).isoformat(), gid),
+                )
+                result = "drop"
+            else:
+                conn.execute(
+                    "UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
+                    (price, gid),
+                )
+                result = "raise" if result == "same" else result
+        conn.commit()
+    return result
+
+
+def mark_sold(url: str):
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET sold = 1 WHERE url = ?", (url,))
+        conn.commit()
+
+
+def pending_favorite_price_drops() -> list[dict]:
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT * FROM seen WHERE favorite = 1 AND drop_notified = 0 AND sold = 0
+               ORDER BY price_dropped_at DESC"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_price_drops_notified(global_ids: list[str]):
+    with _conn() as conn:
+        conn.executemany(
+            "UPDATE seen SET drop_notified = 1 WHERE global_id = ?",
+            [(g,) for g in global_ids],
+        )
+        conn.commit()
+
+
+def set_hidden(global_id: str, hidden: bool):
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE seen SET hidden = ? WHERE global_id = ?",
+            (1 if hidden else 0, global_id),
+        )
+        conn.commit()
+
+
+def count_hidden() -> int:
+    with _conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM seen WHERE hidden = 1").fetchone()[0]
+
+
+def unhide_all() -> int:
+    with _conn() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM seen WHERE hidden = 1").fetchone()[0]
+        conn.execute("UPDATE seen SET hidden = 0 WHERE hidden = 1")
+        conn.commit()
+    return n
+
+
+def all_priced_rows() -> list[dict]:
+    """Title/price/description of every stored listing — input for the
+    typical-price index."""
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        return [dict(r) for r in conn.execute(
+            "SELECT title, price, description FROM seen WHERE price IS NOT NULL AND duplicate = 0"
+        )]
 
 
 def purge_old(days: int = 30):
     """Remove entries older than `days` to keep the DB small."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
-        conn.execute("DELETE FROM seen WHERE first_seen < ?", (cutoff,))
+        conn.execute("DELETE FROM seen WHERE first_seen < ? AND favorite = 0", (cutoff,))
         conn.commit()
     logger.info("Purged seen entries older than %d days", days)
 
@@ -119,7 +300,8 @@ def recent_listings(limit: int = 100, source_name: str = None) -> list[dict]:
     Excludes rows with no URL — those all predate the columns added for
     listing details (url/price/image/etc.), from back when this table only
     tracked dedup fingerprints, and have nothing real to link to or show."""
-    query = "SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND live_only = 0"
+    query = ("SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND live_only = 0"
+             " AND hidden = 0 AND duplicate = 0")
     params: tuple = ()
     if source_name:
         query += " AND source_name = ?"
@@ -167,7 +349,7 @@ def search_listings(query_text: str, limit: int = 300) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             f"""SELECT * FROM seen
-               WHERE url IS NOT NULL AND url != ''
+               WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
                  AND {' AND '.join(clauses)}
                ORDER BY first_seen DESC""",
             params,
@@ -188,7 +370,7 @@ def favorite_listings(limit: int = 300) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """SELECT * FROM seen
-               WHERE url IS NOT NULL AND url != '' AND favorite = 1
+               WHERE url IS NOT NULL AND url != '' AND favorite = 1 AND hidden = 0
                ORDER BY first_seen DESC LIMIT ?""",
             (limit,),
         ).fetchall()

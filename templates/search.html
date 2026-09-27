@@ -20,6 +20,17 @@
     </div>
     <div id="live-status-banner" class="live-status-banner" style="display:none;"></div>
     {% if q %}
+      {% if watch_saved %}
+        <div class="settings-saved" style="margin-top:12px;">🔔 Saved — you'll get an alert when new listings for "{{ q }}" show up.</div>
+      {% endif %}
+      <form method="post" action="{{ url_for('watches_add') }}" class="save-watch-form">
+        <input type="hidden" name="q" value="{{ q }}">
+        <span class="muted">{{ 'Watching this search — update max price:' if is_watched else 'Get alerts for new listings:' }}</span>
+        <input type="text" name="max_price" inputmode="decimal" placeholder="Max price (optional)" class="search-input save-watch-price">
+        <button type="submit" class="btn btn-primary btn-sm">🔔 {{ 'Update' if is_watched else 'Save this search' }}</button>
+      </form>
+    {% endif %}
+    {% if q %}
       {# These sites block automated searching, so they're one-click searches
          in your own browser instead. URLs taken from each site's own search
          box / condition filter (verified live), not guessed. #}
@@ -41,6 +52,8 @@
       <p class="muted">{{ result_count }} result{{ 's' if result_count != 1 else '' }} for "{{ q }}" (from listings already collected — click "Search live now" above to check every site fresh)</p>
     {% endif %}
   </section>
+
+  {% include "_distance_filter.html" %}
 
   {% if q and not grouped_listings %}
   <section class="panel">

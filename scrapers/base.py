@@ -21,6 +21,7 @@ class Listing:
     image_url: Optional[str] = None
     posted_at: Optional[datetime] = None
     listing_id: Optional[str] = None  # unique ID within source
+    location: Optional[str] = None  # "City, ST" or a town name, for local-pickup sources
 
     def __post_init__(self):
         if not self.listing_id:

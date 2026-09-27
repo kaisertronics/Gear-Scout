@@ -10,6 +10,7 @@ Run with: python3 dashboard.py  (inside the container — see docker-compose.yml
 import json
 import logging
 import os
+import re
 import secrets
 import signal
 import socket
@@ -28,6 +29,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scrapers.dispatch import dispatch_scrape
 from scrapers.facebook_marketplace_regions import FACEBOOK_MARKETPLACE_REGIONS
 from scrapers.store import (
+    all_priced_rows,
+    count_hidden,
+    set_hidden,
+    unhide_all,
     count_mismatched,
     favorite_listings,
     purge_all,
@@ -242,12 +247,61 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/sw.js")
+def service_worker():
+    # Served from the site root (not /static) so its scope covers every page.
+    js = "self.addEventListener('fetch', () => {});"
+    return app.response_class(js, mimetype="application/javascript",
+                              headers={"Cache-Control": "no-cache"})
+
+
+@app.context_processor
+def _distance_filter_context():
+    try:
+        home_zip = str(load_config_raw().get("home_zip") or "")
+    except Exception:
+        home_zip = ""
+    return {"home_zip_set": bool(home_zip), "within_value": request.args.get("within", "")}
+
+
+def _decorate(listings: list[dict]) -> list[dict]:
+    """Drops listings matching the user's exclude words and adds display
+    flags: needs_repair, typical price / deal, and 'was' price after a drop."""
+    from scrapers.enrich import build_price_index, exclude_match, needs_repair, price_context
+
+    from scrapers.geo import distance_miles
+
+    cfg = load_config_raw()
+    exclude_words = cfg.get("exclude_words") or []
+    home_zip = str(cfg.get("home_zip") or "")
+    try:
+        within = int(request.args.get("within") or 0)
+    except ValueError:
+        within = 0
+    index = build_price_index(all_priced_rows())
+    out = []
+    for l in listings:
+        if exclude_match(l.get("title"), exclude_words):
+            continue
+        l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
+        l["price_ctx"] = price_context(l.get("title"), l.get("price"), index)
+        if l.get("sold") and l["price_ctx"]:
+            l["price_ctx"]["deal"] = False
+        l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
+        # Listings with no known distance (shipped-item sites, older rows)
+        # stay visible — the radius only filters what can be measured.
+        if within and l["distance"] is not None and l["distance"] > within:
+            continue
+        out.append(l)
+    return out
+
+
 def _group_by_source(listings: list[dict]) -> list[tuple]:
     """Group already-newest-first listings by source, preserving recency
     order within each group, and order the groups themselves by whichever
     source has the single most recent listing."""
     groups: dict[str, list[dict]] = {}
-    for listing in listings:
+    for listing in _decorate(listings):
         groups.setdefault(listing["source_name"], []).append(listing)
     # `listings` arrives newest-first, so the first listing seen for a given
     # source is already that source's most recent one.
@@ -270,6 +324,7 @@ def index():
         fb_session=fb_session_status(),
         source_count=len(cfg.get("sources", [])),
         fbm_regions=fbm_regions,
+        watches=_watch_rows(cfg),
     )
 
 
@@ -300,6 +355,8 @@ def search():
         grouped_listings=grouped_listings,
         result_count=len(listings),
         ebay_api_configured=bool(ebay_api.get("client_id") and ebay_api.get("client_secret")),
+        is_watched=_is_watched(q),
+        watch_saved=request.args.get("watch_saved"),
     )
 
 
@@ -341,6 +398,111 @@ def listing_favorite():
     return redirect(request.form.get("next") or url_for("index"))
 
 
+def _watch_rows(cfg: dict) -> list[dict]:
+    from scrapers.watches import get_watches, watch_status
+    status = watch_status()
+    rows = []
+    for w in get_watches(cfg):
+        st = status.get(w["query"], {})
+        rows.append({**w, **st})
+    return rows
+
+
+def _is_watched(q: str) -> bool:
+    from scrapers.watches import get_watches, normalize_query
+    return bool(q) and any(w["query"] == normalize_query(q) for w in get_watches(load_config_raw()))
+
+
+@app.route("/watches/add", methods=["POST"])
+def watches_add():
+    from scrapers.watches import normalize_query, seed_from_stored
+    q = normalize_query(request.form.get("q", ""))
+    if not q:
+        return redirect(url_for("search"))
+    max_price = request.form.get("max_price", "").replace("$", "").replace(",", "").strip()
+    try:
+        max_price = float(max_price) if max_price else None
+    except ValueError:
+        max_price = None
+    cfg = load_config_raw()
+    watches = cfg.setdefault("watches", [])
+    for w in watches:
+        if normalize_query(w.get("query", "")) == q:
+            w["max_price"] = max_price
+            break
+    else:
+        watches.append({"query": q, "max_price": max_price, "enabled": True})
+    save_config_raw(cfg)
+    # Everything already found for this search counts as seen — only listings
+    # that show up from now on will alert.
+    seed_from_stored(q, max_price)
+    return redirect(url_for("search", q=q, watch_saved=1))
+
+
+@app.route("/watches/delete", methods=["POST"])
+def watches_delete():
+    from scrapers.watches import normalize_query
+    q = normalize_query(request.form.get("q", ""))
+    cfg = load_config_raw()
+    cfg["watches"] = [w for w in (cfg.get("watches") or []) if normalize_query(w.get("query", "")) != q]
+    save_config_raw(cfg)
+    return redirect(request.form.get("next") or url_for("index"))
+
+
+@app.route("/settings/notifications", methods=["POST"])
+def settings_notifications():
+    cfg = load_config_raw()
+    ncfg = cfg.setdefault("notifications", {})
+    ncfg["ntfy_topic"] = re.sub(r"[^A-Za-z0-9_-]", "", request.form.get("ntfy_topic", ""))[:64]
+    ncfg["ntfy_server"] = request.form.get("ntfy_server", "").strip() or "https://ntfy.sh"
+    ncfg["watch_email"] = request.form.get("watch_email") == "1"
+    try:
+        ncfg["watch_interval_minutes"] = max(15, int(request.form.get("watch_interval_minutes", "60")))
+    except ValueError:
+        pass
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="notifications"))
+
+
+@app.route("/settings/notifications/test", methods=["POST"])
+def settings_notifications_test():
+    from scrapers.notify import send_push
+    ok = send_push(load_config_raw(), "Gear Scout test", "Notifications are working 🎛",
+                   tags=["white_check_mark"])
+    return redirect(url_for("settings", saved="push_ok" if ok else "push_fail"))
+
+
+@app.route("/listing/hide", methods=["POST"])
+def listing_hide():
+    global_id = request.form.get("global_id", "")
+    if global_id:
+        set_hidden(global_id, request.form.get("hidden", "1") == "1")
+    return redirect(request.form.get("next") or url_for("index"))
+
+
+@app.route("/settings/exclude", methods=["POST"])
+def settings_exclude():
+    cfg = load_config_raw()
+    words = [w.strip() for w in request.form.get("exclude_words", "").splitlines() if w.strip()]
+    cfg["exclude_words"] = words
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="exclude"))
+
+
+@app.route("/settings/location", methods=["POST"])
+def settings_location():
+    cfg = load_config_raw()
+    cfg["home_zip"] = re.sub(r"\D", "", request.form.get("home_zip", ""))[:5]
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="location"))
+
+
+@app.route("/settings/unhide", methods=["POST"])
+def settings_unhide():
+    n = unhide_all()
+    return redirect(url_for("settings", saved=f"unhide:{n}"))
+
+
 @app.route("/listing/tags", methods=["POST"])
 def listing_tags():
     global_id = request.form.get("global_id", "")
@@ -375,6 +537,11 @@ def settings():
         keyword_count=len(keywords),
         db_stats=db_stats(),
         mismatched_count=count_mismatched(keywords),
+        notif_cfg=cfg.get("notifications") or {},
+        home_zip=cfg.get("home_zip") or "",
+        suggested_topic="gearscout-" + secrets.token_hex(8),
+        exclude_text="\n".join(str(w) for w in (cfg.get("exclude_words") or [])),
+        hidden_count=count_hidden(),
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
         ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
         saved=request.args.get("saved"),
