@@ -266,6 +266,88 @@ def interactive_login(fb_email: str = "", fb_password: str = ""):
 # Group scraper
 # ---------------------------------------------------------------------------
 
+_GROUP_FEED_JS = r"""() => [...document.querySelectorAll('div[role=feed] > div')].map(c => {
+  const listingA = c.querySelector('a[href*="/commerce/listing/"], a[href*="/marketplace/item/"]');
+  const listing = listingA ? ((listingA.getAttribute('href') || '').match(/(?:listing|item)\/(\d+)/) || [])[1] || null : null;
+  const postA = [...c.querySelectorAll('a[href]')].map(a => a.getAttribute('href') || '')
+      .find(h => /\/groups\/[^/]+\/(posts|permalink)\/\d+/.test(h));
+  const img = c.querySelector('img[src*="fbcdn"]');
+  return {
+    listing,
+    permalink: postA ? postA.split(/[?#]/)[0] : null,
+    lines: (c.innerText || '').split('\n').map(l => l.trim()).filter(l => l && l !== 'Facebook'),
+    img: img ? img.getAttribute('src') : null,
+  };
+}).filter(p => p.listing || p.permalink)"""
+
+_PRICE_LINE = re.compile(r"(\$\d+(?:,\d{3})*(?:\.\d{2})?|free)", re.I)
+_POST_UI_LINES = {"message", "like", "comment", "share", "send", "see more", "·", "follow", "reply",
+                  "learn more", "admin", "author", "moderator", "top contributor", "rising contributor",
+                  "all reactions:", "most relevant", "write a comment…", "write a comment...", "see translation"}
+# Facebook's own on-screen text that can end up inside a post's text.
+_POST_UI_PATTERNS = re.compile(
+    r"^(sorry, we're having trouble playing this video|this video may have been removed"
+    r"|\d+[smhdwy]$|\d+ (?:comments?|shares?|reactions?)$|view \d+ more comments?|\+\d+$)",
+    re.I,
+)
+# Sellers often keep a sold post up and just mark it — skip those.
+_SOLD_TITLE = re.compile(r"^\W*(?:sold|pending)\b", re.I)
+
+
+def _is_ui_line(line: str) -> bool:
+    return line.lower() in _POST_UI_LINES or bool(_POST_UI_PATTERNS.match(line))
+
+
+def _parse_group_post(post: dict) -> Optional[dict]:
+    """A group feed post -> {title, price, description, location, url, id}.
+
+    For-sale posts (with a Marketplace listing) read, after the author:
+    description lines, the price on its own line, "· CITY, ST", then the
+    item title (confirmed live). Plain discussion posts use their first
+    line as the title and link to the post itself."""
+    lines = [l for l in post["lines"] if not l.lower().startswith("comment as")]
+    # Skip the author name and the "·" separator after it.
+    body_start = next((i + 1 for i, l in enumerate(lines[:4]) if l == "·"), 1)
+    body = lines[body_start:]
+
+    if post["listing"]:
+        pi = next((i for i, l in enumerate(body) if _PRICE_LINE.fullmatch(l)), None)
+        if pi is None:
+            return None
+        price = None if body[pi].lower() == "free" else body[pi]
+        location, ti = None, pi + 1
+        if ti < len(body) and body[ti].startswith("·"):
+            raw = body[ti].lstrip("· ").strip()
+            parts = [p.strip() for p in raw.split(",")]
+            if len(parts) == 2 and re.fullmatch(r"[A-Za-z]{2}", parts[1]):
+                location = f"{parts[0].title()}, {parts[1].upper()}"
+            ti += 1
+        title = body[ti] if ti < len(body) and not _is_ui_line(body[ti]) else (body[0] if body else "")
+        if not title or _SOLD_TITLE.match(title):
+            return None
+        return {
+            "title": title, "price": price, "location": location,
+            "description": " ".join(body[:pi]),
+            "url": f"https://www.facebook.com/marketplace/item/{post['listing']}/",
+            "id": post["listing"],
+        }
+
+    content = [l for l in body if not _is_ui_line(l)]
+    if not content or _SOLD_TITLE.match(content[0]):
+        return None
+    text = " ".join(content)
+    price_match = re.search(r"\$\d+(?:,\d{3})*(?:\.\d{2})?", text)
+    permalink = post["permalink"]
+    if not permalink.startswith("http"):
+        permalink = "https://www.facebook.com" + permalink
+    post_id = re.search(r"/(?:posts|permalink)/(\d+)", permalink).group(1)
+    return {
+        "title": content[0], "price": price_match.group(0) if price_match else None,
+        "location": None, "description": " ".join(content[1:]),
+        "url": permalink, "id": post_id,
+    }
+
+
 def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
     name = source["name"]
     url = source["url"]
@@ -322,7 +404,20 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                     "with a 90s timeout: %s", url,
                 )
                 page.goto(url, wait_until="domcontentloaded", timeout=90000)
-            _wait_for(page, 'div[role="article"]')
+            _wait_for(page, 'div[role="feed"]')
+
+            if "this content isn't available" in (page.inner_text("body")[:3000] or "").lower():
+                context.close()
+                return ScrapeResult(
+                    source_name=name, source_url=url, success=False,
+                    error="Facebook says this group isn't available.",
+                    fix_hint=(
+                        "The group was deleted, renamed, or the link is wrong. Open the "
+                        "link in your browser to check, then update or remove this source "
+                        "on the Sources page."
+                    ),
+                    duration_seconds=time.time() - start,
+                )
 
             # Check if we got redirected to login — session expired
             if "login" in page.url.lower() or page.query_selector('[data-testid="royal_login_button"]'):
@@ -352,66 +447,67 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                     duration_seconds=time.time() - start,
                 )
 
-            # Scroll to load posts
-            _scroll_for_more(page, 'div[role="article"]', times=3, step_px=1500, max_wait_ms=1500)
+            # Posts live in the group's feed (div[role=feed] > div). Earlier
+            # versions read div[role=article], which on today's layout are
+            # mostly Messenger chat bubbles from an open chat window — never
+            # posts, so nothing was ever found. The feed is virtualized
+            # (posts unload as you scroll), so collect after every scroll.
+            collected: dict[str, dict] = {}
 
-            # Extract posts
-            # FB group posts are in article elements or role="article" divs
-            # One round trip for every post's text/links/image — reading
-            # them element by element was most of a Facebook scrape's time.
-            posts = page.eval_on_selector_all('div[role="article"]', """els => els.slice(0, 40).map(e => ({
-                text: e.innerText || "",
-                links: [...e.querySelectorAll("a[href*='/groups/'][href*='/posts/'], a[href*='story_fbid']")]
-                         .map(a => a.getAttribute('href') || ''),
-                img: (e.querySelector("img[src*='fbcdn']") || {getAttribute: () => null}).getAttribute('src'),
-            }))""")
+            def collect():
+                for post in page.evaluate(_GROUP_FEED_JS):
+                    key = post["listing"] or post["permalink"]
+                    # A post can be captured as an empty placeholder before
+                    # Facebook finishes rendering it — keep the fullest copy.
+                    if key and len(post["lines"]) > len(collected.get(key, {}).get("lines", [])):
+                        collected[key] = post
+
+            post_link = ("div[role=feed] a[href*='/commerce/listing/'], "
+                         "div[role=feed] a[href*='/marketplace/item/'], "
+                         "div[role=feed] a[href*='/posts/'], div[role=feed] a[href*='/permalink/']")
+            try:
+                page.wait_for_selector(post_link, timeout=10000)
+                page.wait_for_timeout(500)
+            except Exception:
+                pass
+
+            for step in range(10):
+                collect()
+                before = len(collected)
+                # Reaching the bottom is what makes Facebook load the next
+                # batch; a fixed scrollBy often stopped short of it.
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                deadline = time.time() + 2.5
+                while time.time() < deadline:
+                    page.wait_for_timeout(250)
+                    collect()
+                    if len(collected) > before:
+                        break
+                logger.debug("FB group %s scroll %d: %d posts collected", name, step, len(collected))
+            collect()
+
             listings = []
-
-            for post in posts:  # already limited to the 40 most recent
+            for post in collected.values():
                 try:
-                    text_content = post["text"]
-                    if not keyword_match(text_content, keywords):
+                    parsed = _parse_group_post(post)
+                    if not parsed:
                         continue
-
-                    # Extract post link
-                    post_url = ""
-                    post_id = ""
-                    for href in post["links"]:
-                        if "/posts/" in href or "story_fbid" in href:
-                            post_url = href.split("?")[0]
-                            # Extract numeric ID
-                            id_match = re.search(r'/posts/(\d+)', href) or re.search(r'story_fbid=(\d+)', href)
-                            post_id = id_match.group(1) if id_match else href[-20:]
-                            break
-
-                    if not post_url:
+                    if not keyword_match(f"{parsed['title']} {parsed['description']}", keywords):
                         continue
-
-                    # Extract price if mentioned
-                    price_match = re.search(r'\$\d+(?:,\d{3})*(?:\.\d{2})?', text_content)
-                    price = price_match.group(0) if price_match else None
-
-                    # First line is usually the title / item name
-                    lines = [l.strip() for l in text_content.split('\n') if l.strip()]
-                    title = lines[0][:120] if lines else "FB Group Listing"
-                    description = " ".join(lines[1:4]) if len(lines) > 1 else ""
-
-                    # Image
-                    image_url = post["img"]
-
                     listings.append(Listing(
                         source_name=name,
-                        title=title,
-                        url=post_url,
-                        price=price,
-                        description=truncate(description, 250),
-                        image_url=image_url,
-                        listing_id=post_id,
+                        title=truncate(parsed["title"], 120),
+                        url=parsed["url"],
+                        price=parsed["price"],
+                        description=truncate(parsed["description"], 250),
+                        image_url=post["img"],
+                        listing_id=parsed["id"],
+                        location=parsed["location"],
                     ))
-
                 except Exception as e:
-                    logger.debug("Error parsing FB post: %s", e)
-                    continue
+                    logger.debug("Error parsing FB group post: %s", e)
+
+            logger.info("FB group %s: %d posts collected, %d matched", name, len(collected), len(listings))
 
             # Refresh session cookies
             _save_session(context)
