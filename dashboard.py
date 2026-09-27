@@ -73,7 +73,28 @@ yaml_rt.indent(mapping=2, sequence=4, offset=2)
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region", "reddit"]
 
 
+_config_cache: dict = {"stamp": None, "data": None}
+_config_cache_lock = threading.Lock()
+
+
 def load_config_raw():
+    """Parsed config.yaml, shared and READ-ONLY. Parsing the (now 1,000+
+    line) file takes up to ~0.7s and a page load needed it several times, so
+    it's parsed once and reused until the file changes on disk. Copying it
+    per caller isn't an option (deepcopy of these YAML objects took ~5s) —
+    anything that edits and saves must use load_config_for_edit()."""
+    st = os.stat(CONFIG_PATH)
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _config_cache_lock:
+        if _config_cache["stamp"] != stamp:
+            with open(CONFIG_PATH) as f:
+                _config_cache["data"] = yaml_rt.load(f)
+            _config_cache["stamp"] = stamp
+        return _config_cache["data"]
+
+
+def load_config_for_edit():
+    """A fresh, private parse of config.yaml, safe to modify and save."""
     with open(CONFIG_PATH) as f:
         return yaml_rt.load(f)
 
@@ -424,7 +445,7 @@ def watches_add():
         max_price = float(max_price) if max_price else None
     except ValueError:
         max_price = None
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     watches = cfg.setdefault("watches", [])
     for w in watches:
         if normalize_query(w.get("query", "")) == q:
@@ -443,7 +464,7 @@ def watches_add():
 def watches_delete():
     from scrapers.watches import normalize_query
     q = normalize_query(request.form.get("q", ""))
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     cfg["watches"] = [w for w in (cfg.get("watches") or []) if normalize_query(w.get("query", "")) != q]
     save_config_raw(cfg)
     return redirect(request.form.get("next") or url_for("index"))
@@ -451,7 +472,7 @@ def watches_delete():
 
 @app.route("/settings/notifications", methods=["POST"])
 def settings_notifications():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     ncfg = cfg.setdefault("notifications", {})
     ncfg["ntfy_topic"] = re.sub(r"[^A-Za-z0-9_-]", "", request.form.get("ntfy_topic", ""))[:64]
     ncfg["ntfy_server"] = request.form.get("ntfy_server", "").strip() or "https://ntfy.sh"
@@ -482,7 +503,7 @@ def listing_hide():
 
 @app.route("/settings/exclude", methods=["POST"])
 def settings_exclude():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     words = [w.strip() for w in request.form.get("exclude_words", "").splitlines() if w.strip()]
     cfg["exclude_words"] = words
     save_config_raw(cfg)
@@ -491,7 +512,7 @@ def settings_exclude():
 
 @app.route("/settings/location", methods=["POST"])
 def settings_location():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     cfg["home_zip"] = re.sub(r"\D", "", request.form.get("home_zip", ""))[:5]
     save_config_raw(cfg)
     return redirect(url_for("settings", saved="location"))
@@ -550,7 +571,7 @@ def settings():
 
 @app.route("/settings/ebay", methods=["POST"])
 def settings_ebay():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     ebay_cfg = cfg.setdefault("ebay_api", {})
     ebay_cfg["client_id"] = request.form.get("client_id", "").strip()
     # Same as the email app password: the field ships blank, so only a newly
@@ -580,7 +601,7 @@ def settings_reset_data():
 
 @app.route("/settings/email", methods=["POST"])
 def settings_email():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     email_cfg = cfg.setdefault("email", {})
     email_cfg["from"] = request.form.get("from", "").strip()
     email_cfg["to"] = request.form.get("to", "").strip()
@@ -619,7 +640,7 @@ def settings_email():
 
 @app.route("/settings/keywords", methods=["POST"])
 def settings_keywords():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     raw = request.form.get("keywords", "")
     new_keywords = [line.strip() for line in raw.splitlines() if line.strip()]
     cfg["keywords"] = new_keywords
@@ -629,7 +650,7 @@ def settings_keywords():
 
 @app.route("/sources/add", methods=["POST"])
 def add_source():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
 
     name = request.form.get("name", "").strip()
     url = request.form.get("url", "").strip()
@@ -651,7 +672,7 @@ def add_source():
 @app.route("/sources/toggle", methods=["POST"])
 def toggle_source():
     name = request.form.get("name", "")
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     for s in cfg.get("sources", []):
         if s.get("name") == name:
             s["enabled"] = not s.get("enabled", True)
@@ -663,7 +684,7 @@ def toggle_source():
 @app.route("/sources/delete", methods=["POST"])
 def delete_source():
     name = request.form.get("name", "")
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     cfg["sources"] = [s for s in cfg.get("sources", []) if s.get("name") != name]
     save_config_raw(cfg)
     return redirect(url_for("sources"))
@@ -671,7 +692,7 @@ def delete_source():
 
 @app.route("/sources/edit", methods=["POST"])
 def edit_source():
-    cfg = load_config_raw()
+    cfg = load_config_for_edit()
     original_name = request.form.get("original_name", "")
     new_name = request.form.get("name", "").strip()
     new_url = request.form.get("url", "").strip()

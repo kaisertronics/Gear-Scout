@@ -67,14 +67,43 @@ def _keyword_pattern(kw: str) -> Optional[re.Pattern]:
     return pattern
 
 
+_combined_cache: dict[tuple, Optional[re.Pattern]] = {}
+
+
+_last_combined: tuple = (None, -1, None)
+
+
+def _combined_pattern(keywords: list[str]) -> Optional[re.Pattern]:
+    # Callers pass the same list object for every listing in a run; building
+    # the cache key from 1,000+ terms per call was the actual bottleneck.
+    global _last_combined
+    ref, length, pattern = _last_combined
+    if keywords is ref and len(keywords) == length:
+        return pattern
+    key = tuple(str(k) for k in keywords)
+    if key not in _combined_cache:
+        parts = sorted({re.escape(k.strip().lower()) for k in key if k.strip()}, key=len, reverse=True)
+        if len(_combined_cache) > 32:
+            _combined_cache.clear()
+        _combined_cache[key] = re.compile(r"\b(?:" + "|".join(parts) + r")s?\b") if parts else None
+    _last_combined = (keywords, len(keywords), _combined_cache[key])
+    return _combined_cache[key]
+
+
 def keyword_match(text: str, keywords: list[str]) -> bool:
     """Return True if any keyword is found in text as a whole word/phrase
     (case-insensitive). Word-boundary matching keeps short keywords like "mic"
     or "rme" from matching fragments inside unrelated words (e.g. "Samick",
     "Performer") the way plain substring matching would."""
     text_lower = text.lower()
+    if len(keywords) > 1:
+        # One combined pattern instead of a loop over every keyword — with
+        # 1,000+ search terms the loop made pages like Settings take seconds.
+        # Same rule per keyword (whole word/phrase, optional plural "s").
+        combined = _combined_pattern(keywords)
+        return bool(combined and combined.search(text_lower))
     for kw in keywords:
-        pattern = _keyword_pattern(kw)
+        pattern = _keyword_pattern(str(kw))
         if pattern and pattern.search(text_lower):
             return True
 
