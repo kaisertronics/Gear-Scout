@@ -48,11 +48,16 @@ def run_sources(
     keywords: list[str],
     cfg: dict,
     on_progress: Optional[Callable[[int, int, Optional[str]], None]] = None,
+    fb_workers: Optional[int] = None,
+    other_workers: Optional[int] = None,
 ) -> list[ScrapeResult]:
     """Scrapes every source and returns results in the same order as
     `sources` (unrecognized source types are dropped, as before).
     on_progress(done, total, name_just_started) may be called from worker
     threads, but never concurrently."""
+    perf = cfg.get("performance") or {}
+    fb_workers = max(1, int(fb_workers or perf.get("facebook_workers") or FB_WORKERS))
+    other_workers = max(1, int(other_workers or perf.get("other_workers") or OTHER_WORKERS))
     total = len(sources)
     results: list[Optional[ScrapeResult]] = [None] * total
     progress_lock = threading.Lock()
@@ -101,11 +106,11 @@ def run_sources(
 
     fb_threads = [
         threading.Thread(target=fb_worker, name=f"fb-worker-{n}", daemon=True)
-        for n in range(min(FB_WORKERS, len(fb_idx)))
+        for n in range(min(fb_workers, len(fb_idx)))
     ]
     for t in fb_threads:
         t.start()
-    with ThreadPoolExecutor(max_workers=OTHER_WORKERS, thread_name_prefix="scrape") as pool:
+    with ThreadPoolExecutor(max_workers=other_workers, thread_name_prefix="scrape") as pool:
         list(pool.map(run, other_idx))
     for t in fb_threads:
         t.join()

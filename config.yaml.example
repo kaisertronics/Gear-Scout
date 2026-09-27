@@ -95,6 +95,15 @@ home_zip: ""
 # Listings whose title contains any of these are dropped everywhere.
 exclude_words: []
 
+# --- Performance (optional) ---------------------------------
+# How many sites are searched at once. Defaults (3 Facebook + 4 other)
+# suit a 4+ core machine; on a 2-core laptop 2 + 2 was just as fast
+# with fewer browsers open. Keep facebook_workers at 3 or below — more
+# simultaneous Facebook pages looks more bot-like to Facebook.
+# performance:
+#   facebook_workers: 2
+#   other_workers: 2
+
 # --- Keywords ------------------------------------------------
 # This is the whole point of the app: it only ever surfaces a listing if its
 # title/description matches one of YOUR keywords below. This list ships
