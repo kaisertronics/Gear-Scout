@@ -49,6 +49,46 @@ _UI_LINE = re.compile(
 )
 
 
+# Only posts offering something for sale are kept. Facebook doesn't mark
+# them, so this reads the wording: clear sale language on its own, or a
+# price together with a sale detail (a bare price can be "I paid $2k for
+# mine"). Wanted/ISO posts and ones already marked sold are dropped.
+_STRONG_SALE = re.compile(
+    r"\b(?:for sale|selling|sell(?:ing)? (?:my|this|a|an|off)|fs|f/s|wts|fsot|for trade or sale|"
+    r"asking(?: price)?|obo|or best offer|price (?:drop|reduced|is firm)|reduced to|make (?:me )?an offer|"
+    r"up for grabs|available for (?:sale|purchase)|need(?:s)? (?:it )?gone)\b",
+    re.I,
+)
+_SALE_DETAIL = re.compile(
+    r"\b(?:shipped|shipping|ships|free ship|local pick ?up|pick ?up|firm|trades?|paypal|venmo|zelle|"
+    r"cash only|dm (?:me|for)|pm (?:me|for)|message me|serious inquiries|no lowballs?|"
+    r"plus shipping|\+ ?shipping|or trade|will ship)\b",
+    re.I,
+)
+_PRICE = re.compile(r"(?:\$|usd\s?|cad\s?)\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*\s?(?:usd|cad|dollars|bucks|obo)\b", re.I)
+_WANTED = re.compile(r"\b(?:wtb|iso|in search of|looking for|want(?:ed)? to buy|anyone selling|does anyone have)\b", re.I)
+_SOLD = re.compile(r"^\W*(?:sold|pending)\b|\b(?:sold|no longer available|sale pending)\W*$", re.I)
+
+
+# The group a post was made in shows at the top of its text. A price posted
+# in a buy/sell/used-gear group is a sale even without sale wording.
+_SALE_GROUP = re.compile(
+    r"\b(?:buy|sell|selling|swap|trade|for sale|used|classifieds?|market(?:place)?|exchange|"
+    r"garage sale|yard sale|swap ?meet|bst|b/s/t)\b",
+    re.I,
+)
+
+
+def is_for_sale(text: str) -> bool:
+    if not text or _WANTED.search(text) or _SOLD.search(text.strip()):
+        return False
+    if _STRONG_SALE.search(text):
+        return True
+    if not _PRICE.search(text):
+        return False
+    return bool(_SALE_DETAIL.search(text) or _SALE_GROUP.search(text[:120]))
+
+
 def parse_priority_list(text: str) -> dict[str, list[str]]:
     """'[Microphones]\\ngefell um70\\n...' -> {'Microphones': ['gefell um70', ...]}.
     Terms before any [Category] line go under 'General'."""
@@ -85,7 +125,7 @@ def _parse(post: dict, term: str) -> Optional[dict]:
     if not content:
         return None
     text = " ".join(content)
-    if not keyword_match(text, [term]):
+    if not keyword_match(text, [term]) or not is_for_sale(text):
         return None
     # Title: the first line that mentions the term, else the first line —
     # minus Facebook's own "… See more" expander text.
