@@ -21,16 +21,13 @@
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
           {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid</span>{% endif %}
         </div>
+        {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
       {% endif %}
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}
       {% if l.price_ctx and l.price_ctx.typical %}
-        {% if l.price_ctx.source == 'reverb' %}
-          <div class="listing-typical" title="Typical used asking price on Reverb right now — real sale prices usually run a bit lower">Reverb ~{{ l.price_ctx.typical }}</div>
-        {% else %}
-          <div class="listing-typical" title="Typical price of this model across listings Gear Scout has seen">typically ~{{ l.price_ctx.typical }}</div>
-        {% endif %}
+        <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
       {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold %}
         <div class="listing-flags">

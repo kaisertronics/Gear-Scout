@@ -7,8 +7,9 @@
     <p class="muted">
       Searches Facebook's site-wide search bar (Posts, newest first) — public posts and posts in
       groups you're in — using your saved Facebook login. Your priority list below runs with every
-      scheduled scrape; search anything once with the box. Facebook hides post dates here, so this
-      page shows what Gear Scout <em>first found</em> in the last 14 days. Posts with a photo link
+      scheduled scrape; search anything once with the box. Only posts from the last 14 days are
+      kept — Gear Scout reads each post's real date (Facebook's own "recent" sort still mixes in
+      old posts, and posts whose date can't be read are skipped). Posts with a photo link
       straight to the post; text-only ones link to the search they came from.
     </p>
     <form method="post" action="{{ url_for('fb_posts_search') }}" class="search-form">

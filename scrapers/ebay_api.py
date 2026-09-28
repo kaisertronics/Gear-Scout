@@ -146,3 +146,42 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         source_name=name, source_url=manual_url, success=True,
         listings=listings, duration_seconds=time.time() - start,
     )
+
+
+def ebay_manual_lowest_url(query: str) -> str:
+    """eBay website search for `query`: Buy It Now, used / open box /
+    refurbished, sorted by price + shipping, lowest first."""
+    return ("https://www.ebay.com/sch/i.html?_sacat=0&LH_BIN=1"
+            "&LH_ItemCondition=1500%7C2500%7C3000&_sop=15"
+            f"&_nkw={requests.utils.quote(query.strip())}")
+
+
+def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
+    """Cheapest Buy-It-Now listings for `query` on eBay (any category — a
+    price-sorted search needs the whole site, not just the newest items).
+    Auctions are left out: a current bid isn't what it will sell for."""
+    token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
+    resp = requests.get(
+        SEARCH_URL,
+        params={"q": query.strip(), "sort": "price", "limit": "200",
+                "filter": f"{CONDITION_FILTER},buyingOptions:{{FIXED_PRICE}},priceCurrency:USD"},
+        headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    out = []
+    for item in resp.json().get("itemSummaries", []) or []:
+        title = item.get("title") or ""
+        if not title or not keyword_match(title, [query]):
+            continue
+        item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
+        loc = item.get("itemLocation") or {}
+        location = ", ".join(p for p in (loc.get("city"), loc.get("stateOrProvince")) if p) or None
+        out.append(Listing(
+            source_name=name, title=truncate(title, 120),
+            url=item.get("itemWebUrl") or f"https://www.ebay.com/itm/{item_id}",
+            price=_format_price(item.get("price")), description=item.get("condition"),
+            image_url=(item.get("image") or {}).get("imageUrl"), listing_id=item_id,
+            location=location,
+        ))
+    return out

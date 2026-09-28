@@ -768,3 +768,5 @@ code {
   /* iOS Safari zooms the page when focusing any input under 16px. */
   input, select, textarea { font-size: 16px !important; }
 }
+.listing-each { font-size: 11px; color: #b45309; font-weight: 600; margin-top: 2px; }
+.lowest-price .listing-each { display: block; text-align: right; font-weight: 600; }

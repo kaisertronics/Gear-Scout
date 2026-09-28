@@ -230,33 +230,187 @@ def build_price_index(rows: list[dict]) -> dict[str, float]:
     for r in rows:
         key = model_key(r.get("title"))
         value = parse_price(r.get("price"))
-        if (key and value and value >= 20 and not is_partial(r.get("title")) and not is_lot(r.get("title"))
+        if key and value and quantity(r.get("title")) > 1:
+            value = value / quantity(r.get("title")) if not _EACH_RE.search(r.get("title") or "") else value
+        if (key and value and value >= 20 and not is_partial(r.get("title"))
                 and not needs_repair(r.get("title"), r.get("description"))):
             by_model.setdefault(key, []).append(value)
     return {k: statistics.median(v) for k, v in by_model.items() if len(v) >= 4}
 
 
-def price_context(title: Optional[str], price: Optional[str], index: dict[str, float],
-                  market: Optional[dict[str, float]] = None) -> dict:
-    """{'typical': '$1,200', 'deal': bool, 'pct_under': int, 'source': 'local'|'reverb'}
-    or {} when there's nothing reliable to compare against.
+# --- Quantity / "each" pricing -------------------------------------------
 
-    Local history (what Gear Scout has seen listed) comes first. Otherwise,
-    Reverb asking prices — those run higher than real sale prices, so a
-    Reverb-based deal needs 35%+ under instead of 25%."""
+_WORD_NUMS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "eight": 8, "ten": 10, "twin": 2}
+_EACH_RE = re.compile(
+    r"\beach\b|\bea\.?(?=\s|$|[,;)])|/\s?ea\b|\bper (?:mic|microphone|unit|piece|one|item|channel|pc)\b|"
+    r"\bapiece\b|\ba piece\b|\bpriced (?:individually|separately)\b|"
+    r"\b(?:sold|sell|buy|available) (?:separately|individually)\b|\bprice is per\b",
+    re.I,
+)
+
+
+def quantity(title: Optional[str], description: Optional[str] = None) -> int:
+    """How many units an ad is for (1 when it doesn't say): "pair" -> 2,
+    "2x SM57" / "SM57 x2" / "(2)" / "Two SM57s" / "4 Sennheiser 421s" /
+    "lot of 3", or "3 available" / "qty 3" / "I have 3" in the description.
+    Model names that contain numbers ("Apollo x8", "Deep Six", "BP-6AA")
+    aren't counts, so the title patterns are deliberately narrow."""
+    t = (title or "").lower()
+    d = (description or "").lower()
+    if re.search(r"\b(?:matched |stereo )?pairs?\b", t) and not re.search(r"\bpairs? of (?:headphones|cables)\b", t):
+        m = re.search(r"\b(\d|two|three|four)\s+pairs\b", t)
+        return 2 * (int(m.group(1)) if m and m.group(1).isdigit() else _WORD_NUMS.get(m.group(1), 1) if m else 1)
+    title_pats = (
+        r"(?:^\W*|\()([2-9]|1\d)\s?[x×]\s+[a-z]",               # "2x SM57" (not "Lindell 17X")
+        # "SM57 x2", "KM184x2" — but not I/O counts like "2x2" / "16x16".
+        r"\b[a-z0-9-]*[a-wyz][a-z0-9-]*\d\s?[x×]\s?([2-9]|1\d)\b(?!\s?\d)",
+        r"\(\s*([2-9]|1\d)\s*\)",                              # "(2)"
+        r"\b(?:lot|set|bundle|group) of ([2-9]|1\d)\b",
+        r"\bqty:?\s?([2-9]|1\d)\b",
+        r"\bhave ([2-9]|1\d)\b",
+        r"^\W*([2-9]|1\d)\s+(?!ch\b|channel|track|space|band|way|input|output|piece|knob|string|button|fader|pin|foot|ft\b|inch|in\b|\")[a-z]",
+    )
+    desc_pats = (
+        r"\b([2-9]|1\d)\s+(?:available|in stock|of them|units available)\b",
+        r"\b(?:i )?have ([2-9]|1\d) (?:of (?:these|them)|available|for sale)\b",
+        r"\bqty:?\s?([2-9]|1\d)\b",
+        r"\bquantity:?\s?([2-9]|1\d)\b",
+        r"\bselling (?:all )?([2-9]|1\d)\b",
+    )
+    for pat in title_pats:
+        m = re.search(pat, t)
+        if m:
+            return int(m.group(1))
+    m = re.search(r"^\W*(two|three|four|five|six|eight|ten)\s+(?!channel|track|band|way)[a-z]", t)
+    if m:
+        return _WORD_NUMS[m.group(1)]
+    for pat in desc_pats:
+        m = re.search(pat, f"{t} {d}")
+        if m:
+            return int(m.group(1))
+    m = re.search(r"\b(?:have|selling|sell) (two|three|four|five|six)\b", d)
+    if m:
+        return _WORD_NUMS[m.group(1)]
+    return 1
+
+
+def price_basis(title: Optional[str], description: Optional[str], value: float,
+                typical: Optional[float] = None) -> tuple[str, int, float]:
+    """(basis, quantity, unit_price) — basis is 'single', 'each' (the price is
+    per piece) or 'set' (the price covers every piece). Explicit wording
+    ("$600 each", "per mic", "priced separately") decides; otherwise, for a
+    multi-piece ad, a price close to ONE unit's typical price means each."""
+    qty = quantity(title, description)
+    text = f"{title or ''} {description or ''}"
+    if qty < 2:
+        return ("each", 1, value) if _EACH_RE.search(title or "") else ("single", 1, value)
+    if _EACH_RE.search(text):
+        return "each", qty, value
+    # No wording either way: a price near ONE unit's typical price is most
+    # likely per piece — flagged as a guess, not stated as fact.
+    if typical and typical * 0.6 <= value <= typical * 1.35:
+        return "each?", qty, value
+    return "set", qty, value / qty
+
+
+# --- Title-based lookup key (for listings with no model number) ------------
+
+# Sale / condition chatter only — product words ("mixer", "12 channel",
+# "condenser") are kept, they're what makes a title lookup find the item.
+_TITLE_FILLER = {
+    "vintage", "new", "mint", "used", "rare", "pair", "pairs", "of", "the", "a", "an", "and", "with",
+    "w", "for", "sale", "selling", "great", "excellent", "good", "nice", "clean", "works", "working",
+    "tested", "perfect", "condition", "shape", "shipping", "ship", "shipped", "free", "local",
+    "pickup", "obo", "firm", "offer", "offers", "price", "cash", "only", "trade", "trades", "each",
+    "ea", "set", "lot", "plus", "includes", "including", "in", "box", "original", "like", "near",
+    "fs", "wts", "sold", "as", "is", "not", "no", "or", "to", "from", "by", "my", "this", "very",
+}
+
+
+def title_query(title: Optional[str]) -> Optional[str]:
+    """Up to 5 meaningful words from a title ("Vintage AKG D190 dynamic mic,
+    works great" -> "akg d190 dynamic"), for looking up a market price when
+    no model number is recognized. None if fewer than 2 remain."""
+    words = [w for w in re.findall(r"[a-z0-9][a-z0-9\-]*", (title or "").lower())
+             if w not in _TITLE_FILLER and (len(w) > 1 or w.isdigit())]
+    return " ".join(words[:5]) if len(words) >= 2 else None
+
+
+def value_key(title: Optional[str]) -> Optional[str]:
+    """Market-value cache key: brand + model ("neumann:u87"), else the
+    title's meaningful words ("t:soundcraft 12 channel analog mixer"). A
+    bare model with no brand ("x32", "c38") is too ambiguous to look up on
+    its own, so it falls back to the title words around it."""
     key = model_key(title)
+    if key and ":" in key:
+        return key
+    q = title_query(title)
+    return f"t:{q}" if q else None
+
+
+def value_query(title: Optional[str]) -> Optional[str]:
+    key = value_key(title)
+    if not key:
+        return None
+    return key[2:] if key.startswith("t:") else model_query(title)
+
+
+def price_context(title: Optional[str], price: Optional[str], index: dict[str, float],
+                  market: Optional[dict[str, float]] = None, description: Optional[str] = None) -> dict:
+    """{'typical', 'deal', 'pct_under', 'source', 'basis', 'qty', 'unit'} or {}.
+
+    Local history (listings Gear Scout has seen) comes first, then the
+    Reverb/eBay asking-price cache — asking prices run higher than sale
+    prices, so a deal against them needs 35%+ under instead of 25%.
+    Multi-piece ads are compared per piece."""
     value = parse_price(price)
-    if not key or not value or is_partial(title) or is_lot(title):
+    if not value or is_partial(title):
         return {}
-    if key in index:
-        typical, source, threshold = index[key], "local", 0.75
-    elif market and key in market:
-        typical, source, threshold = market[key], "reverb", 0.65
+    mkey, key = model_key(title), value_key(title)
+    if mkey and mkey in index:
+        typical, source, threshold = index[mkey], "local", 0.75
+    elif market and key and key in market:
+        typical = market[key]
+        source = (getattr(market, "sources", {}) or {}).get(key, "reverb")
+        threshold = 0.65
     else:
-        return {}
-    return {
+        typical, source, threshold = None, None, None
+    basis, qty, unit = price_basis(title, description, value, typical)
+    ctx = {"basis": basis, "qty": qty, "unit": format_price(unit) if qty > 1 else None,
+           "unit_value": unit, "note": basis_note(basis, qty, unit)}
+    if not typical:
+        return ctx
+    # A value found from title words (no model number) is a rough gauge —
+    # shown, but never used to call something a deal.
+    rough = source != "local" and bool(key and key.startswith("t:"))
+    ctx.update({
         "typical": format_price(typical),
-        "deal": value <= typical * threshold and value >= 20,
-        "pct_under": round((1 - value / typical) * 100),
+        "rough": rough,
+        "deal": not rough and unit <= typical * threshold and unit >= 20,
+        "pct_under": round((1 - unit / typical) * 100),
         "source": source,
-    }
+    })
+    if source == "local":
+        ctx["label"] = f"typically ~{ctx['typical']}"
+        ctx["label_title"] = "Typical price of this model across listings Gear Scout has seen"
+    else:
+        site = source if source not in (None, "reverb") else "Reverb"
+        ctx["label"] = f"{'est.' if rough else site} ~{ctx['typical']}"
+        ctx["label_title"] = (
+            f"Typical used asking price on {site} right now"
+            + (" for similar items (no model number recognized, so a rough gauge)" if rough else "")
+            + " — real sale prices usually run a bit lower"
+            + (", per piece" if qty > 1 else "")
+        )
+    return ctx
+
+
+def basis_note(basis: str, qty: int, unit: float) -> Optional[str]:
+    """Short note shown next to the price of a multi-piece ad."""
+    if qty < 2:
+        return None
+    if basis == "each":
+        return f"price is each · {qty} available"
+    if basis == "each?":
+        return f"likely each · {qty} listed"
+    return f"for all {qty} · ~{format_price(unit)} each"

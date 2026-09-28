@@ -343,6 +343,7 @@
         });
       });
     });
+    if (location.hash === '#ebay') document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% if saved == 'ebay' %}
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% elif saved in ('notifications', 'push_ok', 'push_fail') %}

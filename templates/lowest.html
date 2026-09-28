@@ -16,7 +16,7 @@
               {% if c.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
             </span>{% endif %}
           </span>
-          <span class="lowest-price">{{ c.price }}</span>
+          <span class="lowest-price">{{ c.price }}{% if c.note %}<span class="listing-each">{{ c.note }}</span>{% endif %}</span>
         </a>
       {% endfor %}
     </div>
@@ -29,15 +29,15 @@
   <section class="panel">
     <h2>💰 Lowest price</h2>
     <p class="muted">
-      Finds the 3 cheapest listings of an item across every source right now. Track an item and
+      Finds the 10 cheapest listings of an item across every source right now. Track an item and
       you'll get a push notification and an email whenever something is listed below its current
       lowest price. Parts sold on their own, accessories, rentals, "wanted" posts and placeholder
       prices like "$1 — make an offer" are left out; clones and needs-repair gear are included and
-      tagged.
+      tagged. Ads for several pieces are ranked by their price per piece.
     </p>
     <form method="post" action="{{ url_for('lowest_run') }}" class="search-form">
       <input type="text" name="q" value="{{ q }}" placeholder="e.g. neumann u87ai" class="search-input" required>
-      <button type="submit">Find 3 lowest</button>
+      <button type="submit">Find 10 lowest</button>
     </form>
     <div id="lowest-status" class="live-status-banner" style="display:none;"></div>
   </section>
@@ -50,7 +50,16 @@
     {% if current %}
       {{ ranked_list(current.top) }}
     {% else %}
-      <p class="muted">Not checked yet — click “Find 3 lowest”.</p>
+      <p class="muted">Not checked yet — click “Find 10 lowest”.</p>
+    {% endif %}
+    {% if ebay_included %}
+      <p class="muted" style="margin-top:10px;">eBay is included, searched cheapest-first (Buy It Now only).</p>
+    {% else %}
+      <p class="muted" style="margin-top:10px;">
+        eBay isn't searched automatically yet —
+        <a href="{{ ebay_url }}" target="_blank" rel="noopener">see “{{ q }}” on eBay, lowest price first ↗</a>.
+        Add your free eBay API keys in <a href="{{ url_for('settings') }}#ebay">Settings → eBay</a> to include it here and in alerts.
+      </p>
     {% endif %}
     <form method="post" action="{{ url_for('lowest_untrack' if is_tracked else 'lowest_track') }}" style="margin-top:14px;">
       <input type="hidden" name="q" value="{{ q }}">

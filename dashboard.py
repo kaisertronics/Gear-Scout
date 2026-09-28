@@ -310,7 +310,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if exclude_match(l.get("title"), exclude_words):
             continue
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
-        l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market)
+        l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market,
+                                       description=l.get("description"))
         # A current auction bid isn't a sale price, so it's never a "deal".
         l["is_auction"] = (l.get("description") or "").startswith("Auction")
         if (l.get("sold") or l["is_auction"]) and l["price_ctx"]:
@@ -555,6 +556,7 @@ def _start_lowest_job(query: str) -> bool:
 
 @app.route("/lowest")
 def lowest():
+    from scrapers.ebay_api import ebay_manual_lowest_url
     from scrapers.lowest import get_state, normalize, tracked_queries
     cfg = load_config_raw()
     q = normalize(request.args.get("q", ""))
@@ -566,6 +568,9 @@ def lowest():
         is_tracked=q in tracked,
         tracked=[(t, get_state(t)) for t in tracked],
         status=_load_lowest_status(),
+        ebay_included=bool((cfg.get("ebay_api") or {}).get("client_id")
+                           and (cfg.get("ebay_api") or {}).get("client_secret")),
+        ebay_url=ebay_manual_lowest_url(q) if q else "",
     )
 
 
@@ -593,7 +598,7 @@ def lowest_track():
     if q not in tracked_queries(cfg):
         cfg.setdefault("price_trackers", []).append({"query": q, "enabled": True})
         save_config_raw(cfg)
-    # First check records today's 3 lowest; alerts start from the next one.
+    # First check records today's 10 lowest; alerts start from the next one.
     if not get_state(q):
         _start_lowest_job(q)
     return redirect(url_for("lowest", q=q))
@@ -627,7 +632,7 @@ def _fbposts_rows(days: int = 14) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """SELECT * FROM seen WHERE source_name LIKE 'FB Posts%' AND hidden = 0 AND duplicate = 0
-               AND first_seen >= ? ORDER BY first_seen DESC LIMIT 400""", (cutoff,)).fetchall()
+               AND posted_at >= ? ORDER BY posted_at DESC LIMIT 400""", (cutoff,)).fetchall()
     return [dict(r) for r in rows]
 
 

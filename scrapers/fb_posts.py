@@ -5,8 +5,9 @@ prioritized list of terms grouped by category, plus one-off manual searches.
 Facebook deliberately hides two things on post-search results (checked
 live): post dates are rendered scrambled, and post permalinks aren't in the
 page. So:
-  - "Recent" = Facebook's own newest-first sort; the FB Posts page shows what
-    Gear Scout first found in the last 14 days.
+  - Each kept post's real date is read from the tooltip Facebook shows when
+    the (scrambled) post time is hovered; posts older than 14 days, or whose
+    date can't be read, are left out.
   - A post's photo link (which opens the post) is used as its link; a
     text-only post links to the search it came from.
 Uses the same saved Facebook session as the Marketplace/group sources.
@@ -17,6 +18,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime, timedelta
 from typing import Optional
 from urllib.parse import quote
 
@@ -25,11 +27,8 @@ from .base import Listing, ScrapeResult, keyword_match, truncate
 logger = logging.getLogger(__name__)
 
 MAX_TERMS_PER_RUN = 40
-_RECENT_FILTER = base64.b64encode(json.dumps(
-    {"recent_posts:0": json.dumps({"name": "recent_posts", "args": ""})}
-).encode()).decode()
-
-_POSTS_JS = r"""() => [...document.querySelectorAll('div[role=feed] > div')].map(k => {
+MAX_AGE_DAYS = 14
+_POST_JS = r"""k => {
   const text = (k.innerText || '').trim();
   if (text.length < 20) return null;
   const photo = [...k.querySelectorAll('a[href]')].map(a => a.getAttribute('href') || '')
@@ -39,7 +38,42 @@ _POSTS_JS = r"""() => [...document.querySelectorAll('div[role=feed] > div')].map
   // Post photos, not profile pictures (those are small squares).
   const img = [...k.querySelectorAll('img[src*="fbcdn"]')].find(i => (i.naturalWidth || i.width) >= 120);
   return {text, photo: photo || null, group: group || null, img: img ? img.getAttribute('src') : null};
-}).filter(Boolean)"""
+}"""
+_POSTS_JS = "() => [...document.querySelectorAll('div[role=feed] > div')].map(" + _POST_JS + ").filter(Boolean)"
+
+_TIP_JS = "() => [...document.querySelectorAll('[role=tooltip]')].map(t => t.innerText).join(' | ')"
+
+
+def _parse_tip_date(tip: str) -> Optional[datetime]:
+    """'Saturday, September 26, 2026 at 11:12 AM' -> datetime."""
+    m = re.search(r"([A-Z][a-z]+ \d{1,2}, \d{4}) at (\d{1,2}:\d{2})\s*([AP]M)", (tip or "").replace("\u202f", " "))
+    if not m:
+        return None
+    try:
+        return datetime.strptime(f"{m.group(1)} {m.group(2)} {m.group(3)}", "%B %d, %Y %I:%M %p")
+    except ValueError:
+        return None
+
+
+def _post_date(page, el) -> Optional[datetime]:
+    """Facebook scrambles the visible post time, but hovering the time link
+    shows a tooltip with the real date. Tries the post's first few
+    placeholder links (the time link is one of them)."""
+    for a in el.query_selector_all("a[href]")[:8]:
+        href = a.get_attribute("href") or ""
+        if href and not href.startswith("#") and "?" not in href and "/stories/" not in href:
+            continue
+        try:
+            page.mouse.move(0, 0)
+            page.wait_for_timeout(150)
+            a.hover(timeout=2500)
+            page.wait_for_timeout(700)
+        except Exception:
+            continue
+        when = _parse_tip_date(page.evaluate(_TIP_JS))
+        if when:
+            return when
+    return None
 
 _UI_LINE = re.compile(
     r"^(like|comment|share|send|reply|follow|see more|see translation|all reactions:?|"
@@ -114,8 +148,25 @@ def priority_terms(cfg: dict) -> list[tuple[str, str]]:
     return [(c, str(t)) for c, terms in cats.items() for t in (terms or []) if str(t).strip()]
 
 
+def _filters() -> str:
+    """Recent posts + Facebook's "Date posted" filter for the last
+    MAX_AGE_DAYS days (Facebook applies it loosely; dates are re-checked)."""
+    end = datetime.now()
+    start = end - timedelta(days=MAX_AGE_DAYS)
+    args = {
+        "start_year": str(start.year), "start_month": f"{start.year}-{start.month}",
+        "end_year": str(end.year), "end_month": f"{end.year}-{end.month}",
+        "start_day": f"{start.year}-{start.month}-{start.day}", "end_day": f"{end.year}-{end.month}-{end.day}",
+    }
+    f = {
+        "recent_posts:0": json.dumps({"name": "recent_posts", "args": ""}),
+        "rp_creation_time:0": json.dumps({"name": "creation_time", "args": json.dumps(args)}),
+    }
+    return base64.b64encode(json.dumps(f).encode()).decode()
+
+
 def search_url(term: str) -> str:
-    return f"https://www.facebook.com/search/posts/?q={quote(term)}&filters={_RECENT_FILTER}"
+    return f"https://www.facebook.com/search/posts/?q={quote(term)}&filters={_filters()}"
 
 
 def _parse(post: dict, term: str) -> Optional[dict]:
@@ -159,15 +210,48 @@ def search_term(page, term: str, scrolls: int = 5) -> list[dict]:
     except Exception:
         return []
     collected: dict[str, dict] = {}
+    cutoff = datetime.now() - timedelta(days=MAX_AGE_DAYS)
+    old_in_a_row = 0
     for _ in range(scrolls):
-        for post in page.evaluate(_POSTS_JS):
+        for el in page.query_selector_all("div[role=feed] > div"):
+            try:
+                post = el.evaluate(_POST_JS)
+            except Exception:
+                continue
+            if not post:
+                continue
             key = post["photo"] or post["text"][:200]
-            if len(post["text"]) > len(collected.get(key, {}).get("text", "")):
+            if key in collected:
+                if len(post["text"]) > len(collected[key]["text"]):
+                    collected[key].update(text=post["text"])
+                continue
+            # Only posts worth keeping get the (slower) date check.
+            if not _parse(post, term):
                 collected[key] = post
+                continue
+            post["posted_at"] = _post_date(page, el)
+            collected[key] = post
+            if post["posted_at"] and post["posted_at"] < cutoff:
+                old_in_a_row += 1
+            elif post["posted_at"]:
+                old_in_a_row = 0
+        # Newest-first: once several in a row are old, the rest are too.
+        if old_in_a_row >= 4:
+            break
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         page.wait_for_timeout(1500)
-    parsed = [_parse(p, term) for p in collected.values()]
-    return [p for p in parsed if p]
+    out = []
+    for p in collected.values():
+        # Posts with no readable date, or older than MAX_AGE_DAYS, are left
+        # out — Facebook's "recent" sort still mixes in old posts.
+        when = p.get("posted_at")
+        if not when or when < cutoff:
+            continue
+        parsed = _parse(p, term)
+        if parsed:
+            parsed["posted_at"] = when
+            out.append(parsed)
+    return out
 
 
 def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict] = None) -> ScrapeResult:
@@ -201,7 +285,7 @@ def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict]
                         source_name=f"FB Posts — {category}" if not live_term else name,
                         title=p["title"], url=p["url"], price=p["price"],
                         description=p["description"], image_url=p["image"],
-                        listing_id=p["id"],
+                        listing_id=p["id"], posted_at=p["posted_at"],
                     ))
                 time.sleep(1.5)  # pace consecutive Facebook searches
             _save_session(context)

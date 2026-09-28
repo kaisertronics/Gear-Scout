@@ -20,7 +20,7 @@ from scrapers.store import _conn
 
 logger = logging.getLogger(__name__)
 
-TOP_N = 3
+TOP_N = 10
 MIN_PRICE = 5.0
 # A price this far under the model's typical price is almost always a
 # placeholder ("$1 — make an offer") rather than a real asking price.
@@ -86,7 +86,7 @@ def _is_accessory(title: str) -> bool:
     return not re.search(r"\b(?:with|w/|incl|includes|including|comes with)\b|\+|&", before)
 
 
-def item_typical(query: str, index, market) -> Optional[float]:
+def item_typical(query: str, index, market, ebay_cfg: Optional[dict] = None) -> Optional[float]:
     """Typical price of exactly what was searched for — "u47 clone" must use
     clone prices, not a real U47's (which made every clone look like a
     too-cheap accessory). Reverb listings matching every word of the search
@@ -94,8 +94,8 @@ def item_typical(query: str, index, market) -> Optional[float]:
     that model."""
     from scrapers.enrich import model_key, model_query
     try:
-        from scrapers.market import reverb_typical
-        typical, _ = reverb_typical(query)
+        from scrapers.market import market_typical
+        typical, _, _, _ = market_typical(query, ebay_cfg)
         if typical:
             return typical
     except Exception:
@@ -112,7 +112,7 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
     """Priced, currently-listed matches — no parts, accessories, rentals,
     'wanted' posts or placeholder prices, no hidden or duplicate rows — one
     per link."""
-    from scrapers.enrich import model_key
+    from scrapers.enrich import basis_note, model_key, price_basis, value_key
 
     out, seen_urls = [], set()
     with _conn() as conn:
@@ -128,11 +128,15 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
             if (l.description or "").startswith("Auction"):
                 continue
             repair = needs_repair(l.title, l.description)
+            # "Pair of X — $900" competes as $450 per piece; "$450 each"
+            # stays $450.
+            basis, qty, unit = price_basis(title, l.description, value, typical)
+            value = unit
             if typical:
-                if value < typical * (REPAIR_FLOOR if repair else WORKING_FLOOR):
+                if value < typical * (REPAIR_FLOOR if repair else WORKING_FLOOR) or _is_accessory(title):
                     continue
             else:
-                own = (index or {}).get(model_key(title)) or (market or {}).get(model_key(title))
+                own = (index or {}).get(model_key(title)) or (market or {}).get(value_key(title))
                 if (own and value < own * MIN_FRACTION_OF_TYPICAL) or _is_accessory(title):
                     continue
             row = conn.execute(
@@ -146,6 +150,7 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
                 "source_name": l.source_name, "image_url": l.image_url,
                 "location": getattr(l, "location", None),
                 "needs_repair": repair,
+                "note": basis_note(basis, qty, unit),
                 "is_clone": bool(_CLONE.search(title)) and not _CLONE.search(query),
                 "global_id": l.global_id,
             })
@@ -153,7 +158,7 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
 
 
 def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
-    """Runs the search, updates the stored top 3 and returns
+    """Runs the search, updates the stored top 10 and returns
     {'top': [...], 'alert': candidate-or-None, 'previous_lowest': float|None}.
     An alert is only produced once the item has been checked before, and
     only for a listing this item hasn't already seen."""
@@ -165,8 +170,17 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     q = normalize(query)
     results = run_live_search(q, cfg, on_progress=on_progress)
     listings = [l for r in results for l in r.listings]
+    # eBay by lowest price first (the regular eBay source reads the newest
+    # listings, which can miss the cheapest). Needs the free eBay API keys.
+    api_cfg = cfg.get("ebay_api") or {}
+    if api_cfg.get("client_id") and api_cfg.get("client_secret"):
+        try:
+            from scrapers.ebay_api import ebay_lowest
+            listings += ebay_lowest(q, api_cfg, name="eBay (lowest price)")
+        except Exception as e:
+            logger.warning("eBay lowest-price search failed for %r: %s", q, e)
     index, market = build_price_index(all_priced_rows()), load_market()
-    typical = item_typical(q, index, market)
+    typical = item_typical(q, index, market, api_cfg)
     cands = _candidates(listings, index, market, typical, q)
     top = cands[:TOP_N]
 
@@ -203,7 +217,7 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
                 (q, None, "[]", now),
             )
         # A check that found nothing (site timeouts, Facebook hiccup) keeps
-        # the previous lowest and top 3 rather than wiping them — otherwise
+        # the previous lowest and top 10 rather than wiping them — otherwise
         # the next real drop wouldn't have a lowest to be compared against.
         conn.commit()
     return {"top": top, "alert": alert, "previous_lowest": previous_lowest,
@@ -255,7 +269,7 @@ def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optio
                 <div style="margin-top:6px;"><span style="color:#166534;font-weight:700;font-size:18px;">{alert['price']}</span>
                 <span style="color:#94a3b8;">&nbsp;previous lowest {was}</span></div>
                 <div style="color:#64748b;font-size:13px;margin-top:4px;">{alert['source_name']}{' · ' + alert['location'] if alert.get('location') else ''}{repair}</div>
-                <p style="margin-top:12px;font-size:13px;"><a href="{dashboard_url}/lowest?q={quote_plus(query)}">See the 3 lowest for “{query}” →</a></p>
+                <p style="margin-top:12px;font-size:13px;"><a href="{dashboard_url}/lowest?q={quote_plus(query)}">See the 10 lowest for “{query}” →</a></p>
               </div>
             </div>
           </div></body></html>"""
