@@ -195,6 +195,26 @@ sources:
     type: kijiji
     enabled: true
 
+  # Alto Music's pre-owned / refurbished / B-stock collection (Shopify —
+  # any Shopify store collection link works with type: shopify).
+  - name: "Alto Music — Used & B-Stock"
+    url: "https://www.altomusic.com/collections/pre-owned-refurbished-more"
+    type: shopify
+    enabled: true
+
+  # Long & McQuade used gear (GearHunter), Pro Audio. Prices in CAD.
+  - name: "Long & McQuade — Used Pro Audio"
+    url: "https://www.long-mcquade.com/GearHunter/pro-audio/"
+    type: long_mcquade
+    enabled: true
+
+  # Pro Audio Star blocks automated requests (Cloudflare), so this shows as
+  # "manual check only" with a link to its open-box / used search.
+  - name: "Pro Audio Star — Open Box & Used"
+    url: "https://www.proaudiostar.com/catalogsearch/result/?q=open+box"
+    type: html
+    enabled: true
+
   # ---- Craigslist — 3 broad regions covering the whole continental US ----
   # Each uses Craigslist's own "search distance" filter set to ~1000 miles
   # from a central point (confirmed live: it genuinely returns results that

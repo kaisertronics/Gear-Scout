@@ -38,6 +38,10 @@ def _known_blocked(source: dict, keywords: list[str], cfg: dict):
     elif "sweetwater.com" in url:
         site, why = "Sweetwater", "Akamai/PerimeterX bot protection with a human-verification challenge"
         link = f"https://www.sweetwater.com/used/listings?query={q}" if term else url
+    elif "proaudiostar.com" in url:
+        site, why = "Pro Audio Star", "Cloudflare bot protection — it refuses every automated request (403)"
+        link = (f"https://www.proaudiostar.com/catalogsearch/result/?q={q}" if term
+                else "https://www.proaudiostar.com/catalogsearch/result/?q=open+box")
     elif "gearspace.com" in url:
         site, why = "Gearspace", "a Cloudflare security-verification challenge"
         link = url
@@ -101,6 +105,12 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
         else:
             from scrapers.html_scraper import scrape_forum_html
             return scrape_forum_html(source, keywords)
+    elif stype == "shopify":
+        from scrapers.shopify_store import scrape_shopify_collection
+        return scrape_shopify_collection(source, keywords)
+    elif stype == "long_mcquade":
+        from scrapers.long_mcquade import scrape_long_mcquade
+        return scrape_long_mcquade(source, keywords)
     elif stype == "kijiji":
         from scrapers.kijiji import scrape_kijiji
         return scrape_kijiji(source, keywords)

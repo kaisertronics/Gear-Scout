@@ -71,7 +71,7 @@ yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
-                "shopgoodwill", "kijiji", "reddit"]
+                "shopgoodwill", "kijiji", "shopify", "long_mcquade", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
