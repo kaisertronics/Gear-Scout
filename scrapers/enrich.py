@@ -340,11 +340,15 @@ def value_key(title: Optional[str]) -> Optional[str]:
     """Market-value cache key: brand + model ("neumann:u87"), else the
     title's meaningful words ("t:soundcraft 12 channel analog mixer"). A
     bare model with no brand ("x32", "c38") is too ambiguous to look up on
-    its own, so it falls back to the title words around it."""
+    its own, so it falls back to the title words around it. Parts sold on
+    their own ("KK 104 capsule head") get their own "p:" key so they're
+    valued as the part, never as the whole mic."""
+    q = title_query(title)
+    if is_partial(title):
+        return f"p:{q}" if q else None
     key = model_key(title)
     if key and ":" in key:
         return key
-    q = title_query(title)
     return f"t:{q}" if q else None
 
 
@@ -352,22 +356,22 @@ def value_query(title: Optional[str]) -> Optional[str]:
     key = value_key(title)
     if not key:
         return None
-    return key[2:] if key.startswith("t:") else model_query(title)
+    return key[2:] if key[:2] in ("t:", "p:") else model_query(title)
 
 
 def price_context(title: Optional[str], price: Optional[str], index: dict[str, float],
                   market: Optional[dict[str, float]] = None, description: Optional[str] = None) -> dict:
-    """{'typical', 'deal', 'pct_under', 'source', 'basis', 'qty', 'unit'} or {}.
+    """{'typical', 'label', 'deal', 'pct_under', 'source', 'basis', 'qty', 'unit', 'note'}.
 
     Local history (listings Gear Scout has seen) comes first, then the
     Reverb/eBay asking-price cache — asking prices run higher than sale
     prices, so a deal against them needs 35%+ under instead of 25%.
-    Multi-piece ads are compared per piece."""
+    Multi-piece ads are compared per piece. Ads with no price still get
+    the market value (just no comparison); parts are valued as parts."""
     value = parse_price(price)
-    if not value or is_partial(title):
-        return {}
+    partial = is_partial(title)
     mkey, key = model_key(title), value_key(title)
-    if mkey and mkey in index:
+    if mkey and mkey in index and not partial:
         typical, source, threshold = index[mkey], "local", 0.75
     elif market and key and key in market:
         typical = market[key]
@@ -375,19 +379,23 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         threshold = 0.65
     else:
         typical, source, threshold = None, None, None
-    basis, qty, unit = price_basis(title, description, value, typical)
-    ctx = {"basis": basis, "qty": qty, "unit": format_price(unit) if qty > 1 else None,
-           "unit_value": unit, "note": basis_note(basis, qty, unit)}
+    if value:
+        basis, qty, unit = price_basis(title, description, value, typical)
+    else:
+        basis, qty, unit = "single", 1, None
+    ctx = {"basis": basis, "qty": qty, "unit": format_price(unit) if unit and qty > 1 else None,
+           "unit_value": unit, "note": basis_note(basis, qty, unit) if unit else None}
     if not typical:
         return ctx
-    # A value found from title words (no model number) is a rough gauge —
-    # shown, but never used to call something a deal.
-    rough = source != "local" and bool(key and key.startswith("t:"))
+    # A value found from title words (no model number) or from only one or
+    # two listings is a rough gauge — shown, but never used to call a deal.
+    rough = source != "local" and (
+        bool(key and key[:2] in ("t:", "p:")) or key in (getattr(market, "rough", set()) or set()))
     ctx.update({
         "typical": format_price(typical),
         "rough": rough,
-        "deal": not rough and unit <= typical * threshold and unit >= 20,
-        "pct_under": round((1 - unit / typical) * 100),
+        "deal": bool(unit) and not rough and unit <= typical * threshold and unit >= 20,
+        "pct_under": round((1 - unit / typical) * 100) if unit else None,
         "source": source,
     })
     if source == "local":
@@ -398,7 +406,7 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         ctx["label"] = f"{'est.' if rough else site} ~{ctx['typical']}"
         ctx["label_title"] = (
             f"Typical used asking price on {site} right now"
-            + (" for similar items (no model number recognized, so a rough gauge)" if rough else "")
+            + (" for similar items — a rough gauge (no exact model match, or only a few listings)" if rough else "")
             + " — real sale prices usually run a bit lower"
             + (", per piece" if qty > 1 else "")
         )

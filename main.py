@@ -114,7 +114,7 @@ def _run_scrape_cycle():
     # Reverb (cached, capped per run) so this run's listings and email get one.
     local_index = build_price_index(all_priced_rows())
     try:
-        refresh_market_prices([l.title for l in all_listings], local_index, max_lookups=40, cfg=cfg)
+        refresh_market_prices([l.title for l in all_listings], local_index, max_lookups=120, cfg=cfg)
     except Exception:
         logger.exception("Reverb market price refresh failed")
 

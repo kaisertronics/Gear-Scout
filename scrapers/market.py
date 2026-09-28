@@ -17,6 +17,7 @@ Lookups are cached in the listings database for CACHE_DAYS, including
 cache period.
 """
 import logging
+import re
 import statistics
 import time
 from datetime import datetime, timedelta, timezone
@@ -42,10 +43,12 @@ _SKIP_CONDITIONS = {"brand new", "non functioning"}
 
 
 class MarketIndex(dict):
-    """{value_key: typical price}, plus .sources {value_key: 'Reverb' | 'eBay' | 'Reverb + eBay'}."""
+    """{value_key: typical price}, plus .sources {value_key: 'Reverb' | 'eBay' | 'Reverb + eBay'}
+    and .rough (keys valued from only one or two listings)."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sources: dict[str, str] = {}
+        self.rough: set[str] = set()
 
 
 def _ensure_table(conn):
@@ -65,7 +68,7 @@ def _ensure_table(conn):
 
 def _usable(title: str, query: str, value: Optional[float]) -> bool:
     from scrapers.base import keyword_match
-    return bool(value and value >= 20 and not is_partial(title) and not is_lot(title)
+    return bool(value and value >= 5 and not is_partial(title) and not is_lot(title)
                 and keyword_match(title, [query]))
 
 
@@ -120,13 +123,56 @@ def reverb_typical(query: str) -> tuple[Optional[float], int]:
     return statistics.median(prices), len(prices)
 
 
+# Words that describe what kind of thing it is, not which one — dropped
+# when a lookup finds too few matches ("Blue Microphones Nessie" -> "blue
+# nessie"; "Takstar SGC-598 Condenser Microphone" -> "takstar sgc-598").
+_GENERIC = {
+    "microphone", "microphones", "mic", "mics", "audio", "interface", "usb", "usb-c", "rackmount",
+    "rack", "handheld", "wireless", "wired", "condenser", "dynamic", "ribbon", "studio", "pro",
+    "professional", "black", "white", "silver", "gold", "nickel", "series", "recorder", "player",
+    "card", "sd", "acoustic-electric", "cutaway", "glossy", "mount", "available", "dual", "stereo",
+    "powered", "active", "passive", "portable", "digital", "analog", "tube", "lavalier", "cardioid",
+    "large", "small", "diaphragm", "capsule", "head", "unit", "system", "kit", "edition", "limited",
+    "mixing", "console", "channel", "power", "cord", "with", "vintage", "original", "rare",
+}
+_MISSPELLED_BRANDS = {"sure": "shure", "nueman": "neumann", "nuemann": "neumann", "neuman": "neumann",
+                      "senheiser": "sennheiser", "sennhieser": "sennheiser", "akg's": "akg"}
+
+
+def lookup_plan(query: str) -> list[str]:
+    """Searches to try, most exact first."""
+    words = [_MISSPELLED_BRANDS.get(w, w) for w in query.lower().split()]
+    plan = [" ".join(words)]
+    specific = [w for w in words if w not in _GENERIC]
+    if len(specific) >= 2:
+        plan.append(" ".join(specific[:4]))
+    if len(specific) >= 3:
+        plan.append(" ".join(specific[:3]))
+    if len(specific) >= 2:
+        plan.append(" ".join(specific[:2]))  # brand + name: "fishman tonedeq"
+    # The model number on its own ("sm11", "urec5") — skips a wrong or
+    # misspelled brand word.
+    for w in specific:
+        if re.search(r"\d", w) and re.search(r"[a-z]", w) and len(w.replace("-", "")) >= 3:
+            plan.append(w)
+            break
+    out = []
+    for q in plan:
+        if q and q not in out:
+            out.append(q)
+    return out
+
+
 def market_typical(query: str, ebay_cfg: Optional[dict] = None,
                    loosen: bool = False) -> tuple[Optional[float], int, Optional[str], str]:
     """(median, samples, source label, query used) pooling Reverb and eBay.
-    With `loosen`, drops trailing words (down to 2) until enough match."""
-    words = query.split()
-    while True:
-        q = " ".join(words)
+    Tries the exact query first; with `loosen`, falls back through
+    lookup_plan. If no search finds 3+ listings, the best one with 1–2 is
+    used (the caller marks those as rough)."""
+    best = (None, 0, None, query)
+    for i, q in enumerate(lookup_plan(query) if loosen else [query]):
+        if i:
+            time.sleep(0.5)
         reverb = _reverb_prices(q)
         ebay = []
         if ebay_cfg and ebay_cfg.get("client_id") and ebay_cfg.get("client_secret"):
@@ -135,13 +181,15 @@ def market_typical(query: str, ebay_cfg: Optional[dict] = None,
             except Exception as e:
                 logger.warning("eBay price lookup failed for %r: %s", q, e)
         prices = reverb + ebay
+        if not prices:
+            continue
+        label = " + ".join(n for n, p in (("Reverb", reverb), ("eBay", ebay)) if p)
+        result = (statistics.median(prices), len(prices), label, q)
         if len(prices) >= MIN_SAMPLES:
-            label = " + ".join(n for n, p in (("Reverb", reverb), ("eBay", ebay)) if p)
-            return statistics.median(prices), len(prices), label, q
-        if not loosen or len(words) <= 2:
-            return None, len(prices), None, q
-        words = words[:-1]
-        time.sleep(0.5)
+            return result
+        if len(prices) > best[1]:
+            best = result
+    return best
 
 
 def load_market() -> MarketIndex:
@@ -150,14 +198,16 @@ def load_market() -> MarketIndex:
     with _conn() as conn:
         _ensure_table(conn)
         rows = conn.execute(
-            "SELECT model_key, typical, source FROM market_prices"
+            "SELECT model_key, typical, source, samples FROM market_prices"
             " WHERE typical IS NOT NULL AND fetched_at >= ?",
             (cutoff,),
         ).fetchall()
     market = MarketIndex()
-    for key, typical, source in rows:
+    for key, typical, source, samples in rows:
         market[key] = typical
         market.sources[key] = source or "Reverb"
+        if (samples or 0) < MIN_SAMPLES:
+            market.rough.add(key)
     return market
 
 
@@ -177,15 +227,13 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     models: dict[str, str] = {}
     by_title: dict[str, str] = {}
     for title in titles:
-        if is_partial(title):
-            continue
         mkey = model_key(title)
-        if mkey and mkey in local_index:
+        if mkey and mkey in local_index and not is_partial(title):
             continue
         key = value_key(title)
         if not key or key in fresh or key in models or key in by_title:
             continue
-        if key.startswith("t:"):
+        if key[:2] in ("t:", "p:"):
             by_title[key] = key[2:]
         else:
             models[key] = value_query(title)
@@ -195,7 +243,13 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     found = 0
     for key, query in todo:
         try:
-            typical, n, label, used = market_typical(query, ebay_cfg, loosen=key.startswith("t:"))
+            typical, n, label, used = market_typical(query, ebay_cfg, loosen=True)
+            if not typical and ":" in key and key[:2] not in ("t:", "p:"):
+                # Brand + model found nothing — try the title's words.
+                from scrapers.enrich import title_query
+                tq = next((title_query(t) for t in titles if value_key(t) == key), None)
+                if tq:
+                    typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
         except Exception as e:
             logger.warning("Market price lookup failed for %r: %s", query, e)
             continue
