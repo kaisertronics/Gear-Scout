@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_listing_card.html" import listing_card %}
+{% block title %}Gear Scout — FB Posts{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>📣 Facebook post search</h2>
+    <p class="muted">
+      Searches Facebook's site-wide search bar (Posts, newest first) — public posts and posts in
+      groups you're in — using your saved Facebook login. Your priority list below runs with every
+      scheduled scrape; search anything once with the box. Facebook hides post dates here, so this
+      page shows what Gear Scout <em>first found</em> in the last 14 days. Posts with a photo link
+      straight to the post; text-only ones link to the search they came from.
+    </p>
+    <form method="post" action="{{ url_for('fb_posts_search') }}" class="search-form">
+      <input type="text" name="q" value="{{ q }}" placeholder="e.g. gefell um70" class="search-input" required>
+      <button type="submit">Search Facebook posts</button>
+    </form>
+    <div id="fbposts-status" class="live-status-banner" style="display:none;"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Priority list <span class="muted">— {{ terms|length }} term{{ 's' if terms|length != 1 else '' }}{% if not enabled and terms %} · source is turned off on the Sources page{% endif %}</span></h2>
+    {% if terms %}
+      <p class="muted">
+        {% for cat, t in terms %}{% if loop.first or terms[loop.index0 - 1][0] != cat %}{% if not loop.first %}<br>{% endif %}<strong>{{ cat }}:</strong> {% endif %}{{ t }}{% if not loop.last and terms[loop.index0 + 1][0] == cat %}, {% endif %}{% endfor %}
+      </p>
+    {% else %}
+      <p class="muted">Empty — add terms in <a href="{{ url_for('settings') }}">Settings → FB Posts</a>.</p>
+    {% endif %}
+    <p class="muted">Edit in <a href="{{ url_for('settings') }}">Settings → FB Posts</a>. Each term takes about 30 seconds per run, so 15–20 terms is a good size.</p>
+  </section>
+
+  {% for category, items in groups %}
+  <section class="panel">
+    <h2>{{ category }} <span class="muted">— {{ items|length }} post{{ 's' if items|length != 1 else '' }}</span></h2>
+    <div class="listing-grid">
+      {% for l in items %}{{ listing_card(l) }}{% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <section class="panel"><p class="muted">No Facebook posts found in the last 14 days yet.</p></section>
+  {% endfor %}
+
+  <script>
+    const fbBanner = document.getElementById('fbposts-status');
+    let fbSawRunning = false;
+    async function pollFb() {
+      try {
+        const d = await (await fetch("{{ url_for('fb_posts_status') }}")).json();
+        if (d.state === 'running') {
+          fbSawRunning = true; fbBanner.style.display = '';
+          fbBanner.textContent = `Searching Facebook posts for “${d.query}”… (about 30 seconds)`;
+          setTimeout(pollFb, 2000);
+        } else if (fbSawRunning && d.state === 'done') {
+          fbBanner.textContent = `Done — ${d.found} matching post(s). Loading…`;
+          setTimeout(() => location.reload(), 800);
+        } else if (fbSawRunning && d.state === 'failed') {
+          fbBanner.textContent = '⚠️ Search failed: ' + (d.reason || 'unknown error');
+        }
+      } catch (e) { setTimeout(pollFb, 3000); }
+    }
+    pollFb();
+  </script>
+{% endblock %}

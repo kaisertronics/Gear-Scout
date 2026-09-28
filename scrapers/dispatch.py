@@ -108,6 +108,9 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
     elif stype == "shopify":
         from scrapers.shopify_store import scrape_shopify_collection
         return scrape_shopify_collection(source, keywords)
+    elif stype == "facebook_posts":
+        from scrapers.fb_posts import scrape_facebook_posts
+        return scrape_facebook_posts(source, keywords, cfg)
     elif stype == "long_mcquade":
         from scrapers.long_mcquade import scrape_long_mcquade
         return scrape_long_mcquade(source, keywords)

@@ -71,7 +71,7 @@ yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
-                "shopgoodwill", "kijiji", "shopify", "long_mcquade", "reddit"]
+                "shopgoodwill", "kijiji", "shopify", "long_mcquade", "facebook_posts", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
@@ -613,6 +613,95 @@ def lowest_untrack():
     return redirect(url_for("lowest"))
 
 
+FBPOSTS_STATUS_PATH = Path("/data/fbposts_status.json")
+_fbposts_thread = None
+
+
+def _fbposts_rows(days: int = 14) -> list[dict]:
+    """Facebook post-search finds first seen in the last `days` days."""
+    import sqlite3
+    from datetime import timedelta
+    from scrapers.store import _conn
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT * FROM seen WHERE source_name LIKE 'FB Posts%' AND hidden = 0 AND duplicate = 0
+               AND first_seen >= ? ORDER BY first_seen DESC LIMIT 400""", (cutoff,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _run_fbposts_job(term: str):
+    from scrapers.fb_posts import scrape_facebook_posts
+    from scrapers.store import mark_seen
+    try:
+        FBPOSTS_STATUS_PATH.write_text(json.dumps({"state": "running", "query": term}))
+        res = scrape_facebook_posts({"name": f"FB Posts — Manual: {term}"}, [term], load_config_raw())
+        for l in res.listings:
+            l.source_name = f"FB Posts — Manual: {term}"
+            mark_seen(l)
+        FBPOSTS_STATUS_PATH.write_text(json.dumps(
+            {"state": "done" if res.success else "failed", "query": term,
+             "found": len(res.listings), "reason": res.error}))
+    except Exception as e:
+        logging.exception("FB post search failed")
+        FBPOSTS_STATUS_PATH.write_text(json.dumps({"state": "failed", "query": term, "reason": str(e)}))
+
+
+@app.route("/fb-posts")
+def fb_posts_page():
+    from scrapers.fb_posts import priority_terms
+    cfg = load_config_raw()
+    rows = _fbposts_rows()
+    groups: dict[str, list[dict]] = {}
+    for r in _decorate(rows):
+        groups.setdefault(r["source_name"].replace("FB Posts — ", ""), []).append(r)
+    try:
+        status = json.loads(FBPOSTS_STATUS_PATH.read_text())
+    except Exception:
+        status = {"state": "idle"}
+    return render_template(
+        "fb_posts.html",
+        groups=sorted(groups.items()),
+        terms=priority_terms(cfg),
+        enabled=any(s.get("type") == "facebook_posts" and s.get("enabled", True) for s in cfg.get("sources", [])),
+        status=status,
+        q=request.args.get("q", ""),
+    )
+
+
+@app.route("/fb-posts/search", methods=["POST"])
+def fb_posts_search():
+    global _fbposts_thread
+    term = " ".join(request.form.get("q", "").split())
+    if term and (_fbposts_thread is None or not _fbposts_thread.is_alive()):
+        _fbposts_thread = threading.Thread(target=_run_fbposts_job, args=(term,), daemon=True)
+        _fbposts_thread.start()
+    return redirect(url_for("fb_posts_page", q=term))
+
+
+@app.route("/fb-posts/status")
+def fb_posts_status():
+    try:
+        return jsonify(json.loads(FBPOSTS_STATUS_PATH.read_text()))
+    except Exception:
+        return jsonify({"state": "idle"})
+
+
+@app.route("/settings/fb-posts", methods=["POST"])
+def settings_fb_posts():
+    from scrapers.fb_posts import parse_priority_list
+    cfg = load_config_for_edit()
+    cats = parse_priority_list(request.form.get("priority", ""))
+    cfg.setdefault("fb_post_search", {})["categories"] = cats
+    # Make sure the source exists when there's something to search.
+    if cats and not any(s.get("type") == "facebook_posts" for s in cfg.get("sources", [])):
+        cfg["sources"].append({"name": "FB Posts", "url": "https://www.facebook.com/search/posts/",
+                               "type": "facebook_posts", "enabled": True})
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="fbposts"))
+
+
 @app.route("/listing/hide", methods=["POST"])
 def listing_hide():
     global_id = request.form.get("global_id", "")
@@ -681,6 +770,10 @@ def settings():
         notif_cfg=cfg.get("notifications") or {},
         home_zip=cfg.get("home_zip") or "",
         suggested_topic="gearscout-" + secrets.token_hex(8),
+        fb_priority_text="\n".join(
+            f"[{c}]\n" + "\n".join(str(t) for t in (terms or []))
+            for c, terms in (((cfg.get("fb_post_search") or {}).get("categories")) or {}).items()
+        ),
         exclude_text="\n".join(str(w) for w in (cfg.get("exclude_words") or [])),
         hidden_count=count_hidden(),
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),

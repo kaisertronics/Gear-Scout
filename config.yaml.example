@@ -104,6 +104,17 @@ exclude_words: []
 #   facebook_workers: 2
 #   other_workers: 2
 
+# --- Facebook post search (optional) -------------------------
+# Terms searched in Facebook's search bar (Posts, newest first) on every
+# scheduled run, grouped by category — easiest to edit in Settings → FB Posts.
+# Each term takes ~30s and is a real search on your account: keep it to your
+# most important 15–20 (at most 40 run per scrape). Needs a "facebook_posts"
+# source (added automatically when you save a list in Settings).
+# fb_post_search:
+#   categories:
+#     Microphones: ["gefell um70", "lomo 19a9"]
+#     Preamps: ["neve 1073"]
+
 # --- Keywords ------------------------------------------------
 # This is the whole point of the app: it only ever surfaces a listing if its
 # title/description matches one of YOUR keywords below. This list ships

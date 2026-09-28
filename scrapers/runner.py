@@ -20,7 +20,7 @@ from scrapers.dispatch import dispatch_scrape
 
 logger = logging.getLogger(__name__)
 
-FB_TYPES = ("facebook", "facebook_marketplace_region")
+FB_TYPES = ("facebook", "facebook_marketplace_region", "facebook_posts")
 FB_WORKERS = 3
 # Docker Desktop commonly gets 4 CPUs; several of these also run a
 # headless browser, so more workers mostly means more contention.

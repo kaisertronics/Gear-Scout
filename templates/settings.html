@@ -9,10 +9,13 @@
       <button type="button" class="settings-tab" data-tab="data">Data</button>
       <button type="button" class="settings-tab" data-tab="ebay">eBay</button>
       <button type="button" class="settings-tab" data-tab="notify">Alerts</button>
+      <button type="button" class="settings-tab" data-tab="fbposts">FB Posts</button>
     </div>
 
     {% if saved == 'email' %}
       <div class="settings-saved">✓ Email &amp; schedule settings saved.</div>
+    {% elif saved == 'fbposts' %}
+      <div class="settings-saved">✓ Facebook post search list saved — it runs with the next scheduled scrape.</div>
     {% elif saved == 'notifications' %}
       <div class="settings-saved">✓ Alert settings saved.</div>
     {% elif saved == 'push_ok' %}
@@ -212,6 +215,22 @@
       </form>
     </div>
 
+    <div class="settings-panel" id="tab-fbposts" style="display:none;">
+      <h3>Facebook post search — priority list</h3>
+      <p class="muted">
+        Terms searched in Facebook's search bar (Posts, newest first) on every scheduled scrape,
+        grouped by category. Put each category in square brackets, then one term per line under it.
+        Each term takes about 30 seconds and is a search on your Facebook account, so keep it to
+        your most important 15–20 terms (at most 40 run each time). Results show on the
+        <a href="{{ url_for('fb_posts_page') }}">FB Posts</a> page, on the Dashboard and in the email.
+      </p>
+      <form method="post" action="{{ url_for('settings_fb_posts') }}" class="settings-form">
+        <textarea name="priority" class="settings-keywords-textarea" rows="16" spellcheck="false"
+                  placeholder="[Microphones]&#10;gefell um70&#10;lomo 19a9&#10;oktava mk-012&#10;&#10;[Preamps]&#10;neve 1073">{{ fb_priority_text }}</textarea>
+        <button type="submit" class="btn btn-primary">Save priority list</button>
+      </form>
+    </div>
+
     <div class="settings-panel" id="tab-notify" style="display:none;">
       <h3>Phone notifications</h3>
       <p class="muted">
@@ -313,6 +332,7 @@
       data: document.getElementById('tab-data'),
       ebay: document.getElementById('tab-ebay'),
       notify: document.getElementById('tab-notify'),
+      fbposts: document.getElementById('tab-fbposts'),
     };
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -327,6 +347,8 @@
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% elif saved in ('notifications', 'push_ok', 'push_fail') %}
       document.querySelector('.settings-tab[data-tab="notify"]').click();
+    {% elif saved == 'fbposts' %}
+      document.querySelector('.settings-tab[data-tab="fbposts"]').click();
     {% elif saved in ('exclude', 'location') %}
       document.querySelector('.settings-tab[data-tab="keywords"]').click();
     {% elif saved and saved.startswith('unhide:') %}
