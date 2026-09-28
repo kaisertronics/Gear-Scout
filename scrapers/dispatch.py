@@ -101,6 +101,12 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
         else:
             from scrapers.html_scraper import scrape_forum_html
             return scrape_forum_html(source, keywords)
+    elif stype == "kijiji":
+        from scrapers.kijiji import scrape_kijiji
+        return scrape_kijiji(source, keywords)
+    elif stype == "shopgoodwill":
+        from scrapers.shopgoodwill import scrape_shopgoodwill
+        return scrape_shopgoodwill(source, keywords)
     elif stype == "craigslist":
         return scrape_craigslist(source, keywords)
     elif stype == "craigslist_region":

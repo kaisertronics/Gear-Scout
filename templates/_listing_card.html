@@ -19,10 +19,11 @@
         <div class="listing-price-row">
           <span class="listing-price">{{ l.price }}</span>
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
+          {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid</span>{% endif %}
         </div>
       {% endif %}
       {% if l.location %}
-        <div class="listing-location">📍 {{ l.location }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
+        <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}
       {% if l.price_ctx and l.price_ctx.typical %}
         {% if l.price_ctx.source == 'reverb' %}

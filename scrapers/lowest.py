@@ -124,6 +124,9 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
             if (not value or value < MIN_PRICE or _WANTED.match(title) or _RENTAL.search(title)
                     or _FOR_ITEM.search(title) or is_partial(title)):
                 continue
+            # An auction's current bid isn't what it will sell for.
+            if (l.description or "").startswith("Auction"):
+                continue
             repair = needs_repair(l.title, l.description)
             if typical:
                 if value < typical * (REPAIR_FLOOR if repair else WORKING_FLOOR):

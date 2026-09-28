@@ -181,6 +181,20 @@ sources:
     type: html
     enabled: true
 
+  # ShopGoodwill: searched with a set of broad audio terms each run (its
+  # categories are too mixed to browse). Most items are auctions — shown
+  # with their current bid, never tagged as a deal.
+  - name: "ShopGoodwill"
+    url: "https://shopgoodwill.com/categories/listing?st=pro%20audio"
+    type: shopgoodwill
+    enabled: true
+
+  # Kijiji (Canada) Pro Audio & Recording. Prices are in CAD (shown as C$).
+  - name: "Kijiji — Pro Audio"
+    url: "https://www.kijiji.ca/b-pro-audio-recording/canada/c615l0"
+    type: kijiji
+    enabled: true
+
   # ---- Craigslist — 3 broad regions covering the whole continental US ----
   # Each uses Craigslist's own "search distance" filter set to ~1000 miles
   # from a central point (confirmed live: it genuinely returns results that

@@ -62,16 +62,25 @@ def needs_repair(*texts: Optional[str]) -> bool:
     return any(t and _REPAIR_RE.search(t) for t in texts)
 
 
+# Approximate — Kijiji prices are Canadian dollars; comparisons (typical
+# price, deals, lowest price) are done in USD.
+CAD_TO_USD = 0.73
+
+
 def parse_price(price: Optional[str]) -> Optional[float]:
+    """Numeric price in USD (Canadian "C$…"/"CAD" prices converted)."""
     if not price:
         return None
     m = re.search(r"\d[\d,]*(?:\.\d+)?", price)
     if not m:
         return None
     try:
-        return float(m.group(0).replace(",", ""))
+        value = float(m.group(0).replace(",", ""))
     except ValueError:
         return None
+    if re.search(r"C\$|CAD", price):
+        value *= CAD_TO_USD
+    return value
 
 
 def format_price(value: float) -> str:

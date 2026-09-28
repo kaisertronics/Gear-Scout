@@ -10,7 +10,7 @@
           {% if c.image_url %}<img src="{{ c.image_url }}" alt="" class="lowest-img" loading="lazy">{% else %}<span class="lowest-img lowest-img-empty"></span>{% endif %}
           <span class="lowest-info">
             <span class="lowest-title">{{ c.title }}</span>
-            <span class="muted">{{ c.source_name }}{% if c.location %} · 📍 {{ c.location }}{% endif %}</span>
+            <span class="muted">{{ c.source_name }}{% if c.location %} · 📍 {{ c.location.split(' @')[0] }}{% endif %}</span>
             {% if c.needs_repair or c.is_clone %}<span class="listing-flags">
               {% if c.is_clone %}<span class="flag flag-clone">Clone</span>{% endif %}
               {% if c.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}

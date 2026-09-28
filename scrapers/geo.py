@@ -72,7 +72,14 @@ def place_coords(location: Optional[str]) -> Optional[tuple[float, float]]:
     """"Claremont, CA" -> coordinates. A bare town name ("Sherman Oaks", as
     Craigslist gives it) only resolves if that name exists in one state —
     ambiguous names like "Springfield" are skipped rather than guessed."""
-    if not location or not _load():
+    if not location:
+        return None
+    # "Abbotsford, BC @49.06523,-122.35242": exact coordinates supplied by
+    # the source (Kijiji) — no lookup needed, and works outside the US.
+    exact = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", location)
+    if exact:
+        return float(exact.group(1)), float(exact.group(2))
+    if not _load():
         return None
     parts = [p.strip() for p in location.split(",") if p.strip()]
     if not parts:

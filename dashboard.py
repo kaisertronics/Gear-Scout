@@ -70,7 +70,8 @@ yaml_rt.preserve_quotes = True
 yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
-SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region", "reddit"]
+SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
+                "shopgoodwill", "kijiji", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
@@ -310,7 +311,9 @@ def _decorate(listings: list[dict]) -> list[dict]:
             continue
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
         l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market)
-        if l.get("sold") and l["price_ctx"]:
+        # A current auction bid isn't a sale price, so it's never a "deal".
+        l["is_auction"] = (l.get("description") or "").startswith("Auction")
+        if (l.get("sold") or l["is_auction"]) and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
         # Listings with no known distance (shipped-item sites, older rows)
