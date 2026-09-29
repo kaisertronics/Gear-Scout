@@ -26,7 +26,8 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 DEFAULT_BROAD_TERMS = [
-    "microphone", "mic preamp", "compressor", "mixer", "audio interface", "studio monitors",
+    "microphone", "mic preamp", "audio compressor", "compressor limiter", "audio mixer",
+    "mixing console", "audio interface", "studio monitors",
     "tube mic", "neumann", "shure", "akg", "sennheiser", "recording studio", "rack gear",
     "reel to reel", "equalizer", "api 500", "neve", "tascam", "pro audio",
 ]

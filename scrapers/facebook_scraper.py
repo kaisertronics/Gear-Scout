@@ -541,7 +541,7 @@ FEED_SCROLLS = 8
 BROAD_SCROLLS = 6
 # Newest-first Marketplace searches per region on scheduled runs (overridable
 # with config `facebook_marketplace: broad_terms:`).
-DEFAULT_BROAD_TERMS = ["microphone", "preamp", "compressor", "mixer", "studio monitor", "tube"]
+DEFAULT_BROAD_TERMS = ["microphone", "preamp", "audio compressor", "audio mixer", "studio monitor", "tube mic"]
 
 _CARD_JS = """els => els.map(e => ({
     href: e.getAttribute('href') || '',

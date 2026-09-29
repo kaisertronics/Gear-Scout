@@ -145,6 +145,35 @@ def dup_key(title: Optional[str], price: Optional[str]) -> Optional[str]:
     return f"{norm}|{value:.0f}"
 
 
+# Things that share a word with audio gear but aren't: air compressors,
+# kitchen/cement mixers, computer/baby monitors, bike racks… Applied to every
+# source on top of your own exclude words.
+_NOT_AUDIO = re.compile(
+    r"\b(?:air[\s-]?compressors?|pancake|psi|\d+\s?(?:gal|gallon)s?\b|tire inflator|jump starter|pneumatic|"
+    r"nail(?:er| gun)|brad nailer|impact wrench|3[\s-]phase|hvac|a/?c compressor|refrigerat\w*|freezer|"
+    r"porter[\s-]?cable|dewalt|craftsman|campbell hausfeld|ingersoll|bostitch|husky|ryobi|makita|milwaukee|"
+    r"california air tools|kobalt|quincy|"
+    r"kitchen\s?aid|stand mixer|hand mixer|cement mixer|concrete mixer|mortar mixer|dough|bread maker|blender|"
+    r"baby monitor|computer monitor|gaming monitor|pc monitor|(?:lcd|led|oled|ips|4k|1080p|curved|ultrawide) monitor|"
+    r"\d{2,3}\s?hz monitor|blood pressure|heart rate|"
+    r"bike rack|bicycle rack|wine rack|roof rack|hitch rack|shoe rack|gun rack|drying rack|spice rack|"
+    r"kitchen cabinet|bathroom cabinet|filing cabinet|file cabinet|china cabinet|curio|medicine cabinet|"
+    r"inner tube|tube top|"
+    r"(?:car|truck|boat|marine|rv) (?:amp|amplifier|stereo|subwoofer)|car audio)\b",
+    re.I)
+
+
+def is_not_audio(title: Optional[str]) -> bool:
+    """True for listings that only share a word with audio gear."""
+    t = title or ""
+    if _NOT_AUDIO.search(t):
+        return True
+    # A bare "Compressor" / "Mixer" / "Monitor" with nothing else to go on
+    # (typical of air compressors on OfferUp and Marketplace).
+    return bool(re.fullmatch(r"\W*(?:an?\s+)?(?:compressors?|mixers?|monitors?|racks?)(?:\s+\w+){0,2}?\W*", t.strip(), re.I)
+                and not re.search(r"\b(?:audio|studio|rack ?mount|stereo|mic|vocal|channel|limiter|opto|tube|fet|vca|dbx|api|ssl|neve|la-?2a|1176)\b", t, re.I))
+
+
 def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
     from scrapers.base import keyword_match
     words = [w for w in (exclude_words or []) if str(w).strip()]
@@ -153,9 +182,7 @@ def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
 
 def drop_excluded(listings: list, cfg: dict) -> list:
     words = cfg.get("exclude_words") or []
-    if not words:
-        return listings
-    return [l for l in listings if not exclude_match(l.title, words)]
+    return [l for l in listings if not is_not_audio(l.title) and not (words and exclude_match(l.title, words))]
 
 
 # --- Typical price / deal context -------------------------------------------

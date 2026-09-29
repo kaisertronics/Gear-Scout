@@ -121,7 +121,8 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
                 continue
             title = l.title or ""
             value = parse_price(l.price)
-            if (not value or value < MIN_PRICE or _WANTED.match(title) or _RENTAL.search(title)
+            from scrapers.enrich import is_not_audio
+            if (not value or value < MIN_PRICE or _WANTED.match(title) or _RENTAL.search(title) or is_not_audio(title)
                     or _FOR_ITEM.search(title) or is_partial(title)):
                 continue
             # An auction's current bid isn't what it will sell for.

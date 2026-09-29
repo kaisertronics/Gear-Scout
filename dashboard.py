@@ -309,7 +309,7 @@ def _price_index() -> dict:
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
-    from scrapers.enrich import build_price_index, exclude_match, needs_repair, price_context
+    from scrapers.enrich import build_price_index, exclude_match, is_not_audio, needs_repair, price_context
 
     from scrapers.geo import distance_miles
 
@@ -326,7 +326,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
     market = load_market()
     out = []
     for l in listings:
-        if exclude_match(l.get("title"), exclude_words):
+        if exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")):
             continue
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
         l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market,
