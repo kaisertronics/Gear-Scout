@@ -80,6 +80,7 @@ def _found_since_last_digest(exclude: set[str]) -> list:
         rows = conn.execute(
             """SELECT * FROM seen WHERE first_seen > ? AND COALESCE(live_only, 0) = 0
                AND COALESCE(hidden, 0) = 0 AND COALESCE(duplicate, 0) = 0
+               AND source_name NOT LIKE 'FB Posts%'
                ORDER BY first_seen""", (since,)).fetchall()
     out = []
     for r in rows:
@@ -175,6 +176,11 @@ def _run_scrape_cycle():
         logger.exception("Couldn't update learned search terms")
     keywords = keywords_with_learned(cfg)
     sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    from scrapers.fb_posts_background import settings as fb_bg_settings
+    if fb_bg_settings(cfg)["enabled"]:
+        # Facebook post search runs all day in the background instead, with
+        # its own afternoon roundup email.
+        sources = [s for s in sources if s.get("type") != "facebook_posts"]
     email_cfg = cfg["email"]
 
     logger.info("=" * 60)
@@ -321,6 +327,31 @@ def run_watch_cycle():
         _run_lock.release()
 
 
+def run_fb_posts_batch():
+    # Leaves the machine to a scrape that's already running (CPU, memory
+    # and the Facebook account) — the next batch is 15 minutes away.
+    if _run_lock.locked():
+        return
+    try:
+        from scrapers.fb_posts_background import run_batch
+        run_batch(load_config())
+    except Exception:
+        logger.exception("Background Facebook post search failed")
+
+
+def run_fb_posts_roundup():
+    """Checked every hour on the hour; sends at the configured hour."""
+    try:
+        from scrapers.fb_posts_background import _local_now, send_roundup, settings
+        cfg = load_config()
+        s = settings(cfg)
+        if not s["enabled"] or _local_now(cfg).hour != s["roundup_hour"]:
+            return
+        send_roundup(cfg)
+    except Exception:
+        logger.exception("Facebook posts roundup failed")
+
+
 def run_schedule():
     cfg = load_config()
     schedule_cfg = cfg.get("schedule", {})
@@ -363,6 +394,14 @@ def run_schedule():
         coalesce=True,
         misfire_grace_time=600,
     )
+
+    # Both jobs always run and re-read their settings each time, so changes
+    # made on the FB Posts page apply without restarting anything.
+    from scrapers import fb_posts_background as fbbg
+    scheduler.add_job(run_fb_posts_batch, IntervalTrigger(minutes=fbbg.BATCH_EVERY_MINUTES, timezone=tz_name),
+                      name="gear_scout_fb_posts", max_instances=1, coalesce=True, misfire_grace_time=300)
+    scheduler.add_job(run_fb_posts_roundup, CronTrigger(minute=0, timezone=tz_name),
+                      name="gear_scout_fb_roundup", misfire_grace_time=1800)
 
     logger.info("Scheduler started. Cron: '%s' (%s); background refresh + saved searches every %d min",
                 cron_expr, tz_name, interval)

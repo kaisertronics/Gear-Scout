@@ -58,22 +58,31 @@ def _parse_tip_date(tip: str) -> Optional[datetime]:
 def _post_date(page, el) -> Optional[datetime]:
     """Facebook scrambles the visible post time, but hovering the time link
     shows a tooltip with the real date. Tries the post's first few
-    placeholder links (the time link is one of them)."""
+    placeholder links (the time link is one of them), waiting only as long
+    as the tooltip takes to appear."""
+    links = []
     for a in el.query_selector_all("a[href]")[:8]:
         href = a.get_attribute("href") or ""
-        if href and not href.startswith("#") and "?" not in href and "/stories/" not in href:
+        if "/stories/" in href or (href and not href.startswith("#") and "?" not in href):
             continue
+        links.append((0 if href.startswith("#") else 1, len(links), a))
+    # The time link's address is usually just "#" — try those first.
+    for _, _, a in sorted(links, key=lambda x: x[:2])[:4]:
         try:
+            # Move away and let the previous tooltip close, so its date can't
+            # be read for this post; then hover and poll for the new one.
             page.mouse.move(0, 0)
-            page.wait_for_timeout(150)
-            a.hover(timeout=2500)
-            page.wait_for_timeout(700)
+            page.wait_for_timeout(250)
+            a.hover(timeout=1200)
         except Exception:
             continue
-        when = _parse_tip_date(page.evaluate(_TIP_JS))
-        if when:
-            return when
+        for _ in range(8):
+            page.wait_for_timeout(150)
+            when = _parse_tip_date(page.evaluate(_TIP_JS))
+            if when:
+                return when
     return None
+
 
 _UI_LINE = re.compile(
     r"^(like|comment|share|send|reply|follow|see more|see translation|all reactions:?|"
@@ -197,6 +206,12 @@ def _parse(post: dict, term: str) -> Optional[dict]:
     }
 
 
+def _already_saved(url: str) -> bool:
+    from scrapers.store import _conn
+    with _conn() as conn:
+        return conn.execute("SELECT 1 FROM seen WHERE url = ? LIMIT 1", (url,)).fetchone() is not None
+
+
 def search_term(page, term: str, scrolls: int = 5, on_progress=None) -> list[dict]:
     """Posts for one term from an open (logged-in) Playwright page."""
     try:
@@ -227,8 +242,10 @@ def search_term(page, term: str, scrolls: int = 5, on_progress=None) -> list[dic
                 if len(post["text"]) > len(collected[key]["text"]):
                     collected[key].update(text=post["text"])
                 continue
-            # Only posts worth keeping get the (slower) date check.
-            if not _parse(post, term):
+            # Only posts worth keeping get the (slower) date check — and not
+            # ones already saved on an earlier search.
+            parsed_now = _parse(post, term)
+            if not parsed_now or _already_saved(parsed_now["url"]):
                 collected[key] = post
                 continue
             post["posted_at"] = _post_date(page, el)
@@ -240,8 +257,8 @@ def search_term(page, term: str, scrolls: int = 5, on_progress=None) -> list[dic
         # Newest-first: once several in a row are old, the rest are too.
         if old_in_a_row >= 4:
             break
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        page.wait_for_timeout(1500)
+        page.mouse.wheel(0, 4000)
+        page.wait_for_timeout(1200)
     out = []
     for p in collected.values():
         # Posts with no readable date, or older than MAX_AGE_DAYS, are left

@@ -376,6 +376,13 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
         return []
 
 
+@app.template_filter("local")
+def _local_filter(value):
+    """ISO/UTC time -> '12-hour, your time zone' for templates."""
+    from scrapers.timefmt import local_time
+    return local_time(value, (load_config_raw().get("schedule") or {}).get("timezone"))
+
+
 @app.route("/learning")
 def learning_page():
     from scrapers import learning as L
@@ -779,7 +786,49 @@ def fb_posts_page():
         enabled=any(s.get("type") == "facebook_posts" and s.get("enabled", True) for s in cfg.get("sources", [])),
         status=status,
         q=request.args.get("q", ""),
+        bg=_fb_bg_view(cfg),
+        saved=request.args.get("saved"),
     )
+
+
+def _fb_bg_view(cfg) -> dict:
+    from scrapers import fb_posts_background as fbbg
+    st, s = fbbg.state(), fbbg.settings(cfg)
+    total = st.get("total_terms") or len(fbbg.all_terms(cfg))
+    cursor = st.get("cursor") or 0
+    active_hours = max(1, s["end_hour"] - s["start_hour"])
+    per_day = s["per_hour"] * active_hours
+    paused = st.get("paused_until")
+    if paused and datetime.fromisoformat(paused) <= datetime.now(timezone.utc):
+        paused = None
+    return {
+        **s, "total": total, "cursor": cursor,
+        "pct": round(100 * cursor / total) if total else 0,
+        "today_count": st.get("today_count") or 0, "today_hits": st.get("today_hits") or 0,
+        "last_term": st.get("last_term"), "passes_done": st.get("passes_done") or 0,
+        "per_day": per_day, "days_per_pass": round(total / per_day, 1) if per_day else None,
+        "paused_until": paused, "pause_reason": st.get("pause_reason") if paused else None,
+    }
+
+
+@app.route("/settings/fb-posts-background", methods=["POST"])
+def settings_fb_posts_background():
+    def num(name, lo, hi, default):
+        try:
+            return max(lo, min(hi, int(request.form.get(name, default))))
+        except ValueError:
+            return default
+    cfg = load_config_for_edit()
+    fps = cfg.setdefault("fb_post_search", {})
+    start, end = num("start_hour", 0, 23, 6), num("end_hour", 1, 24, 22)
+    fps["background"] = {
+        "enabled": request.form.get("enabled") == "1",
+        "per_hour": num("per_hour", 8, 200, 60),
+        "start_hour": start, "end_hour": max(end, start + 1),
+        "roundup_hour": num("roundup_hour", 0, 23, 15),
+    }
+    save_config_raw(cfg)  # picked up by the next 15-minute batch — no restart needed
+    return redirect(url_for("fb_posts_page", saved="bg"))
 
 
 @app.route("/fb-posts/search", methods=["POST"])

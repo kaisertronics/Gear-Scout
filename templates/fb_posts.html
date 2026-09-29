@@ -6,8 +6,9 @@
     <h2>📣 Facebook post search</h2>
     <p class="muted">
       Searches Facebook's site-wide search bar (Posts, newest first) — public posts and posts in
-      groups you're in — using your saved Facebook login. Your priority list below runs with every
-      scheduled scrape; search anything once with the box. Only posts from the last 14 days are
+      groups you're in — using your saved Facebook login. It works through your whole search-term
+      list in the background all day (priority terms come around several times a day) and emails
+      one roundup of what it found each afternoon; search anything once with the box. Only posts from the last 14 days are
       kept — Gear Scout reads each post's real date (Facebook's own "recent" sort still mixes in
       old posts, and posts whose date can't be read are skipped). Posts with a photo link
       straight to the post; text-only ones link to the search they came from.
@@ -17,6 +18,40 @@
       <button type="submit">Search Facebook posts</button>
     </form>
     <div id="fbposts-status" class="live-status-banner" style="display:none;"></div>
+  </section>
+
+  <section class="panel">
+    <h2>🔁 Background search <span class="muted">— your whole list, all day</span></h2>
+    {% if saved == 'bg' %}<div class="settings-saved">✓ Saved — takes effect within 15 minutes.</div>{% endif %}
+    {% if not bg.enabled %}
+      <p class="muted">Off.</p>
+    {% elif bg.paused_until %}
+      <p class="flag flag-repair" style="display:inline-block;">Paused until {{ bg.paused_until|local }} — {{ bg.pause_reason }}. It restarts on its own.</p>
+    {% endif %}
+    {% if bg.enabled %}
+      <div class="live-status-banner" style="display:block;">
+        <div class="gs-progress-text">Through your list: term {{ '{:,}'.format(bg.cursor) }} of {{ '{:,}'.format(bg.total) }}{% if bg.passes_done %} · {{ bg.passes_done }} full pass{{ 'es' if bg.passes_done != 1 else '' }} done{% endif %}</div>
+        <div class="gs-progress"><div class="gs-progress-fill" style="width: {{ [bg.pct, 3]|max }}%;"></div></div>
+        <div class="gs-progress-meta">
+          Today: {{ bg.today_count }} searches, {{ bg.today_hits }} new for-sale posts
+          {% if bg.last_term %} · last searched: “{{ bg.last_term }}”{% endif %}
+          · about {{ '{:,}'.format(bg.per_day) }} searches a day = the whole list every {{ bg.days_per_pass }} day{{ '' if bg.days_per_pass == 1 else 's' }}
+        </div>
+      </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('settings_fb_posts_background') }}" class="bg-form">
+      <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if bg.enabled else '' }}> Search in the background</label>
+      <label>Searches per hour <input type="number" name="per_hour" min="8" max="200" value="{{ bg.per_hour }}"></label>
+      <label>From <input type="number" name="start_hour" min="0" max="23" value="{{ bg.start_hour }}">:00</label>
+      <label>until <input type="number" name="end_hour" min="1" max="24" value="{{ bg.end_hour }}">:00</label>
+      <label>Roundup email at <input type="number" name="roundup_hour" min="0" max="23" value="{{ bg.roundup_hour }}">:00</label>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+    <p class="muted" style="margin-top:8px;">
+      Faster gets through the list sooner but means more searches from your Facebook account —
+      Facebook can temporarily block searching for accounts that search a lot. If it does, Gear
+      Scout pauses for 6 hours on its own and sends you a push notification.
+    </p>
   </section>
 
   <section class="panel">

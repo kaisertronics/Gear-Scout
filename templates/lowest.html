@@ -45,7 +45,7 @@
   {% if q %}
   <section class="panel">
     <h2>“{{ q }}”
-      {% if current %}<span class="muted">— checked {{ current.checked_at[:16].replace('T', ' ') }} UTC</span>{% endif %}
+      {% if current %}<span class="muted">— checked {{ current.checked_at|local }}</span>{% endif %}
     </h2>
     {% if current %}
       {{ ranked_list(current.top) }}
@@ -82,7 +82,7 @@
             <a class="watch-query" href="{{ url_for('lowest', q=t) }}">{{ t }}</a>
             <span class="muted">
               {% if st and st.top %}lowest {{ st.top[0].price }}{% elif st %}no priced listings{% else %}not checked yet{% endif %}
-              {% if st %} · checked {{ st.checked_at[:16].replace('T', ' ') }} UTC{% endif %}
+              {% if st %} · checked {{ st.checked_at|local }}{% endif %}
             </span>
             <form method="post" action="{{ url_for('lowest_untrack') }}" onsubmit="return confirm('Stop tracking &quot;{{ t }}&quot;?');">
               <input type="hidden" name="q" value="{{ t }}">

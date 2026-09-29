@@ -17,7 +17,7 @@
       <div class="stat-label">Last run</div>
       <div class="stat-value">
         {% if status %}
-          {{ status.run_time[:16].replace('T', ' ') }} UTC
+          {{ status.run_time|local }}
         {% else %}
           never
         {% endif %}

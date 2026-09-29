@@ -782,3 +782,6 @@ code {
 .learn-chip-like { background: var(--green-bg, #dcfce7); color: var(--green-text, #166534); }
 .learn-chip-dislike { background: var(--amber-bg); color: var(--amber-text); }
 .table-scroll { overflow-x: auto; }
+
+.bg-form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 12px; font-size: 14px; }
+.bg-form input[type=number] { width: 64px; margin-left: 4px; }

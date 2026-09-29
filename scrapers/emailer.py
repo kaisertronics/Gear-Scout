@@ -10,6 +10,7 @@ from typing import Optional
 
 from .base import Listing, ScrapeResult
 from .enrich import needs_repair, price_context
+from .timefmt import local_time
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def build_email_html(
             if item.posted_at:
                 posted_html = f"""
                 <span style="font-size:11px;color:#94a3b8;">
-                  &nbsp;· {item.posted_at.strftime('%b %d, %I:%M %p UTC')}
+                  &nbsp;· {local_time(item.posted_at)}
                 </span>"""
 
             listing_cards += f"""
@@ -253,7 +254,7 @@ def build_email_html(
           <span style="font-size:13px;">See the Source Status section below for details and fix instructions.</span>
         </div>"""
 
-    run_label = f"Run #{run_number} &middot; {run_time.strftime('%A %B %d, %Y at %I:%M %p UTC')}"
+    run_label = f"Run #{run_number} &middot; {local_time(run_time)}"
     total_ok = len(ok_sources)
     total_sources = len(results)
 
