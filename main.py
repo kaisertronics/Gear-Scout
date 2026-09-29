@@ -9,6 +9,7 @@ Commands:
   python main.py fb-search  — search Facebook groups by keyword
   python main.py status     — print DB stats and source list
 """
+import json
 import logging
 import sys
 import threading
@@ -56,9 +57,37 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+LAST_SCHEDULED_PATH = Path("/data/last_scheduled_run.json")
+
+
 def run_scrape_cycle():
     with _run_lock:
         _run_scrape_cycle()
+    # Recorded only once a run finishes, so a run cut short by a restart is
+    # caught up on the next start (see _catch_up_missed_run).
+    try:
+        LAST_SCHEDULED_PATH.write_text(json.dumps({"finished": datetime.now(timezone.utc).isoformat()}))
+    except Exception:
+        logger.exception("Couldn't record the finished run")
+
+
+def _catch_up_missed_run(trigger, window_hours: float = 3) -> bool:
+    """True if the latest scheduled time (within `window_hours`) has no
+    finished run after it — e.g. the container was rebuilt or restarted
+    mid-run, or was down at that time."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    fire, latest = trigger.get_next_fire_time(None, now - timedelta(hours=window_hours)), None
+    while fire and fire <= now:
+        latest = fire
+        fire = trigger.get_next_fire_time(fire, fire + timedelta(seconds=1))
+    if not latest:
+        return False
+    try:
+        finished = datetime.fromisoformat(json.loads(LAST_SCHEDULED_PATH.read_text())["finished"])
+    except Exception:
+        finished = None
+    return finished is None or finished < latest
 
 
 def _run_scrape_cycle():
@@ -114,7 +143,9 @@ def _run_scrape_cycle():
     # Reverb (cached, capped per run) so this run's listings and email get one.
     local_index = build_price_index(all_priced_rows())
     try:
-        refresh_market_prices([l.title for l in all_listings], local_index, max_lookups=120, cfg=cfg)
+        # A few before the email (so it has values); the rest after it, so
+        # lookups never hold up the email by several minutes.
+        refresh_market_prices([l.title for l in new_listings], local_index, max_lookups=30, cfg=cfg)
     except Exception:
         logger.exception("Reverb market price refresh failed")
 
@@ -171,6 +202,11 @@ def _run_scrape_cycle():
     if price_drops:
         mark_price_drops_notified([d["global_id"] for d in pending_favorite_price_drops()])
 
+    try:
+        refresh_market_prices([l.title for l in all_listings], local_index, max_lookups=120, cfg=cfg)
+    except Exception:
+        logger.exception("Market price refresh failed")
+
     # Periodic DB cleanup
     purge_old(days=30)
 
@@ -216,16 +252,17 @@ def run_schedule():
     minute, hour, day, month, day_of_week = parts
 
     scheduler = BlockingScheduler(timezone=tz_name)
+    cron_trigger = CronTrigger(
+        minute=minute,
+        hour=hour,
+        day=day,
+        month=month,
+        day_of_week=day_of_week,
+        timezone=tz_name,
+    )
     scheduler.add_job(
         run_scrape_cycle,
-        CronTrigger(
-            minute=minute,
-            hour=hour,
-            day=day,
-            month=month,
-            day_of_week=day_of_week,
-            timezone=tz_name,
-        ),
+        cron_trigger,
         name="gear_scout",
         misfire_grace_time=300,
     )
@@ -252,6 +289,13 @@ def run_schedule():
     if schedule_cfg.get("run_on_startup", False):
         logger.info("Running initial scrape now (run_on_startup)...")
         run_scrape_cycle()
+    elif _catch_up_missed_run(cron_trigger):
+        # A scheduled run in the last 3 hours never finished (restart,
+        # rebuild, computer asleep) — run it now instead of skipping it.
+        from datetime import timedelta
+        logger.info("A scheduled run was missed — running it in 1 minute.")
+        scheduler.add_job(run_scrape_cycle, "date", name="gear_scout_catch_up",
+                          run_date=datetime.now(timezone.utc) + timedelta(minutes=1))
 
     try:
         scheduler.start()
