@@ -71,7 +71,7 @@ yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
-                "shopgoodwill", "kijiji", "shopify", "long_mcquade", "facebook_posts", "reddit"]
+                "shopgoodwill", "kijiji", "offerup", "shopify", "long_mcquade", "facebook_posts", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
@@ -294,6 +294,18 @@ def _distance_filter_context():
             "deals_only": request.args.get("deals") == "1"}
 
 
+_price_index_cache: dict = {"at": 0.0, "index": None}
+
+
+def _price_index() -> dict:
+    """Typical prices from local history — rebuilt at most every 5 minutes
+    (it reads every priced listing and takes a couple of seconds)."""
+    from scrapers.enrich import build_price_index
+    if _price_index_cache["index"] is None or time.time() - _price_index_cache["at"] > 300:
+        _price_index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
+    return _price_index_cache["index"]
+
+
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
@@ -309,7 +321,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
     except ValueError:
         within = 0
     deals_only = request.args.get("deals") == "1"
-    index = build_price_index(all_priced_rows())
+    index = _price_index()
     from scrapers.market import load_market
     market = load_market()
     out = []
@@ -376,11 +388,110 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
         return []
 
 
+@app.template_filter("usd")
+def _usd_filter(price):
+    from scrapers.enrich import display_price
+    return display_price(price)[0]
+
+
+@app.template_filter("orig_price")
+def _orig_price_filter(price):
+    from scrapers.enrich import display_price
+    return display_price(price)[1]
+
+
 @app.template_filter("local")
 def _local_filter(value):
     """ISO/UTC time -> '12-hour, your time zone' for templates."""
     from scrapers.timefmt import local_time
     return local_time(value, (load_config_raw().get("schedule") or {}).get("timezone"))
+
+
+def _telex_terms(cfg) -> list[str]:
+    return [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
+
+
+def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list[tuple[str, list[dict]]]:
+    """Stored listings (last `days` days, from scrapes and live searches)
+    matching each Telex term — every word, any order, like the live search."""
+    import sqlite3
+    from datetime import timedelta
+    from scrapers.store import _conn
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
+               AND COALESCE(sold, 0) = 0 AND first_seen >= ? ORDER BY first_seen DESC LIMIT 6000""",
+            (cutoff,)).fetchall()]
+    from scrapers.base import _keyword_pattern, _word_matches, fix_brand_spelling
+    texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
+
+    def matcher(term: str):
+        words = [w for w in term.lower().split() if re.search(r"[a-z0-9]", w)]
+        # A long, descriptive term ("Warm audio WA-412 API 4 channel pre")
+        # rarely has every word in a title: its brand + model numbers decide.
+        if len(words) >= 4:
+            key = [words[0]] + [w for w in words[1:] if re.search(r"\d", w) and len(w) >= 2]
+            words = key if len(key) >= 2 else words
+        exact = _keyword_pattern(term.lower())
+        # Quick substring check on the longest plain word before the full match.
+        plain = max((w for w in words if w.isalpha() and len(w) >= 3), key=len, default=None)
+        return lambda t: (plain is None or plain in t) and (
+            bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
+
+    out = []
+    for term in terms:
+        hits, seen_urls = [], set()
+        match = matcher(term)
+        for r, text in zip(rows, texts):
+            if r["url"] in seen_urls:
+                continue
+            if match(text):
+                seen_urls.add(r["url"])
+                hits.append(r)
+                if len(hits) >= per_term:
+                    break
+        out.append((term, hits))
+    # Price context etc. for every hit in one pass (a listing can sit under
+    # several terms), then hand each group its decorated copies.
+    unique = list({id(r): r for _, hits in out for r in hits}.values())
+    kept = {id(r) for r in _decorate(unique)}  # adds display fields in place; drops excluded
+    return [(term, [r for r in hits if id(r) in kept]) for term, hits in out]
+
+
+@app.route("/telex")
+def telex():
+    cfg = load_config_raw()
+    terms = _telex_terms(cfg)
+    groups = _telex_matches(terms)
+    return render_template("telex.html", groups=groups, terms=terms,
+                           total=sum(len(g) for _, g in groups))
+
+
+@app.route("/telex/add", methods=["POST"])
+def telex_add():
+    new = [l.strip() for l in request.form.get("terms", "").splitlines() if l.strip()]
+    if new:
+        cfg = load_config_for_edit()
+        terms = list(cfg.get("telex_list") or [])
+        lower = {str(t).lower() for t in terms}
+        for t in new:
+            if t.lower() not in lower:
+                terms.append(t)
+                lower.add(t.lower())
+        cfg["telex_list"] = terms
+        save_config_raw(cfg)
+    return redirect(url_for("telex"))
+
+
+@app.route("/telex/remove", methods=["POST"])
+def telex_remove():
+    term = request.form.get("term", "").strip()
+    cfg = load_config_for_edit()
+    cfg["telex_list"] = [t for t in (cfg.get("telex_list") or []) if str(t).strip() != term]
+    save_config_raw(cfg)
+    return redirect(url_for("telex"))
 
 
 @app.route("/learning")

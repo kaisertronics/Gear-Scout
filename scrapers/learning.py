@@ -221,9 +221,14 @@ def update_learned_terms(cfg: dict) -> list[str]:
 
 
 def keywords_with_learned(cfg: dict) -> list[str]:
+    """Keyword list + Telex List terms + learned terms (no repeats)."""
     base = list(cfg.get("keywords") or [])
-    lower = {k.lower() for k in base}
-    return base + [t for t in active_learned_terms() if t not in lower]
+    lower = {str(k).lower() for k in base}
+    for t in [str(t).strip() for t in cfg.get("telex_list") or []] + active_learned_terms():
+        if t and t.lower() not in lower:
+            base.append(t)
+            lower.add(t.lower())
+    return base
 
 
 # ---------------------------------------------------------------------------

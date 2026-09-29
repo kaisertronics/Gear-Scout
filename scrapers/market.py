@@ -64,12 +64,36 @@ def _ensure_table(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(market_prices)")}
     if "source" not in cols:
         conn.execute("ALTER TABLE market_prices ADD COLUMN source TEXT")
+    if "loose" not in cols:
+        # 1 = found only after loosening the search — shown as a rough estimate.
+        conn.execute("ALTER TABLE market_prices ADD COLUMN loose INTEGER DEFAULT 0")
+
+
+def _title_fits(title: str, query: str) -> bool:
+    """A result counts when it has the query's model number and brand (its
+    first word) and most of its other words — every word is too strict
+    ("Tascam TEAC 22-2" vs Reverb's "TEAC 22-2 Reel to Reel")."""
+    from scrapers.base import _word_matches, fix_brand_spelling
+    text = fix_brand_spelling(title.lower())
+    words = [w for w in query.lower().split() if w not in _GENERIC] or query.lower().split()
+    if not words:
+        return False
+    models = [w for w in words if _is_model_token(w) or (w.isdigit() and len(w) >= 3)]
+    must = set(models) or {words[0]}
+    if not all(_word_matches(w, text) for w in must):
+        return False
+    rest = [w for w in words if w not in must]
+    if not rest:
+        return True
+    hit = sum(1 for w in rest if _word_matches(w, text))
+    return hit / len(rest) >= 0.6
 
 
 def _usable(title: str, query: str, value: Optional[float]) -> bool:
     from scrapers.base import keyword_match
-    return bool(value and value >= 5 and not is_partial(title) and not is_lot(title)
-                and keyword_match(title, [query]))
+    from scrapers.enrich import is_bundle
+    return bool(value and value >= 5 and not is_partial(title) and not is_lot(title) and not is_bundle(title)
+                and (keyword_match(title, [query]) or _title_fits(title, query)))
 
 
 def _reverb_prices(query: str) -> list[float]:
@@ -134,28 +158,40 @@ _GENERIC = {
     "powered", "active", "passive", "portable", "digital", "analog", "tube", "lavalier", "cardioid",
     "large", "small", "diaphragm", "capsule", "head", "unit", "system", "kit", "edition", "limited",
     "mixing", "console", "channel", "power", "cord", "with", "vintage", "original", "rare",
+    "gear", "equipment", "music", "stuff", "various", "misc", "assorted", "bundle", "lot",
 }
 _MISSPELLED_BRANDS = {"sure": "shure", "nueman": "neumann", "nuemann": "neumann", "neuman": "neumann",
                       "senheiser": "sennheiser", "sennhieser": "sennheiser", "akg's": "akg"}
 
 
+# Specs, not model numbers: "24-bit", "192khz", "2x2", "16x16", "1/4", "3.5".
+_SPEC = re.compile(r"^(?:\d+(?:-?bit|khz|hz|v|w|mm|ft|u|ch|in|out|x\d+)|\d+/\d+|\d+\.\d+|usb-?c?\d*|mk-?i+)$")
+
+
+def _is_model_token(w: str) -> bool:
+    return bool(re.search(r"\d", w) and re.search(r"[a-z]", w) and not _SPEC.match(w))
+
+
 def lookup_plan(query: str) -> list[str]:
-    """Searches to try, most exact first."""
+    """Searches to try, most exact first. Loosening never drops so much that
+    it matches unrelated gear: it keeps the brand and model number (or at
+    least three descriptive words), and a model number on its own is only
+    tried when it's distinctive ("urec5", "sgc-598" — not "c1la" or "24-bit")."""
     words = [_MISSPELLED_BRANDS.get(w, w) for w in query.lower().split()]
+    words = [w for w in words if not _SPEC.match(w)] or words
     plan = [" ".join(words)]
     specific = [w for w in words if w not in _GENERIC]
-    if len(specific) >= 2:
-        plan.append(" ".join(specific[:4]))
+    model = next((w for w in specific if _is_model_token(w)), None)
     if len(specific) >= 3:
-        plan.append(" ".join(specific[:3]))
-    if len(specific) >= 2:
-        plan.append(" ".join(specific[:2]))  # brand + name: "fishman tonedeq"
-    # The model number on its own ("sm11", "urec5") — skips a wrong or
-    # misspelled brand word.
-    for w in specific:
-        if re.search(r"\d", w) and re.search(r"[a-z]", w) and len(w.replace("-", "")) >= 3:
-            plan.append(w)
-            break
+        for cut in (specific[:4], specific[:3]):
+            if not model or model in cut:
+                plan.append(" ".join(cut))
+    elif len(specific) == 2 and model:
+        plan.append(" ".join(specific))
+    if model and specific and specific[0] != model:
+        plan.append(f"{specific[0]} {model}")  # brand + model: "shure sm11"
+    if model and len(model.replace("-", "")) >= 5:
+        plan.append(model)
     out = []
     for q in plan:
         if q and q not in out:
@@ -198,22 +234,22 @@ def load_market() -> MarketIndex:
     with _conn() as conn:
         _ensure_table(conn)
         rows = conn.execute(
-            "SELECT model_key, typical, source, samples FROM market_prices"
+            "SELECT model_key, typical, source, samples, loose FROM market_prices"
             " WHERE typical IS NOT NULL AND fetched_at >= ?",
             (cutoff,),
         ).fetchall()
     market = MarketIndex()
-    for key, typical, source, samples in rows:
+    for key, typical, source, samples, loose in rows:
         market[key] = typical
         market.sources[key] = source or "Reverb"
-        if (samples or 0) < MIN_SAMPLES:
+        if (samples or 0) < MIN_SAMPLES or loose:
             market.rough.add(key)
     return market
 
 
 def refresh_market_prices(titles: list[str], local_index: dict[str, float],
                           max_lookups: int = 60, pause: float = 1.0,
-                          cfg: Optional[dict] = None) -> int:
+                          cfg: Optional[dict] = None, force: bool = False) -> int:
     """Looks up every item in `titles` that has no local typical price and
     no fresh cached lookup — model-number items first, then title-word ones.
     Capped per call and paced, so a run never floods Reverb or eBay.
@@ -222,11 +258,14 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     ebay_cfg = (cfg or {}).get("ebay_api") or {}
     with _conn() as conn:
         _ensure_table(conn)
-        fresh = {k for (k,) in conn.execute(
+        fresh = set() if force else {k for (k,) in conn.execute(
             "SELECT model_key FROM market_prices WHERE fetched_at >= ?", (cutoff,))}
     models: dict[str, str] = {}
     by_title: dict[str, str] = {}
     for title in titles:
+        from scrapers.enrich import is_bundle
+        if is_bundle(title):
+            continue
         mkey = model_key(title)
         if mkey and mkey in local_index and not is_partial(title):
             continue
@@ -244,21 +283,23 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     for key, query in todo:
         try:
             typical, n, label, used = market_typical(query, ebay_cfg, loosen=True)
+            loose = used != lookup_plan(query)[0]
             if not typical and ":" in key and key[:2] not in ("t:", "p:"):
                 # Brand + model found nothing — try the title's words.
                 from scrapers.enrich import title_query
                 tq = next((title_query(t) for t in titles if value_key(t) == key), None)
                 if tq:
                     typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
+                    loose = True
         except Exception as e:
             logger.warning("Market price lookup failed for %r: %s", query, e)
             continue
         with _conn() as conn:
             _ensure_table(conn)
             conn.execute(
-                "INSERT OR REPLACE INTO market_prices (model_key, query, typical, samples, fetched_at, source)"
-                " VALUES (?,?,?,?,?,?)",
-                (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label),
+                "INSERT OR REPLACE INTO market_prices"
+                " (model_key, query, typical, samples, fetched_at, source, loose) VALUES (?,?,?,?,?,?,?)",
+                (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose)),
             )
             conn.commit()
         if typical:

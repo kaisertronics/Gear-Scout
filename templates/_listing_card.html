@@ -17,7 +17,8 @@
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">
-          <span class="listing-price">{{ l.price }}</span>
+          <span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>
+          {% if l.price|orig_price %}<span class="listing-was" style="text-decoration:none;">{{ l.price|orig_price }}</span>{% endif %}
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
           {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid</span>{% endif %}
         </div>

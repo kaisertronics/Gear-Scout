@@ -301,7 +301,7 @@ def recent_listings(limit: int = 100, source_name: str = None) -> list[dict]:
     listing details (url/price/image/etc.), from back when this table only
     tracked dedup fingerprints, and have nothing real to link to or show."""
     query = ("SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND live_only = 0"
-             " AND hidden = 0 AND duplicate = 0")
+             " AND hidden = 0 AND duplicate = 0 AND sold = 0")
     params: tuple = ()
     if source_name:
         query += " AND source_name = ?"
@@ -349,7 +349,7 @@ def search_listings(query_text: str, limit: int = 300) -> list[dict]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             f"""SELECT * FROM seen
-               WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
+               WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0 AND sold = 0
                  AND {' AND '.join(clauses)}
                ORDER BY first_seen DESC""",
             params,

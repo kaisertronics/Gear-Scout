@@ -16,7 +16,7 @@
               {% if c.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
             </span>{% endif %}
           </span>
-          <span class="lowest-price">{{ c.price }}{% if c.note %}<span class="listing-each">{{ c.note }}</span>{% endif %}</span>
+          <span class="lowest-price">{{ c.price|usd }}{% if c.price|orig_price %}<span class="listing-each" style="color:inherit;opacity:.7;">{{ c.price|orig_price }}</span>{% endif %}{% if c.note %}<span class="listing-each">{{ c.note }}</span>{% endif %}</span>
         </a>
       {% endfor %}
     </div>

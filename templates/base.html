@@ -27,6 +27,7 @@
         <a href="{{ url_for('favorites') }}" class="{{ 'active' if request.endpoint == 'favorites' else '' }}">Favorites</a>
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Lowest Price</a>
         <a href="{{ url_for('fb_posts_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('fb_posts') else '' }}">FB Posts</a>
+        <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('learning_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('learning') else '' }}">Learning</a>
         <a href="{{ url_for('sources') }}" class="{{ 'active' if request.endpoint in ('sources','add_source') else '' }}">Sources</a>
         <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>

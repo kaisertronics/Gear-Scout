@@ -41,6 +41,30 @@ _LOT_RE = re.compile(
 )
 
 
+_GEAR_NOUN = re.compile(
+    r"\b(?:amp|amplifier|head|cab|cabinet|mic|mics|microphone|interface|monitors?|speakers?|sub|subwoofer|"
+    r"mixer|preamp|pre-amp|compressor|eq|equalizer|headphones?|recorder|deck|synth|keyboard|controller|"
+    r"pedal|di|console|rack|reverb|delay|limiter)s?\b", re.I)
+_MODELISH = re.compile(r"\b[a-z]*\d+[a-z0-9-]*\b", re.I)
+_ACCESSORY_WORDS = re.compile(
+    r"^\s*(?:(?:a|the|its|original|matching)\s+)?(?:case|cases|cable|cables|cords?|shock ?mount|mount|clip|"
+    r"stand|stands|pop filter|windscreen|foam|box|manual|power supply|psu|adapter|strap|bag|cover)\b", re.I)
+
+
+def is_bundle(title: Optional[str]) -> bool:
+    """Several pieces of gear sold together ("EVH 5150 amp & 2x12 cabinet",
+    "ADAM A8H monitors + Sub12 + stands") — one item's market price doesn't
+    fit. A mic "with case and shock mount" isn't a bundle."""
+    t = title or ""
+    if re.search(r"\b(?:bundle|package deal|full setup|studio setup|combo deal)\b", t, re.I):
+        return True
+    parts = [p for p in re.split(r"\s(?:&|\+|and|plus)\s|\s/+\s|\s\|\s", t) if p.strip()]
+    if len(parts) < 2:
+        return False
+    gear = [p for p in parts if not _ACCESSORY_WORDS.match(p) and (_GEAR_NOUN.search(p) or _MODELISH.search(p))]
+    return len(gear) >= 2
+
+
 def is_lot(title: Optional[str]) -> bool:
     return bool(title and _LOT_RE.search(title))
 
@@ -81,6 +105,16 @@ def parse_price(price: Optional[str]) -> Optional[float]:
     if re.search(r"C\$|CAD", price):
         value *= CAD_TO_USD
     return value
+
+
+def display_price(price: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """(price to show, original) — Canadian prices are shown in US dollars
+    ("~$110"), with the seller's own "C$150" kept alongside."""
+    if price and re.search(r"C\$|CAD", price):
+        value = parse_price(price)
+        if value:
+            return f"~{format_price(value)}", price
+    return price, None
 
 
 def format_price(value: float) -> str:
@@ -160,6 +194,10 @@ def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
         # "LA-2A"/"LA2A" is a model; "model 7" or "channel 8" is not — a
         # word followed by a spaced number needs at least 2 digits.
         if sep == " " and len(digits) < 2:
+            continue
+        # "Presonus 16", "Behringer 24": a long word and a short number is a
+        # size or count, not a model ("NS 10", "KM 184", "U 87" still are).
+        if sep == " " and len(digits) < 3 and len(letters) > 3 and not suffix:
             continue
         # "circa 1965", "from 1972": a year, not a model number.
         if len(digits) == 4 and 1920 <= int(digits) <= 2035 and not suffix:
@@ -370,6 +408,9 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
     the market value (just no comparison); parts are valued as parts."""
     value = parse_price(price)
     partial = is_partial(title)
+    if is_bundle(title):
+        return {"basis": "single", "qty": 1, "unit": None, "unit_value": value,
+                "note": "bundle of several items — no single-item comparison"}
     mkey, key = model_key(title), value_key(title)
     if mkey and mkey in index and not partial:
         typical, source, threshold = index[mkey], "local", 0.75
@@ -385,6 +426,16 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         basis, qty, unit = "single", 1, None
     ctx = {"basis": basis, "qty": qty, "unit": format_price(unit) if unit and qty > 1 else None,
            "unit_value": unit, "note": basis_note(basis, qty, unit) if unit else None}
+    # A rough gauge that's wildly off from the asking price is almost always
+    # a comparison with the wrong thing — better no value than a wrong one.
+    rough_guess = source != "local" and (
+        bool(key and key[:2] in ("t:", "p:")) or key in (getattr(market, "rough", set()) or set()))
+    if typical and rough_guess and unit and not (0.2 <= unit / typical <= 5):
+        typical = None
+    # 6x the typical price is a different variant ("SM57 Unidyne III" is a
+    # vintage mic, not a $100 SM57) or a bundle — not a comparable item.
+    if typical and unit and unit / typical > 6:
+        typical = None
     if not typical:
         return ctx
     # A value found from title words (no model number) or from only one or

@@ -117,6 +117,9 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
     elif stype == "kijiji":
         from scrapers.kijiji import scrape_kijiji
         return scrape_kijiji(source, keywords)
+    elif stype == "offerup":
+        from scrapers.offerup import scrape_offerup
+        return scrape_offerup(source, keywords)
     elif stype == "shopgoodwill":
         from scrapers.shopgoodwill import scrape_shopgoodwill
         return scrape_shopgoodwill(source, keywords)

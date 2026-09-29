@@ -120,14 +120,21 @@ def run_refresh_cycle(cfg: dict):
     new_listings = filter_new(all_listings)
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
+    # Catch listings that sold or were taken down since they were found.
+    try:
+        from scrapers.sold_check import run_sold_check
+        run_sold_check()
+    except Exception:
+        logger.exception("Sold check failed")
     try:
         Path("/data/last_refresh.json").write_text(json.dumps({
             "finished": datetime.now(timezone.utc).isoformat(), "new_count": len(new_listings)}))
     except OSError:
         pass
     try:
-        refresh_market_prices([l.title for l in new_listings], build_price_index(all_priced_rows()),
-                              max_lookups=40, cfg=cfg)
+        # New finds first, then any older listing still without a value.
+        refresh_market_prices([l.title for l in new_listings] + [l.title for l in all_listings],
+                              build_price_index(all_priced_rows()), max_lookups=60, cfg=cfg)
     except Exception:
         logger.exception("Market price refresh failed")
 

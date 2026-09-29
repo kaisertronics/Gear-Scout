@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 from .base import Listing, ScrapeResult
-from .enrich import needs_repair, price_context
+from .enrich import display_price, needs_repair, price_context
 from .timefmt import local_time
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,10 @@ def build_email_html(
                 price_html = f"""
                 <span style="display:inline-block;margin-top:6px;padding:2px 10px;
                     background:#dcfce7;color:#166534;border-radius:12px;
-                    font-size:13px;font-weight:600;">{item.price}</span>"""
+                    font-size:13px;font-weight:600;">{display_price(item.price)[0]}</span>"""
+                if display_price(item.price)[1]:
+                    price_html += f"""
+                <span style="font-size:11px;color:#94a3b8;">&nbsp;{display_price(item.price)[1]}</span>"""
                 ctx = price_context(item.title, item.price, price_index or {}, market_index,
                                     description=item.description)
                 if ctx.get("note"):
