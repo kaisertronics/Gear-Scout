@@ -538,7 +538,8 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
 
 
 FEED_SCROLLS = 8
-BROAD_SCROLLS = 6
+BROAD_SCROLLS = 5
+REGION_BUDGET_SECONDS = 240
 # Newest-first Marketplace searches per region on scheduled runs (overridable
 # with config `facebook_marketplace: broad_terms:`).
 DEFAULT_BROAD_TERMS = ["microphone", "preamp", "audio compressor", "audio mixer", "studio monitor", "tube mic"]
@@ -660,6 +661,10 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
             loc_id = re.search(r'/marketplace/(\d+)', source["url"])
             if not is_live and not source.get("_light") and loc_id:
                 for term in source.get("_broad_terms") or DEFAULT_BROAD_TERMS:
+                    # A time budget per region, so one slow page can't stall the run.
+                    if time.time() - start > REGION_BUDGET_SECONDS:
+                        logger.info("%s: time budget reached, skipping remaining broad searches", name)
+                        break
                     time.sleep(1.5)  # pace consecutive Facebook page loads
                     try:
                         page.goto(

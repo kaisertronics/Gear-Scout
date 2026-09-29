@@ -7,7 +7,7 @@
     <form method="post" action="{{ url_for('scrape_start') }}" id="scrape-now-form">
       <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
     </form>
-    <span class="muted">Runs a full scrape across every enabled source right now — updates everything below, but never sends an email.
+    <span class="muted">Quick scrape of every source right now (about 5 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.
       {% if last_refresh %}<br>Auto-refreshed {% if last_refresh.mins < 1 %}just now{% elif last_refresh.mins < 120 %}{{ last_refresh.mins }} min ago{% else %}{{ last_refresh.mins // 60 }} h ago{% endif %} · {{ last_refresh.new_count }} new{% endif %}</span>
   </div>
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>

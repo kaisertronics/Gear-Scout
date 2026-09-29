@@ -30,7 +30,12 @@ def run_manual_scrape(
     but never touches email."""
     from scrapers.learning import keywords_with_learned
     keywords = keywords_with_learned(cfg)
-    sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    # The quick version (like the hourly refresh): Facebook Marketplace reads
+    # each region's feed without the extra broad searches, and the slow
+    # Facebook post search (which runs all day in the background) is left out
+    # — a full scheduled-style pass takes 15–20 minutes.
+    sources = [{**s, "_light": True} for s in cfg.get("sources", [])
+               if s.get("enabled", True) and s.get("type") != "facebook_posts"]
     results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
 
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
