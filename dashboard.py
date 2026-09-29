@@ -465,8 +465,9 @@ def telex():
     cfg = load_config_raw()
     terms = _telex_terms(cfg)
     groups = _telex_matches(terms)
+    from scrapers.telex import state as telex_state
     return render_template("telex.html", groups=groups, terms=terms,
-                           total=sum(len(g) for _, g in groups))
+                           total=sum(len(g) for _, g in groups), sweep=telex_state())
 
 
 @app.route("/telex/add", methods=["POST"])

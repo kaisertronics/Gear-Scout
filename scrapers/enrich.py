@@ -166,7 +166,8 @@ _NOT_AUDIO = re.compile(
 def is_not_audio(title: Optional[str]) -> bool:
     """True for listings that only share a word with audio gear."""
     t = title or ""
-    if _NOT_AUDIO.search(t):
+    # "Viair compressors", "aAir Compressor": "air compressor" even inside a word.
+    if _NOT_AUDIO.search(t) or re.search(r"air[\s-]?compressor|air tank|viair", t, re.I):
         return True
     # A bare "Compressor" / "Mixer" / "Monitor" with nothing else to go on
     # (typical of air compressors on OfferUp and Marketplace).

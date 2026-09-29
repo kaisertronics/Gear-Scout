@@ -132,9 +132,15 @@ def run_refresh_cycle(cfg: dict):
     except OSError:
         pass
     try:
-        # New finds first, then any older listing still without a value.
-        refresh_market_prices([l.title for l in new_listings] + [l.title for l in all_listings],
-                              build_price_index(all_priced_rows()), max_lookups=60, cfg=cfg)
+        # New finds first, then this run's other listings, then anything from
+        # the last few days (live searches, Telex matches) still without a value.
+        from scrapers.store import _conn
+        with _conn() as conn:
+            recent = [t for (t,) in conn.execute(
+                "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= datetime('now', '-3 days')"
+                " ORDER BY first_seen DESC LIMIT 1500")]
+        refresh_market_prices([l.title for l in new_listings] + [l.title for l in all_listings] + recent,
+                              build_price_index(all_priced_rows()), max_lookups=80, cfg=cfg)
     except Exception:
         logger.exception("Market price refresh failed")
 
@@ -323,6 +329,12 @@ def run_watch_cycle():
                 run_refresh_cycle(cfg)
             except Exception:
                 logger.exception("Background refresh failed")
+        # Actively search the next few Telex List terms on search-based sites.
+        try:
+            from scrapers.telex import run_sweep
+            run_sweep(cfg)
+        except Exception:
+            logger.exception("Telex sweep failed")
         if any(w["enabled"] for w in get_watches(cfg)):
             notify_watch_hits(cfg, run_watches(cfg))
         # Lowest-price trackers share the same timer (and lock).

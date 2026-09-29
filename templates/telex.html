@@ -8,7 +8,10 @@
     <p class="muted">
       Every listing Gear Scout has found in the last 30 days that matches one of these terms (every
       word, any order — “Apollo X8P” also finds “Universal Audio Apollo x8p”). The terms are also
-      added to every scrape and the background Facebook post search, so new matches keep showing up here.
+      added to every scrape and the background Facebook post search, and every hour Gear Scout
+      searches the next few terms directly on Facebook Marketplace (all regions), your Facebook
+      groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb and Long &amp; McQuade — so the whole
+      list is searched every few hours. New terms go first.
     </p>
     <form method="post" action="{{ url_for('telex_add') }}" class="telex-add">
       <textarea name="terms" rows="3" placeholder="Add terms — one per line" class="search-input"></textarea>
@@ -31,7 +34,9 @@
 
   {% for term, items in groups %}
   <section class="panel" id="t-{{ loop.index }}">
-    <h2>{{ term }} <span class="muted">— {{ items|length }}{{ '+' if items|length >= 60 else '' }} · <a href="{{ url_for('search', q=term) }}">live search every site →</a></span></h2>
+    <h2>{{ term }} <span class="muted">— {{ items|length }}{{ '+' if items|length >= 60 else '' }} ·
+      {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
+      <a href="{{ url_for('search', q=term) }}">live search every site now →</a></span></h2>
     {% if items %}
       <div class="listing-grid">
         {% for l in items %}{{ listing_card(l) }}{% endfor %}
