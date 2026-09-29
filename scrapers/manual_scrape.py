@@ -45,8 +45,10 @@ def run_manual_scrape(
         from scrapers.enrich import build_price_index
         from scrapers.market import refresh_market_prices
         from scrapers.store import all_priced_rows
-        refresh_market_prices([l.title for l in all_listings],
-                              build_price_index(all_priced_rows()), max_lookups=120, cfg=cfg)
+        # Only this scrape's new finds, briefly — the hourly refresh fills in
+        # the rest, so "Scrape now" finishes right after scraping.
+        refresh_market_prices([l.title for l in new_listings],
+                              build_price_index(all_priced_rows()), max_lookups=15, pause=0.3, cfg=cfg)
     except Exception:
         logger.exception("Reverb market price refresh failed")
 
