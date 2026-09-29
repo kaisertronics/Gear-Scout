@@ -316,7 +316,25 @@ def _run_scrape_cycle():
 _run_lock = threading.Lock()
 
 
+def _dashboard_job_running() -> bool:
+    """True while you're running Scrape now, a live search, a Lowest Price
+    check or an FB post search from the dashboard — background jobs step
+    aside so your search gets the machine (and the Facebook account)."""
+    for name in ("manual_scrape_status.json", "live_search_status.json",
+                 "lowest_status.json", "fbposts_status.json"):
+        p = Path("/data") / name
+        try:
+            if time.time() - p.stat().st_mtime < 900 and json.loads(p.read_text()).get("state") == "running":
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def run_watch_cycle():
+    if _dashboard_job_running():
+        logger.info("Hourly refresh skipped — a search from the dashboard is running.")
+        return
     if not _run_lock.acquire(blocking=False):
         logger.info("Saved searches skipped this interval — a scrape is already running.")
         return
@@ -349,7 +367,7 @@ def run_watch_cycle():
 def run_fb_posts_batch():
     # Leaves the machine to a scrape that's already running (CPU, memory
     # and the Facebook account) — the next batch is 15 minutes away.
-    if _run_lock.locked():
+    if _run_lock.locked() or _dashboard_job_running():
         return
     try:
         from scrapers.fb_posts_background import run_batch
