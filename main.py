@@ -58,6 +58,73 @@ def load_config() -> dict:
 
 
 LAST_SCHEDULED_PATH = Path("/data/last_scheduled_run.json")
+LAST_DIGEST_PATH = Path("/data/last_digest.json")
+
+
+def _last_digest_time() -> datetime:
+    try:
+        return datetime.fromisoformat(json.loads(LAST_DIGEST_PATH.read_text())["sent"])
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+def _found_since_last_digest(exclude: set[str]) -> list:
+    """Listings the hourly background refreshes found since the last digest
+    email, so the scheduled email still reports them."""
+    import sqlite3
+    from scrapers.base import Listing
+    from scrapers.store import _conn
+    since = _last_digest_time().isoformat()
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT * FROM seen WHERE first_seen > ? AND COALESCE(live_only, 0) = 0
+               AND COALESCE(hidden, 0) = 0 AND COALESCE(duplicate, 0) = 0
+               ORDER BY first_seen""", (since,)).fetchall()
+    out = []
+    for r in rows:
+        if r["global_id"] in exclude:
+            continue
+        posted = None
+        try:
+            posted = datetime.fromisoformat(r["posted_at"]) if r["posted_at"] else None
+        except ValueError:
+            pass
+        out.append(Listing(
+            source_name=r["source_name"], title=r["title"], url=r["url"], price=r["price"],
+            description=r["description"], image_url=r["image_url"], posted_at=posted,
+            listing_id=r["global_id"].split("::", 1)[-1], location=r["location"],
+        ))
+    return out
+
+
+def run_refresh_cycle(cfg: dict):
+    """Hourly background refresh (no email): re-reads every source so the
+    dashboard always has the latest. Lighter than a full run — Facebook
+    Marketplace reads each region's feed without the extra broad searches,
+    and the Facebook post search (slow, many searches) is left to the full
+    scheduled runs. New finds go into the next digest email."""
+    keywords = cfg.get("keywords", [])
+    sources = [
+        {**s, "_light": True} for s in cfg.get("sources", [])
+        if s.get("enabled", True) and s.get("type") != "facebook_posts"
+    ]
+    start = time.time()
+    results = run_sources(sources, keywords, cfg)
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
+    new_listings = filter_new(all_listings)
+    logger.info("Background refresh: %d new listings from %d sources in %.0fs",
+                len(new_listings), len(results), time.time() - start)
+    try:
+        Path("/data/last_refresh.json").write_text(json.dumps({
+            "finished": datetime.now(timezone.utc).isoformat(), "new_count": len(new_listings)}))
+    except OSError:
+        pass
+    try:
+        refresh_market_prices([l.title for l in new_listings], build_price_index(all_priced_rows()),
+                              max_lookups=40, cfg=cfg)
+    except Exception:
+        logger.exception("Market price refresh failed")
 
 
 def run_scrape_cycle():
@@ -127,6 +194,8 @@ def _run_scrape_cycle():
     # Deduplicate — only keep listings we haven't seen before
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
     new_listings = filter_new(all_listings)
+    # Plus what the hourly background refreshes found since the last email.
+    new_listings += _found_since_last_digest({l.global_id for l in new_listings})
 
     failed_sources = [r for r in results if not r.success]
     has_failures = bool(failed_sources)
@@ -194,6 +263,7 @@ def _run_scrape_cycle():
         )
         if success:
             logger.info("Email sent successfully.")
+            LAST_DIGEST_PATH.write_text(json.dumps({"sent": datetime.now(timezone.utc).isoformat()}))
         else:
             logger.error("Email failed to send. Check SMTP credentials in config.yaml.")
     else:
@@ -226,6 +296,11 @@ def run_watch_cycle():
         from scrapers.lowest import run_trackers, tracked_queries
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
+        if (cfg.get("schedule") or {}).get("background_refresh", True):
+            try:
+                run_refresh_cycle(cfg)
+            except Exception:
+                logger.exception("Background refresh failed")
         if any(w["enabled"] for w in get_watches(cfg)):
             notify_watch_hits(cfg, run_watches(cfg))
         # Lowest-price trackers share the same timer (and lock).
@@ -280,7 +355,7 @@ def run_schedule():
         misfire_grace_time=600,
     )
 
-    logger.info("Scheduler started. Cron: '%s' (%s); saved searches every %d min",
+    logger.info("Scheduler started. Cron: '%s' (%s); background refresh + saved searches every %d min",
                 cron_expr, tz_name, interval)
 
     # Off by default: every container restart (rebuild, reboot, crash

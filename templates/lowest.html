@@ -106,13 +106,10 @@
         const data = await (await fetch("{{ url_for('lowest_status') }}")).json();
         if (data.state === 'running' && (!currentQ || data.query === currentQ)) {
           sawRunning = true;
-          lowBanner.style.display = '';
-          lowBanner.textContent = data.total
-            ? `Searching every site for “${data.query}” (${data.done}/${data.total})…`
-            : `Searching every site for “${data.query}”…`;
-          setTimeout(pollLowest, 2000);
+          gsProgress(lowBanner, `Searching every site for “${data.query}”…`, data);
+          setTimeout(pollLowest, 1000);
         } else if (sawRunning && data.state === 'done') {
-          lowBanner.textContent = 'Done — loading results…';
+          gsProgressText(lowBanner, 'Done — loading results…');
           setTimeout(() => window.location.reload(), 800);
         } else if (sawRunning && data.state === 'failed') {
           lowBanner.textContent = '⚠️ Search failed: ' + (data.reason || 'unknown error');

@@ -770,3 +770,10 @@ code {
 }
 .listing-each { font-size: 11px; color: #b45309; font-weight: 600; margin-top: 2px; }
 .lowest-price .listing-each { display: block; text-align: right; font-weight: 600; }
+
+.gs-progress { height: 10px; margin: 8px 0 6px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
+.gs-progress-fill { height: 100%; width: 3%; background: var(--amber-text); border-radius: 999px; transition: width 0.6s ease; }
+.gs-progress-fill.indeterminate { width: 35%; animation: gs-slide 1.3s ease-in-out infinite; }
+@keyframes gs-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+.gs-progress-meta { font-size: 12px; opacity: 0.85; }
+@media (prefers-reduced-motion: reduce) { .gs-progress-fill.indeterminate { animation: none; width: 100%; opacity: 0.5; } }

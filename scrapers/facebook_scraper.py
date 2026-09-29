@@ -537,6 +537,38 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
         )
 
 
+FEED_SCROLLS = 8
+BROAD_SCROLLS = 6
+# Newest-first Marketplace searches per region on scheduled runs (overridable
+# with config `facebook_marketplace: broad_terms:`).
+DEFAULT_BROAD_TERMS = ["microphone", "preamp", "compressor", "mixer", "studio monitor", "tube"]
+
+_CARD_JS = """els => els.map(e => ({
+    href: e.getAttribute('href') || '',
+    aria: e.getAttribute('aria-label') || '',
+    text: e.innerText || '',
+    img: (e.querySelector('img') || {getAttribute: () => null}).getAttribute('src'),
+}))"""
+
+
+def _collect_marketplace_cards(page, collected: dict, scrolls: int) -> None:
+    """Scrolls with the mouse wheel (a scripted window scroll doesn't make
+    Facebook load more) and gathers cards as they appear; stops early when
+    two scrolls in a row bring nothing new."""
+    stale = 0
+    for i in range(scrolls + 1):
+        before = len(collected)
+        for c in page.eval_on_selector_all("a[href*='/marketplace/item/']", _CARD_JS):
+            key = c["href"].split("?")[0]
+            if key not in collected or len(c["aria"]) > len(collected[key]["aria"]):
+                collected[key] = c
+        stale = stale + 1 if len(collected) == before else 0
+        if i == scrolls or stale >= 2:
+            break
+        page.mouse.wheel(0, 4000)
+        page.wait_for_timeout(1600)
+
+
 def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> ScrapeResult:
     """Scrapes one Facebook Marketplace region's general browse feed (see
     scrapers/facebook_marketplace_regions.py for the 8 regions), filtering
@@ -564,7 +596,8 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
     # keyword list, where an automated search per keyword per region would
     # mean hundreds of requests against the actual Facebook account, one
     # term is exactly what a search box is for.
-    if len(keywords) == 1 and keywords[0].strip():
+    is_live = len(keywords) == 1 and bool(keywords[0].strip())
+    if is_live:
         from scrapers.facebook_marketplace_regions import facebook_marketplace_search_url
 
         loc_match = re.search(r'/marketplace/(\d+)', url)
@@ -613,18 +646,31 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     duration_seconds=time.time() - start,
                 )
 
-            # Scroll a few times to load more of the feed
-            _scroll_for_more(page, "a[href*='/marketplace/item/']", times=3, step_px=1800, max_wait_ms=1200)
-
             # Marketplace item cards are always wrapped in a
             # /marketplace/item/{id}/ anchor — this URL scheme is far more
-            # stable than any class name on a React-rendered page.
-            cards = page.eval_on_selector_all("a[href*='/marketplace/item/']", """els => els.map(e => ({
-                href: e.getAttribute('href') || '',
-                aria: e.getAttribute('aria-label') || '',
-                text: e.innerText || '',
-                img: (e.querySelector('img') || {getAttribute: () => null}).getAttribute('src'),
-            }))""")
+            # stable than any class name on a React-rendered page. The list
+            # is virtualized (only ~40 cards exist on the page at a time), so
+            # cards are collected after every scroll, not once at the end.
+            collected: dict[str, dict] = {}
+            _collect_marketplace_cards(page, collected, scrolls=(8 if is_live else FEED_SCROLLS))
+
+            # Scheduled runs also search a few broad words newest-first in
+            # each region — the browse feed alone is a small, personalized
+            # sample. Skipped on the lighter hourly refresh runs.
+            loc_id = re.search(r'/marketplace/(\d+)', source["url"])
+            if not is_live and not source.get("_light") and loc_id:
+                for term in source.get("_broad_terms") or DEFAULT_BROAD_TERMS:
+                    time.sleep(1.5)  # pace consecutive Facebook page loads
+                    try:
+                        page.goto(
+                            f"https://www.facebook.com/marketplace/{loc_id.group(1)}/search?query={quote_plus(term)}"
+                            "&sortBy=creation_time_descend&exact=false",
+                            wait_until="domcontentloaded", timeout=45000)
+                        _wait_for(page, "a[href*='/marketplace/item/']")
+                        _collect_marketplace_cards(page, collected, scrolls=BROAD_SCROLLS)
+                    except Exception as e:
+                        logger.warning("FB Marketplace broad search %r failed for %s: %s", term, name, e)
+            cards = list(collected.values())
             listings = []
             seen_ids = set()
 

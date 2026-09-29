@@ -116,5 +116,48 @@
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   </script>
+<script>
+  // Progress bar inside a status banner. `data` is a status payload:
+  // {done, total, started (seconds), current_source}. With no total yet it
+  // shows a moving "working" bar.
+  function gsFmt(sec) {
+    sec = Math.max(0, Math.round(sec));
+    return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
+  }
+  window.gsProgress = function (el, text, data) {
+    el.style.display = '';
+    if (!el.querySelector('.gs-progress')) {
+      el.innerHTML = '<div class="gs-progress-text"></div>' +
+        '<div class="gs-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="gs-progress-fill"></div></div>' +
+        '<div class="gs-progress-meta"></div>';
+    }
+    el.querySelector('.gs-progress-text').textContent = text;
+    const bar = el.querySelector('.gs-progress'), fill = el.querySelector('.gs-progress-fill');
+    const meta = el.querySelector('.gs-progress-meta');
+    const started = data && data.started ? data.started * 1000 : null;
+    const elapsed = started ? (Date.now() - started) / 1000 : null;
+    const parts = [];
+    if (data && data.total) {
+      const pct = Math.min(100, Math.round(100 * data.done / data.total));
+      fill.classList.remove('indeterminate');
+      fill.style.width = Math.max(pct, 3) + '%';
+      bar.setAttribute('aria-valuenow', pct);
+      parts.push(`${pct}%`, `${data.done} of ${data.total} done`);
+      if (elapsed && data.done > 0 && data.done < data.total) {
+        parts.push(`about ${gsFmt(elapsed / data.done * (data.total - data.done))} left`);
+      }
+    } else {
+      fill.classList.add('indeterminate');
+      fill.style.width = '';
+    }
+    if (elapsed) parts.push(`${gsFmt(elapsed)} elapsed`);
+    if (data && data.current_source) parts.push(`now: ${data.current_source}`);
+    meta.textContent = parts.join(' · ');
+  };
+  window.gsProgressText = function (el, text) {
+    el.style.display = '';
+    el.textContent = text;
+  };
+</script>
 </body>
 </html>

@@ -49,14 +49,14 @@
       try {
         const d = await (await fetch("{{ url_for('fb_posts_status') }}")).json();
         if (d.state === 'running') {
-          fbSawRunning = true; fbBanner.style.display = '';
-          fbBanner.textContent = `Searching Facebook posts for “${d.query}”… (about 30 seconds)`;
-          setTimeout(pollFb, 2000);
+          fbSawRunning = true;
+          gsProgress(fbBanner, `Searching Facebook posts for “${d.query}”…`, d);
+          setTimeout(pollFb, 1000);
         } else if (fbSawRunning && d.state === 'done') {
-          fbBanner.textContent = `Done — ${d.found} matching post(s). Loading…`;
+          gsProgressText(fbBanner, `Done — ${d.found} matching post(s). Loading…`);
           setTimeout(() => location.reload(), 800);
         } else if (fbSawRunning && d.state === 'failed') {
-          fbBanner.textContent = '⚠️ Search failed: ' + (d.reason || 'unknown error');
+          gsProgressText(fbBanner, '⚠️ Search failed: ' + (d.reason || 'unknown error'));
         }
       } catch (e) { setTimeout(pollFb, 3000); }
     }

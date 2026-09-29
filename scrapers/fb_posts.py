@@ -197,7 +197,7 @@ def _parse(post: dict, term: str) -> Optional[dict]:
     }
 
 
-def search_term(page, term: str, scrolls: int = 5) -> list[dict]:
+def search_term(page, term: str, scrolls: int = 5, on_progress=None) -> list[dict]:
     """Posts for one term from an open (logged-in) Playwright page."""
     try:
         page.goto(search_url(term), wait_until="domcontentloaded", timeout=45000)
@@ -212,7 +212,9 @@ def search_term(page, term: str, scrolls: int = 5) -> list[dict]:
     collected: dict[str, dict] = {}
     cutoff = datetime.now() - timedelta(days=MAX_AGE_DAYS)
     old_in_a_row = 0
-    for _ in range(scrolls):
+    for step in range(scrolls):
+        if on_progress:
+            on_progress(step, scrolls, "reading posts and checking their dates")
         for el in page.query_selector_all("div[role=feed] > div"):
             try:
                 post = el.evaluate(_POST_JS)
@@ -254,7 +256,8 @@ def search_term(page, term: str, scrolls: int = 5) -> list[dict]:
     return out
 
 
-def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict] = None) -> ScrapeResult:
+def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict] = None,
+                          on_progress=None) -> ScrapeResult:
     """Scheduled run: every priority term (capped). Live search: the one term."""
     from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context, _save_session
 
@@ -280,7 +283,7 @@ def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict]
             context = _new_context(browser)
             page = context.new_page()
             for category, term in jobs:
-                for p in search_term(page, term):
+                for p in search_term(page, term, on_progress=on_progress):
                     listings.append(Listing(
                         source_name=f"FB Posts — {category}" if not live_term else name,
                         title=p["title"], url=p["url"], price=p["price"],

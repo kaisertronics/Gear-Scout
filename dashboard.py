@@ -163,10 +163,11 @@ def _write_live_search_status(status: dict):
 
 def _run_live_search_job(query: str):
     from scrapers.live_search import run_live_search
+    started = time.time()
 
     def on_progress(done, total, current_source):
         _write_live_search_status({
-            "state": "running",
+            "state": "running", "started": started,
             "query": query,
             "done": done,
             "total": total,
@@ -206,10 +207,11 @@ def _write_manual_scrape_status(status: dict):
 
 def _run_manual_scrape_job():
     from scrapers.manual_scrape import run_manual_scrape
+    started = time.time()
 
     def on_progress(done, total, current_source):
         _write_manual_scrape_status({
-            "state": "running",
+            "state": "running", "started": started,
             "done": done,
             "total": total,
             "current_source": current_source,
@@ -354,8 +356,16 @@ def index():
     listings = recent_listings(limit=300)
     grouped_listings = _group_by_source(listings)
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
+    last_refresh = None
+    try:
+        info = json.loads(Path("/data/last_refresh.json").read_text())
+        mins = int((datetime.now(timezone.utc) - datetime.fromisoformat(info["finished"])).total_seconds() // 60)
+        last_refresh = {"mins": mins, "new_count": info.get("new_count", 0)}
+    except Exception:
+        pass
     return render_template(
         "index.html",
+        last_refresh=last_refresh,
         deals=_deals_from(grouped_listings),
         status=status,
         grouped_listings=grouped_listings,
@@ -533,9 +543,11 @@ def _load_lowest_status() -> dict:
 def _run_lowest_job(query: str):
     from scrapers.lowest import check_lowest
 
+    started = time.time()
+
     def on_progress(done, total, current):
         _write_lowest_status({"state": "running", "query": query, "done": done,
-                              "total": total, "current_source": current})
+                              "total": total, "current_source": current, "started": started})
     try:
         res = check_lowest(query, load_config_raw(), on_progress=on_progress)
         _write_lowest_status({"state": "done", "query": query, "found": len(res["top"])})
@@ -640,8 +652,14 @@ def _run_fbposts_job(term: str):
     from scrapers.fb_posts import scrape_facebook_posts
     from scrapers.store import mark_seen
     try:
-        FBPOSTS_STATUS_PATH.write_text(json.dumps({"state": "running", "query": term}))
-        res = scrape_facebook_posts({"name": f"FB Posts — Manual: {term}"}, [term], load_config_raw())
+        started = time.time()
+        FBPOSTS_STATUS_PATH.write_text(json.dumps({"state": "running", "query": term, "started": started}))
+
+        def on_progress(done, total, step):
+            FBPOSTS_STATUS_PATH.write_text(json.dumps({"state": "running", "query": term, "started": started,
+                                                       "done": done, "total": total, "current_source": step}))
+        res = scrape_facebook_posts({"name": f"FB Posts — Manual: {term}"}, [term], load_config_raw(),
+                                    on_progress=on_progress)
         for l in res.listings:
             l.source_name = f"FB Posts — Manual: {term}"
             mark_seen(l)

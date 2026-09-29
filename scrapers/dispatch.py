@@ -129,7 +129,8 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
         return scrape_facebook_group(source, keywords)
     elif stype == "facebook_marketplace_region":
         from scrapers.facebook_scraper import scrape_facebook_marketplace_region
-        return scrape_facebook_marketplace_region(source, keywords)
+        broad = ((cfg or {}).get("facebook_marketplace") or {}).get("broad_terms")
+        return scrape_facebook_marketplace_region({**source, "_broad_terms": broad}, keywords)
     else:
         logger.warning("Unknown source type '%s' for %s — skipping", stype, source.get("name"))
         return None

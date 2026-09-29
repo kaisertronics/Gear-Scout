@@ -7,7 +7,8 @@
     <form method="post" action="{{ url_for('scrape_start') }}" id="scrape-now-form">
       <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
     </form>
-    <span class="muted">Runs a full scrape across every enabled source right now — updates everything below, but never sends an email.</span>
+    <span class="muted">Runs a full scrape across every enabled source right now — updates everything below, but never sends an email.
+      {% if last_refresh %}<br>Auto-refreshed {% if last_refresh.mins < 1 %}just now{% elif last_refresh.mins < 120 %}{{ last_refresh.mins }} min ago{% else %}{{ last_refresh.mins // 60 }} h ago{% endif %} · {{ last_refresh.new_count }} new{% endif %}</span>
   </div>
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
 
@@ -212,19 +213,14 @@
         sawRunning = true;
         scrapeBanner.style.display = '';
         scrapeBtn.disabled = true;
-        if (data.total) {
-          scrapeBanner.textContent = `Scraping now (${data.done}/${data.total} sources)` +
-            (data.current_source ? ` — checking ${data.current_source}...` : '');
-        } else {
-          scrapeBanner.textContent = 'Starting scrape...';
-        }
-        setTimeout(poll, 2000);
+        gsProgress(scrapeBanner, data.total ? 'Scraping every source…' : 'Starting scrape…', data);
+        setTimeout(poll, 1000);
       } else if (data.state === 'done' && sawRunning) {
-        scrapeBanner.style.display = '';
+        gsProgressText(scrapeBanner, '');
         scrapeBanner.textContent = `Scrape done — ${data.new_count} new listing(s) found across ${data.sources_ok}/${data.sources_total} sources. Reloading...`;
         setTimeout(() => { window.location.reload(); }, 1500);
       } else if (data.state === 'failed' && sawRunning) {
-        scrapeBanner.style.display = '';
+        gsProgressText(scrapeBanner, '');
         scrapeBtn.disabled = false;
         scrapeBanner.textContent = '⚠️ Scrape failed: ' + (data.reason || 'unknown error');
       } else {

@@ -91,19 +91,14 @@
         sawRunning = true;
         banner.style.display = '';
         liveBtn.disabled = true;
-        if (data.total) {
-          banner.textContent = `Searching live (${data.done}/${data.total} sources)` +
-            (data.current_source ? ` — checking ${data.current_source}...` : '');
-        } else {
-          banner.textContent = 'Starting live search...';
-        }
-        setTimeout(poll, 2000);
+        gsProgress(banner, data.total ? `Searching every source for “${data.query}”…` : 'Starting live search…', data);
+        setTimeout(poll, 1000);
       } else if (data.state === 'done' && data.query === currentQ && sawRunning) {
-        banner.style.display = '';
+        gsProgressText(banner, '');
         banner.textContent = `Live search done — ${data.matched_count} match(es) found across ${data.sources_ok}/${data.sources_total} sources. Reloading...`;
         setTimeout(() => { window.location.href = "{{ url_for('search') }}?q=" + encodeURIComponent(currentQ); }, 1500);
       } else if (data.state === 'failed' && data.query === currentQ && sawRunning) {
-        banner.style.display = '';
+        gsProgressText(banner, '');
         liveBtn.disabled = !qInput.value.trim();
         banner.textContent = '⚠️ Live search failed: ' + (data.reason || 'unknown error');
       } else {
