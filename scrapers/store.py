@@ -16,7 +16,12 @@ DB_PATH = Path("/data/seen_listings.db")
 
 def _conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    # Several background jobs (hourly refresh, Facebook post search, price
+    # lookups, the dashboard) use the database at once: wait for a busy
+    # database instead of failing, and use WAL so reads never block writes.
+    conn = sqlite3.connect(str(DB_PATH), timeout=60)
+    conn.execute("PRAGMA busy_timeout = 60000")
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen (
             global_id TEXT PRIMARY KEY,

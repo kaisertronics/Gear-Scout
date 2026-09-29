@@ -89,10 +89,25 @@ def _title_fits(title: str, query: str) -> bool:
     return hit / len(rest) >= 0.6
 
 
+def _same_form(title: str, query: str) -> bool:
+    """A pedal/kit/plugin search only counts pedals/kits/plugins, and a
+    regular search leaves them out. 500-series is only enforced one way (a
+    500 module's price comes from 500 modules): many real 500-series units
+    don't say "500" in their titles."""
+    from scrapers.enrich import item_form
+    want, got = item_form(query), item_form(title)
+    if want == "500":
+        return got == "500"
+    if got == "500":
+        return True
+    return want == got
+
+
 def _usable(title: str, query: str, value: Optional[float]) -> bool:
     from scrapers.base import keyword_match
     from scrapers.enrich import is_bundle
     return bool(value and value >= 5 and not is_partial(title) and not is_lot(title) and not is_bundle(title)
+                and _same_form(title, query)
                 and (keyword_match(title, [query]) or _title_fits(title, query)))
 
 
@@ -192,8 +207,14 @@ def lookup_plan(query: str) -> list[str]:
         plan.append(f"{specific[0]} {model}")  # brand + model: "shure sm11"
     if model and len(model.replace("-", "")) >= 5:
         plan.append(model)
+    # A pedal/kit/plugin/500-series search stays one in every fallback.
+    from scrapers.enrich import item_form
+    form = item_form(query)
+    form_word = {"500": "500 series"}.get(form, form)
     out = []
     for q in plan:
+        if form and item_form(q) != form:
+            q = f"{q} {form_word}"
         if q and q not in out:
             out.append(q)
     return out

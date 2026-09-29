@@ -160,20 +160,47 @@ def drop_excluded(listings: list, cfg: dict) -> list:
 
 # --- Typical price / deal context -------------------------------------------
 
+# What form an item takes. A "UAFX LA-2A pedal" ($150) or an LA-2A kit is
+# not a Teletronix LA-2A ($3,800) even though the model name matches, so
+# these become part of the model's identity and of its price lookups.
+_FORMS = (
+    ("pedal", re.compile(r"\b(?:pedal|stomp ?box|uafx)\b", re.I)),
+    ("plugin", re.compile(r"\b(?:plug-?in|software|licen[sc]e|vst|aax)\b", re.I)),
+    ("kit", re.compile(r"\b(?:diy|pcb|bare boards?|unbuilt|unassembled|(?:partial|build|clone|diy|project) kit|kit (?:build|form|only))\b", re.I)),
+    ("500", re.compile(r"\b500[\s-]?series\b|\bapi[\s-]?500\b|\b500 (?:module|format)\b|\(500\)|\b(?:lunchbox|vpr)\b", re.I)),
+)
+
+
+def item_form(title: Optional[str]) -> Optional[str]:
+    """'pedal', 'plugin', 'kit', '500' or None (a regular unit)."""
+    for name, pattern in _FORMS:
+        if pattern.search(title or ""):
+            return name
+    return None
+
+
 def model_key(title: Optional[str]) -> Optional[str]:
     """The first model-number-looking token in a title, normalized and
     prefixed with the brand ("neumann:u87ai", "sennheiser:421",
     "tascam:portastudio414") — so listings of the same model group together
-    even when written "WA-47" or "WA 47"."""
+    even when written "WA-47" or "WA 47". A pedal/kit/plugin/500-series
+    version gets its own key ("universal:la2a|pedal")."""
     found = _model_match(title)
-    return found[0] if found else None
+    if not found:
+        return None
+    form = item_form(title)
+    return f"{found[0]}|{form}" if form else found[0]
 
 
 def model_query(title: Optional[str]) -> Optional[str]:
     """The same model as readable search words ("Sennheiser 421",
-    "Tascam Portastudio 414") — used to look the model up on Reverb."""
+    "Tascam Portastudio 414", "Universal LA-2A pedal") — used to look the
+    model up on Reverb/eBay."""
     found = _model_match(title)
-    return found[1] if found else None
+    if not found:
+        return None
+    form = item_form(title)
+    return f"{found[1]} {'500 series' if form == '500' else form}" if form else found[1]
 
 
 def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
