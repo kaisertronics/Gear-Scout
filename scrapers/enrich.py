@@ -51,27 +51,88 @@ _ACCESSORY_WORDS = re.compile(
     r"stand|stands|pop filter|windscreen|foam|box|manual|power supply|psu|adapter|strap|bag|cover)\b", re.I)
 
 
+_DEVICE = re.compile(
+    r"\b(?:mic|mics|microphones?|interface|headphones?|monitors?|speakers?|subwoofer|sub|mixer|laptop|"
+    r"keyboard|controller|stands?|turntable|cabinet|cab|amp|amplifier|head|combo|synth)\b", re.I)
+_KIND = {"mics": "mic", "microphone": "mic", "microphones": "mic", "headphone": "headphones",
+         "monitor": "speaker", "monitors": "speaker", "speakers": "speaker", "sub": "subwoofer",
+         "cab": "cabinet", "amplifier": "amp", "head": "amp", "combo": "amp", "stands": "stand"}
+
+
+def _model_tokens(text: str) -> set[str]:
+    """Distinct model numbers in a piece of text ("VT-737SP", "18i20", "5150"),
+    reduced to their digits so "VT-737SP" and "737 SP" count once."""
+    out = set()
+    for m in re.finditer(r"\b(?=[a-z0-9-]*\d)[a-z0-9]+(?:-[a-z0-9]+)*\b", text.lower()):
+        tok = m.group(0)
+        digits = re.sub(r"\D", "", tok)
+        if not digits or re.fullmatch(r"(?:19|20)\d\d", tok) or re.fullmatch(r"\d{1,2}", tok):
+            continue  # years and small counts aren't models
+        if re.fullmatch(r"\d+(?:-?bit|khz|hz|w|v|mm|in|ch|u)|\d+x\d+|\d+/\d+", tok):
+            continue
+        out.add(digits)
+    return out
+
+
 def is_bundle(title: Optional[str]) -> bool:
-    """Several pieces of gear sold together ("EVH 5150 amp & 2x12 cabinet",
-    "ADAM A8H monitors + Sub12 + stands") — one item's market price doesn't
-    fit. A mic "with case and shock mount" isn't a bundle."""
+    """Several different products sold together ("Avalon VT-737SP + Focusrite
+    Scarlett 18i20", "EVH 5150 amp & 2x12 cabinet", "mic, interface and
+    headphones"). One unit described by its functions is not a bundle:
+    "Stereo Compressor & EQ", "Preamp / Compressor / EQ", "Preamp and DI"."""
     t = title or ""
-    if re.search(r"\b(?:bundle|package deal|full setup|studio setup|combo deal)\b", t, re.I):
+    if re.search(r"\b(?:bundle|package deal|full setup|studio setup|combo deal|lot of)\b", t, re.I):
         return True
-    parts = [p for p in re.split(r"\s(?:&|\+|and|plus)\s|\s/+\s|\s\|\s", t) if p.strip()]
+    parts = [p for p in re.split(r"\s(?:&|\+|and|plus|w/|with)\s|,\s", t) if p.strip()]
     if len(parts) < 2:
-        return False
-    gear = [p for p in parts if not _ACCESSORY_WORDS.match(p) and (_GEAR_NOUN.search(p) or _MODELISH.search(p))]
-    return len(gear) >= 2
+        kinds = {_KIND.get(m.group(0).lower(), m.group(0).lower()) for m in _DEVICE.finditer(t)} - {"stand"}
+        return len(_model_tokens(t)) >= 2 and len(kinds) >= 2
+    # Two parts naming different model numbers = two products.
+    seen, distinct = set(), 0
+    for part in parts:
+        toks = _model_tokens(part)
+        if _ACCESSORY_WORDS.match(part):
+            continue
+        if toks and not toks & seen:
+            distinct += 1
+        seen |= toks
+    if distinct >= 2:
+        return True
+    # Different kinds of devices in different parts ("amp & 2x12 cabinet",
+    # "monitors + subwoofer", "mic, interface and headphones").
+    kinds_seen, kind_parts = set(), 0
+    for part in parts:
+        kinds = {_KIND.get(m.group(0).lower(), m.group(0).lower()) for m in _DEVICE.finditer(part)} - {"stand"}
+        if kinds - kinds_seen:
+            kind_parts += 1
+        kinds_seen |= kinds
+    if kind_parts >= 2:
+        return True
+    # No separator but two models of two kinds ("Dynaudio BM15 Studio
+    # Monitors Hafler P4000 Power Amp").
+    kinds = {_KIND.get(m.group(0).lower(), m.group(0).lower()) for m in _DEVICE.finditer(t)} - {"stand"}
+    return len(_model_tokens(t)) >= 2 and len(kinds) >= 2
 
 
 def is_lot(title: Optional[str]) -> bool:
     return bool(title and _LOT_RE.search(title))
 
 
+_PART_FOR = re.compile(
+    r"\b(?:cables?|cords?|case|mount|shock ?mount|clip|tool|wrench|transformers?|tubes?|valves?|knobs?|"
+    r"power suppl(?:y|ies)|psu|capsules?|grilles?|foam|windscreen|manual|schematics?|adapter|bracket|"
+    r"rack ears?|faceplate|meters?|pcbs?|boards?|pots?|switch|jacks?|cover|bag|spider|screws?|feet|"
+    r"lamp|bulb|fuse|parts?|motor|belt|head ?stack|pinch roller|remote)\b.{0,40}?\b(?:for|fits|from|compatible with)\b",
+    re.I)
+_PART_WORDS = re.compile(r"\b(?:input|output|interstage|mic) transformers?\b|\bt4b\b|\bopto cell\b", re.I)
+
+
 def is_partial(title: Optional[str]) -> bool:
     if not title:
         return False
+    # "Swivel mount cable for a U87", "Sowter LA-2A output transformer",
+    # "Allen wrench for EL8 Distressor": a part made for the model, not the model.
+    if _PART_FOR.search(title) or _PART_WORDS.search(title):
+        return True
     for m in _PARTIAL_RE.finditer(title):
         before = title[:m.start()].lower().rstrip()
         # "U87 with capsule" / "mic w/ head" / "body and capsule" describe a
@@ -207,6 +268,81 @@ def item_form(title: Optional[str]) -> Optional[str]:
     return None
 
 
+# Known pro-audio brands and product lines, found anywhere in a title
+# ("UA", "UAD", "Universal Audio", "Apollo" are all Universal Audio;
+# "Distressor" is Empirical Labs). Much more reliable than "the first word
+# before the model number", which split one item into several "models"
+# ("Custom LA-2A", "Refurbished MD 421", "Patchbay PB-48").
+_BRAND_ALIASES = {
+    "universal-audio": ["universal audio", "uad", "ua", "apollo", "uafx", "universal-audio"],
+    "teletronix": ["teletronix"], "urei": ["urei", "u.r.e.i"],
+    "empirical-labs": ["empirical labs", "empirical", "distressor", "fatso"],
+    "focusrite": ["focusrite", "scarlett", "clarett", "rednet", "isa"],
+    "neumann": ["neumann"], "sennheiser": ["sennheiser"], "shure": ["shure"], "akg": ["akg"],
+    "beyerdynamic": ["beyerdynamic", "beyer"], "electro-voice": ["electro-voice", "electrovoice", "ev"],
+    "audio-technica": ["audio-technica", "audio technica", "audiotechnica"],
+    "rode": ["rode", "røde"], "blue": ["blue microphones", "blue yeti", "yeti"],
+    "telefunken": ["telefunken"], "schoeps": ["schoeps"], "dpa": ["dpa"], "royer": ["royer"],
+    "coles": ["coles"], "aea": ["aea"], "gefell": ["gefell"], "oktava": ["oktava"], "lomo": ["lomo"],
+    "soyuz": ["soyuz"], "wunder": ["wunder"], "flea": ["flea"], "mojave": ["mojave"],
+    "warm-audio": ["warm audio"], "avantone": ["avantone"], "lauten": ["lauten"], "peluso": ["peluso"],
+    "stam": ["stam audio", "stam"], "audioscape": ["audioscape", "audio-scape"],
+    "golden-age": ["golden age"], "chandler": ["chandler"], "neve": ["neve", "ams neve"],
+    "api": ["api"], "ssl": ["ssl", "solid state logic"], "manley": ["manley"],
+    "avalon": ["avalon"], "tube-tech": ["tube-tech", "tube tech"], "pultec": ["pultec"],
+    "great-river": ["great river"], "a-designs": ["a-designs", "a designs"], "vintech": ["vintech"],
+    "heritage-audio": ["heritage audio"], "rupert-neve": ["rupert neve"], "bae": ["bae"],
+    "dbx": ["dbx"], "drawmer": ["drawmer"], "tc-electronic": ["tc electronic", "t.c. electronic"],
+    "lexicon": ["lexicon"], "eventide": ["eventide"], "yamaha": ["yamaha"], "roland": ["roland"],
+    "tascam": ["tascam", "portastudio"], "teac": ["teac"], "otari": ["otari"], "ampex": ["ampex"],
+    "studer": ["studer"], "revox": ["revox"], "mackie": ["mackie"], "soundcraft": ["soundcraft"],
+    "allen-heath": ["allen & heath", "allen and heath", "allen heath"], "behringer": ["behringer"],
+    "presonus": ["presonus", "eris", "audiobox", "studiolive"], "motu": ["motu"], "rme": ["rme"],
+    "apogee": ["apogee"], "antelope": ["antelope audio", "antelope"], "lynx": ["lynx"],
+    "genelec": ["genelec"], "adam": ["adam audio"], "krk": ["krk", "rokit"], "jbl": ["jbl"],
+    "focal": ["focal"], "dynaudio": ["dynaudio"], "neumann-monitors": [], "barefoot": ["barefoot"],
+    "hedd": ["hedd"], "kali": ["kali audio"], "iloud": ["ik multimedia", "iloud"],
+    "radial": ["radial"], "cloudlifter": ["cloudlifter", "cloud microphones"], "art": ["art pro audio"],
+    "summit": ["summit audio"], "universal-audio-la": [], "klark-teknik": ["klark teknik"],
+    "capi": ["capi"], "hairball": ["hairball"], "sound-skulptor": ["sound skulptor"],
+    "purple-audio": ["purple audio"], "inward-connections": ["inward connections"],
+    "retro": ["retro instruments"], "thermionic": ["thermionic culture"], "spl": ["spl"],
+    "elysia": ["elysia"], "maag": ["maag"], "dangerous": ["dangerous music"], "crane-song": ["crane song"],
+    "mesa": ["mesa boogie"], "fender": ["fender"], "marshall": ["marshall"], "evh": ["evh"],
+    "boss": ["boss"], "zoom": ["zoom"], "steinberg": ["steinberg"], "m-audio": ["m-audio", "m audio"],
+    "native-instruments": ["native instruments"], "arturia": ["arturia"], "moog": ["moog"],
+    "korg": ["korg"], "sony": ["sony"], "rca": ["rca"], "altec": ["altec"], "western-electric": ["western electric"],
+    "langevin": ["langevin"], "gates": ["gates"], "collins": ["collins"], "ampeg": ["ampeg"],
+    "furman": ["furman"], "samson": ["samson"], "peavey": ["peavey"], "crown": ["crown"], "qsc": ["qsc"],
+    "bose": ["bose"], "numark": ["numark"], "pioneer": ["pioneer"], "technics": ["technics"],
+}
+_BRAND_DISPLAY = {"universal-audio": "universal audio", "empirical-labs": "empirical labs"}
+_BRAND_RE = [(canon, re.compile(r"(?<![a-z0-9])" + re.escape(alias) + r"(?![a-z0-9])", re.I))
+             for canon, aliases in _BRAND_ALIASES.items() for alias in sorted(aliases, key=len, reverse=True)]
+
+
+def canonical_brand(title: Optional[str]) -> Optional[str]:
+    """The first known brand/product line in the title, before any "for" /
+    "fits" (in "Cable for Neumann U87" the brand is whoever made the cable)."""
+    text = (title or "").lower()
+    cut = re.search(r"\b(?:for|fits|compatible with|replacement)\b", text)
+    head = text[:cut.start()] if cut else text
+    best = None
+    for canon, pattern in _BRAND_RE:
+        m = pattern.search(head)
+        if m and (best is None or m.start() < best[0]):
+            best = (m.start(), canon)
+    return best[1] if best else None
+
+
+def _canonical_model(brand: str, model: str) -> str:
+    # Avalon writes the same unit as "VT-737SP", "VT 737 SP", "737sp", "737".
+    if brand == "avalon":
+        model = re.sub(r"^vt", "", model)
+        model = re.sub(r"sp$", "", model)
+    return model
+
+
 def model_key(title: Optional[str]) -> Optional[str]:
     """The first model-number-looking token in a title, normalized and
     prefixed with the brand ("neumann:u87ai", "sennheiser:421",
@@ -216,8 +352,16 @@ def model_key(title: Optional[str]) -> Optional[str]:
     found = _model_match(title)
     if not found:
         return None
+    brand, _, model = found[0].rpartition(":")
+    known = canonical_brand(title)
+    if known:
+        # "Sennheiser 421" came back as brand "sennheiser" + model "421";
+        # a known brand as the "model's letters" means the same thing.
+        brand = known
+    model = _canonical_model(brand, model)
+    key = f"{brand}:{model}" if brand else model
     form = item_form(title)
-    return f"{found[0]}|{form}" if form else found[0]
+    return f"{key}|{form}" if form else key
 
 
 def model_query(title: Optional[str]) -> Optional[str]:
@@ -227,8 +371,19 @@ def model_query(title: Optional[str]) -> Optional[str]:
     found = _model_match(title)
     if not found:
         return None
+    query = found[1]
+    known = canonical_brand(title)
+    if known:
+        old_brand = found[0].rpartition(":")[0]
+        words = query.split()
+        if old_brand and words and words[0].lower() == old_brand:
+            words = words[1:]
+        display = _BRAND_DISPLAY.get(known, known.replace("-", " "))
+        if not " ".join(words).lower().startswith(display):
+            words = display.split() + words
+        query = " ".join(words)
     form = item_form(title)
-    return f"{found[1]} {'500 series' if form == '500' else form}" if form else found[1]
+    return f"{query} {'500 series' if form == '500' else form}" if form else query
 
 
 def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
@@ -293,6 +448,10 @@ _COUNT_WORD_AFTER = re.compile(
 
 
 _NOT_BRAND_WORDS = {
+    "refurbished", "custom", "patchbay", "patch", "bay", "handmade", "boutique", "reissue", "b-stock",
+    "bstock", "black", "silver", "white", "gold", "studio", "recording", "channel", "strip", "amplifier",
+    "limiter", "equalizer", "eq", "speaker", "speakers", "headphones", "pedal", "unit", "units",
+    "listing", "item", "gear", "audio", "sound", "music", "used", "excellent", "tested", "wow",
     "vintage", "new", "mint", "used", "rare", "pair", "of", "the", "nos", "excellent",
     "great", "beautiful", "classic", "original", "pro", "professional", "authentic",
     "genuine", "like", "brand", "lot", "set", "two", "three", "four", "matched", "stereo",
