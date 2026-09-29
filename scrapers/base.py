@@ -90,12 +90,46 @@ def _combined_pattern(keywords: list[str]) -> Optional[re.Pattern]:
     return _combined_cache[key]
 
 
+# Common misspellings of brand names in listing titles. Misspelled listings
+# are a classic source of deals — few buyers' searches find them — so titles
+# are matched as if spelled correctly. Only unambiguous misspellings; "sure"
+# counts as Shure only right before a Shure model.
+_BRAND_FIXES = [(re.compile(p), r) for p, r in (
+    (r"\b(?:nueman+|neuman|nuemann|neumman|nuemen|newmann)\b", "neumann"),
+    (r"\b(?:senheiser|sennhieser|senhiser|senheisser|sennheisser|sennhiser|sennheizer)\b", "sennheiser"),
+    (r"\bsure(?=[\s-]*(?:sm\d|beta\b|ksm\d|55\b|520\b|pga\d))", "shure"),
+    (r"\bshur(?=[\s-]*(?:sm\d|beta\b|ksm\d|55\b|520\b|pga\d))", "shure"),
+    (r"\b(?:telefunkin|telafunken|telefunkon|telefonken)\b", "telefunken"),
+    (r"\b(?:beyer dynamic|beyerdinamic|beyerdynamik|bayerdynamic|beyerdynamics)\b", "beyerdynamic"),
+    (r"\b(?:electrovoice|electro voice|electrovoise)\b", "electro-voice"),
+    (r"\b(?:schoepps|shoeps|schopes|schoeppes)\b", "schoeps"),
+    (r"\b(?:pultech|pulltec|pulltech)\b", "pultec"),
+    (r"\b(?:teletronics|teletronix|teletronic)\b", "teletronix"),
+    (r"\b(?:behringher|beringer|behringner|bheringer)\b", "behringer"),
+    (r"\b(?:focusright|focus rite)\b", "focusrite"),
+    (r"\b(?:tascom|tasscam)\b", "tascam"),
+    (r"\b(?:soundcraf|sound craft)\b", "soundcraft"),
+    (r"\b(?:presounus|pre sonus|presonous)\b", "presonus"),
+    (r"\b(?:gefel|gefelle|geffell)\b", "gefell"),
+    (r"\b(?:royar|royer labs)\b", "royer"),
+    (r"\b(?:universal audios|univeral audio|universial audio)\b", "universal audio"),
+    (r"\b(?:akg's|a\.k\.g\.?)(?=\s)", "akg"),
+    (r"\bu\.r\.e\.i\.?", "urei"),
+)]
+
+
+def fix_brand_spelling(text_lower: str) -> str:
+    for pattern, right in _BRAND_FIXES:
+        text_lower = pattern.sub(right, text_lower)
+    return text_lower
+
+
 def keyword_match(text: str, keywords: list[str]) -> bool:
     """Return True if any keyword is found in text as a whole word/phrase
     (case-insensitive). Word-boundary matching keeps short keywords like "mic"
     or "rme" from matching fragments inside unrelated words (e.g. "Samick",
     "Performer") the way plain substring matching would."""
-    text_lower = text.lower()
+    text_lower = fix_brand_spelling(text.lower())
     if len(keywords) > 1:
         # One combined pattern instead of a loop over every keyword — with
         # 1,000+ search terms the loop made pages like Settings take seconds.

@@ -28,7 +28,8 @@ def run_manual_scrape(
     stores any new listings, and updates the same last_run.json snapshot a
     scheduled run would — so the Dashboard tab reflects it immediately —
     but never touches email."""
-    keywords = cfg.get("keywords", [])
+    from scrapers.learning import keywords_with_learned
+    keywords = keywords_with_learned(cfg)
     sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
     results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
 

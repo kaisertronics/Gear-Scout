@@ -175,6 +175,11 @@ def _run_live_search_job(query: str):
         })
 
     try:
+        from scrapers.learning import record_search
+        record_search(query)
+    except Exception:
+        logging.exception("Couldn't record search")
+    try:
         cfg = load_config_raw()
         results = run_live_search(query, cfg, on_progress=on_progress)
         _write_live_search_status({
@@ -349,6 +354,89 @@ def _group_by_source(listings: list[dict]) -> list[tuple]:
     return sorted(groups.items(), key=lambda kv: kv[1][0]["first_seen"], reverse=True)
 
 
+def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
+    """Listings that best match what you favorite (learned taste)."""
+    try:
+        from scrapers.learning import taste
+        t = taste()
+        if not t.ready:
+            return []
+        scored, seen_urls = [], set()
+        for _, items in grouped:
+            for l in items:
+                if l.get("favorite") or l.get("sold") or l.get("url") in seen_urls:
+                    continue
+                seen_urls.add(l.get("url"))
+                s = t.score(l.get("title") or "")
+                if s >= 1.5:
+                    scored.append((s, l))
+        return [l for _, l in sorted(scored, key=lambda x: -x[0])[:n]]
+    except Exception:
+        logging.exception("Couldn't score listings for you")
+        return []
+
+
+@app.route("/learning")
+def learning_page():
+    from scrapers import learning as L
+    cfg = load_config_raw()
+    t = L.taste(max_age_seconds=0)
+    enabled = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    _, skipped = L.skip_on_light_runs(enabled)
+    return render_template(
+        "learning.html",
+        taste=t, min_favs=L.MIN_FAVORITES_FOR_TASTE,
+        likes=t.top(24, positive=True), dislikes=t.top(16, positive=False),
+        terms=L.learned_terms(),
+        groups=L.group_suggestions(cfg),
+        excludes=L.exclude_suggestions(cfg),
+        board=L.source_scoreboard(), skipped=set(skipped),
+    )
+
+
+@app.route("/learning/term/remove", methods=["POST"])
+def learning_term_remove():
+    from scrapers.learning import block_term
+    term = request.form.get("term", "").strip()
+    if term:
+        block_term(term)
+    return redirect(url_for("learning_page"))
+
+
+@app.route("/learning/group/add", methods=["POST"])
+def learning_group_add():
+    url = request.form.get("url", "").strip()
+    if re.match(r"^https://www\.facebook\.com/groups/[^/?#]+$", url):
+        cfg = load_config_for_edit()
+        if not any((s.get("url") or "").rstrip("/") == url for s in cfg.get("sources", [])):
+            cfg.setdefault("sources", []).append({
+                "name": f"FB group — {url.rsplit('/', 1)[-1]}", "url": url, "type": "facebook", "enabled": True,
+            })
+            save_config_raw(cfg)
+    return redirect(url_for("learning_page"))
+
+
+@app.route("/learning/exclude/add", methods=["POST"])
+def learning_exclude_add():
+    word = request.form.get("word", "").strip()
+    if word:
+        cfg = load_config_for_edit()
+        words = list(cfg.get("exclude_words") or [])
+        if word.lower() not in (str(w).lower() for w in words):
+            cfg["exclude_words"] = words + [word]
+            save_config_raw(cfg)
+    return redirect(url_for("learning_page"))
+
+
+@app.route("/learning/dismiss", methods=["POST"])
+def learning_dismiss():
+    from scrapers.learning import dismiss
+    kind, value = request.form.get("kind", ""), request.form.get("value", "").strip()
+    if kind in ("group", "exclude") and value:
+        dismiss(kind, value)
+    return redirect(url_for("learning_page"))
+
+
 @app.route("/")
 def index():
     cfg = load_config_raw()
@@ -366,6 +454,7 @@ def index():
     return render_template(
         "index.html",
         last_refresh=last_refresh,
+        for_you=_for_you(grouped_listings),
         deals=_deals_from(grouped_listings),
         status=status,
         grouped_listings=grouped_listings,

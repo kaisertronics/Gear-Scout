@@ -78,6 +78,15 @@ def run_sources(
 
     fb_idx = [i for i, s in enumerate(sources) if s.get("type") in FB_TYPES]
     other_idx = [i for i, s in enumerate(sources) if s.get("type") not in FB_TYPES]
+    # Slowest first (learned from past runs): with parallel workers, starting
+    # the long jobs early finishes the whole run sooner.
+    try:
+        from scrapers.learning import average_seconds
+        secs = average_seconds()
+        fb_idx.sort(key=lambda i: -secs.get(sources[i]["name"], 30))
+        other_idx.sort(key=lambda i: -secs.get(sources[i]["name"], 30))
+    except Exception:
+        logger.exception("Couldn't order sources by past run time")
 
     fb_queue: "queue.Queue[int]" = queue.Queue()
     for i in fb_idx:
@@ -117,4 +126,12 @@ def run_sources(
 
     if on_progress:
         on_progress(total, total, None)
-    return [r for r in results if r is not None]
+    out = [r for r in results if r is not None]
+    try:
+        from scrapers.learning import record_source_runs
+        kind = ("live" if len(keywords) == 1 else
+                "light" if any(s.get("_light") for s in sources) else "full")
+        record_source_runs(out, kind)
+    except Exception:
+        logger.exception("Couldn't record source stats")
+    return out

@@ -253,7 +253,15 @@ def search_term(page, term: str, scrolls: int = 5, on_progress=None) -> list[dic
         if parsed:
             parsed["posted_at"] = when
             out.append(parsed)
+            if p.get("group"):
+                try:
+                    from scrapers.learning import record_group_sighting
+                    # Only the group link is kept — never names from the post.
+                    record_group_sighting(p["group"])
+                except Exception:
+                    logger.exception("Couldn't record group")
     return out
+
 
 
 def scrape_facebook_posts(source: dict, keywords: list[str], cfg: Optional[dict] = None,

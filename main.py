@@ -104,11 +104,15 @@ def run_refresh_cycle(cfg: dict):
     Marketplace reads each region's feed without the extra broad searches,
     and the Facebook post search (slow, many searches) is left to the full
     scheduled runs. New finds go into the next digest email."""
-    keywords = cfg.get("keywords", [])
+    from scrapers.learning import keywords_with_learned, skip_on_light_runs
+    keywords = keywords_with_learned(cfg)
     sources = [
         {**s, "_light": True} for s in cfg.get("sources", [])
         if s.get("enabled", True) and s.get("type") != "facebook_posts"
     ]
+    sources, skipped = skip_on_light_runs(sources)
+    if skipped:
+        logger.info("Background refresh skipping (failing or never matching lately): %s", ", ".join(skipped))
     start = time.time()
     results = run_sources(sources, keywords, cfg)
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
@@ -164,7 +168,12 @@ def _run_scrape_cycle():
     run_time = datetime.now(timezone.utc)
 
     cfg = load_config()
-    keywords = cfg.get("keywords", [])
+    from scrapers.learning import keywords_with_learned, update_learned_terms
+    try:
+        update_learned_terms(cfg)
+    except Exception:
+        logger.exception("Couldn't update learned search terms")
+    keywords = keywords_with_learned(cfg)
     sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
     email_cfg = cfg["email"]
 

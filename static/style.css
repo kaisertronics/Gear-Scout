@@ -777,3 +777,8 @@ code {
 @keyframes gs-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
 .gs-progress-meta { font-size: 12px; opacity: 0.85; }
 @media (prefers-reduced-motion: reduce) { .gs-progress-fill.indeterminate { animation: none; width: 100%; opacity: 0.5; } }
+
+.learn-chip { display: inline-block; margin: 3px 4px 3px 0; padding: 2px 10px; border-radius: 999px; font-size: 13px; }
+.learn-chip-like { background: var(--green-bg, #dcfce7); color: var(--green-text, #166534); }
+.learn-chip-dislike { background: var(--amber-bg); color: var(--amber-text); }
+.table-scroll { overflow-x: auto; }

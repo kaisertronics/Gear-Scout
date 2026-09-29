@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Learning{% endblock %}
+{% block content %}
+
+  <section class="panel">
+    <h2>🧠 What Gear Scout has learned</h2>
+    <p class="muted">
+      Gear Scout keeps learning from what you do and from its own runs — nothing to set up.
+      Favorites teach it your taste; hidden listings teach it what to ignore; searches you repeat
+      and items you track become search terms; and every run teaches it which sources are fast,
+      slow, useful or broken. Everything stays on this computer.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>✨ Your taste <span class="muted">— from {{ taste.favorites }} favorite{{ '' if taste.favorites == 1 else 's' }}</span></h2>
+    {% if not taste.ready %}
+      <p class="muted">Star {{ min_favs - taste.favorites }} more listing{{ '' if min_favs - taste.favorites == 1 else 's' }} you like and a “Picked for you” section appears on the Dashboard.</p>
+    {% else %}
+      <p class="muted">These drive the “Picked for you” section on the Dashboard.</p>
+    {% endif %}
+    {% if likes %}
+      <p><strong>Draws you in:</strong>
+        {% for w, s in likes %}<span class="learn-chip learn-chip-like">{{ w }}</span>{% endfor %}</p>
+    {% endif %}
+    {% if dislikes %}
+      <p><strong>You tend to hide:</strong>
+        {% for w, s in dislikes %}<span class="learn-chip learn-chip-dislike">{{ w }}</span>{% endfor %}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>🔎 Learned search terms <span class="muted">— added to every scheduled scrape automatically</span></h2>
+    {% if terms %}
+      <table class="status-table">
+        <tr><th>Term</th><th>Why</th><th></th></tr>
+        {% for t in terms %}
+          <tr>
+            <td><a href="{{ url_for('search', q=t.term) }}">{{ t.term }}</a></td>
+            <td class="muted">{{ t.reason }}</td>
+            <td>
+              <form method="post" action="{{ url_for('learning_term_remove') }}">
+                <input type="hidden" name="term" value="{{ t.term }}">
+                <button type="submit" class="hide-btn" title="Stop using this term" aria-label="Stop using this term">✕</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">None yet. Favorite a model your search terms don't already cover, track an item's lowest price, or live-search the same thing twice, and it's added here.</p>
+    {% endif %}
+  </section>
+
+  {% if groups or excludes %}
+  <section class="panel">
+    <h2>💡 Suggestions</h2>
+    {% if groups %}
+      <h3>Facebook groups where gear keeps turning up</h3>
+      <p class="muted">Seen in your Facebook post searches with for-sale posts. Adding one makes it a regular source (it reads the group's newest posts on every scrape).</p>
+      <table class="status-table">
+        {% for g in groups %}
+          <tr>
+            <td><a href="{{ g.url }}" target="_blank" rel="noopener">{{ g.url.split('/groups/')[-1] }}</a></td>
+            <td class="muted">{{ g.sale_posts }} for-sale posts</td>
+            <td style="white-space:nowrap;">
+              <form method="post" action="{{ url_for('learning_group_add') }}" style="display:inline;">
+                <input type="hidden" name="url" value="{{ g.url }}">
+                <button type="submit" class="btn btn-primary btn-sm">Add as source</button>
+              </form>
+              <form method="post" action="{{ url_for('learning_dismiss') }}" style="display:inline;">
+                <input type="hidden" name="kind" value="group"><input type="hidden" name="value" value="{{ g.url }}">
+                <button type="submit" class="btn btn-sm">No thanks</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+    {% if excludes %}
+      <h3>Words that keep showing up in listings you hide</h3>
+      <p class="muted">Never in anything you've favorited. Excluding a word drops every listing that contains it.</p>
+      <table class="status-table">
+        {% for e in excludes %}
+          <tr>
+            <td><strong>{{ e.word }}</strong></td>
+            <td class="muted">in {{ e.hidden }} hidden listings</td>
+            <td style="white-space:nowrap;">
+              <form method="post" action="{{ url_for('learning_exclude_add') }}" style="display:inline;">
+                <input type="hidden" name="word" value="{{ e.word }}">
+                <button type="submit" class="btn btn-primary btn-sm">Exclude it</button>
+              </form>
+              <form method="post" action="{{ url_for('learning_dismiss') }}" style="display:inline;">
+                <input type="hidden" name="kind" value="exclude"><input type="hidden" name="value" value="{{ e.word }}">
+                <button type="submit" class="btn btn-sm">Keep it</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>📊 Source scoreboard <span class="muted">— last 7 days</span></h2>
+    <p class="muted">
+      Runs start with the slowest sources so the whole scrape finishes sooner. The hourly
+      refresh skips a source that failed 5 times in a row or hasn't matched anything in 12
+      scheduled runs — the full scrapes keep re-testing it, so it comes back on its own.
+    </p>
+    {% if board %}
+      <div class="table-scroll">
+      <table class="status-table">
+        <tr><th>Source</th><th>Matches / run</th><th>Avg time</th><th>Worked</th><th></th></tr>
+        {% for b in board %}
+          <tr>
+            <td>{{ b.name }}</td>
+            <td>{{ b.avg_found if b.avg_found is not none else '—' }}</td>
+            <td>{{ '%.0f'|format(b.avg_seconds) }}s</td>
+            <td>{{ b.success_rate }}%</td>
+            <td class="muted">{% if b.name in skipped %}skipped on hourly refresh{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </table>
+      </div>
+    {% else %}
+      <p class="muted">Fills in after the next scrape.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}
