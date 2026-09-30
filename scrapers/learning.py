@@ -366,3 +366,55 @@ def exclude_suggestions(cfg: dict, min_hidden: int = 3) -> list[dict]:
             continue
         out.append({"word": word, "hidden": n})
     return out[:15]
+
+
+# ---------------------------------------------------------------------------
+# How fast gear sells, and for how much (learned from listings that sold)
+# ---------------------------------------------------------------------------
+
+FAST_SALE_DAYS = 4
+_sales_cache: dict = {"at": None, "stats": None}
+
+
+def sale_stats(max_age_seconds: int = 600) -> dict[str, dict]:
+    """{model key: {'n', 'days' (median days listed before it sold),
+    'price' (median price it was listed at when it went)}} for models with
+    3+ listings Gear Scout watched sell. Days are counted from when the
+    listing was posted (or first seen) to when it disappeared."""
+    import statistics
+    from scrapers.enrich import model_key, parse_price
+    now = datetime.now(timezone.utc)
+    if _sales_cache["stats"] is not None and (now - _sales_cache["at"]).total_seconds() < max_age_seconds:
+        return _sales_cache["stats"]
+    by_model: dict[str, list[tuple[float, float]]] = {}
+    with _conn() as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(seen)")}
+        rows = [] if "sold_at" not in cols else conn.execute(
+            "SELECT title, price, first_seen, posted_at, sold_at FROM seen WHERE sold = 1 AND sold_at IS NOT NULL"
+            " AND COALESCE(duplicate, 0) = 0").fetchall()
+    for title, price, first_seen, posted_at, sold_at in rows:
+        key = model_key(title)
+        value = parse_price(price)
+        if not key or not value:
+            continue
+        try:
+            start = datetime.fromisoformat(posted_at or first_seen)
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            days = (datetime.fromisoformat(sold_at) - start).total_seconds() / 86400
+        except (TypeError, ValueError):
+            continue
+        if 0 <= days <= 120:
+            by_model.setdefault(key, []).append((days, value))
+    stats = {}
+    for key, sales in by_model.items():
+        if len(sales) >= 3:
+            stats[key] = {"n": len(sales), "days": statistics.median(d for d, _ in sales),
+                          "price": statistics.median(v for _, v in sales)}
+    _sales_cache.update(at=now, stats=stats)
+    return stats
+
+
+def fast_sellers(limit: int = 20) -> list[tuple[str, dict]]:
+    items = [(k, v) for k, v in sale_stats().items() if v["days"] <= FAST_SALE_DAYS]
+    return sorted(items, key=lambda kv: kv[1]["days"])[:limit]

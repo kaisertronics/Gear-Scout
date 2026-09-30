@@ -85,33 +85,78 @@ def _local_now(cfg: dict) -> datetime:
     return datetime.now(ZoneInfo(tz))
 
 
+def _term_stats(conn) -> dict[str, dict]:
+    conn.execute("""CREATE TABLE IF NOT EXISTS fb_post_terms (
+        term TEXT PRIMARY KEY, searches INTEGER DEFAULT 0, hits INTEGER DEFAULT 0,
+        last_searched TEXT, last_hit TEXT)""")
+    return {t.lower(): {"searches": s or 0, "hits": h or 0, "last_searched": ls, "last_hit": lh}
+            for t, s, h, ls, lh in conn.execute(
+                "SELECT term, searches, hits, last_searched, last_hit FROM fb_post_terms")}
+
+
+def record_term(term: str, new_hits: int) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with _conn() as conn:
+        _term_stats(conn)
+        conn.execute(
+            "INSERT INTO fb_post_terms (term, searches, hits, last_searched, last_hit) VALUES (?, 1, ?, ?, ?)"
+            " ON CONFLICT(term) DO UPDATE SET searches = searches + 1, hits = hits + excluded.hits,"
+            " last_searched = excluded.last_searched,"
+            " last_hit = COALESCE(excluded.last_hit, fb_post_terms.last_hit)",
+            (term.lower(), new_hits, now, now if new_hits else None))
+        conn.commit()
+
+
+def term_weight(st: Optional[dict]) -> float:
+    """How often a term should come around, learned from its results:
+    never searched first; terms that found for-sale posts in the last two
+    weeks 3x as often; terms that found nothing in 4+ searches 4x less."""
+    if not st or not st["searches"]:
+        return 100.0
+    if st["last_hit"]:
+        try:
+            if datetime.now(timezone.utc) - datetime.fromisoformat(st["last_hit"]) < timedelta(days=14):
+                return 3.0
+        except ValueError:
+            pass
+    if st["searches"] >= 4 and not st["hits"]:
+        return 0.25
+    return 1.0
+
+
 def _next_jobs(cfg: dict, n: int) -> list[tuple[str, str]]:
-    """[(category, term)] — a couple of priority terms, the rest from the
-    full list, continuing where the last batch stopped."""
+    """[(category, term)] — a couple of priority terms, then the terms most
+    "due": hours since last searched × learned weight (see term_weight)."""
     from scrapers.fb_posts import priority_terms
     prio = priority_terms(cfg)
     terms = all_terms(cfg)
     jobs = []
+    now = datetime.now(timezone.utc)
     with _conn() as conn:
         pc = _state_get(conn, "priority_cursor", 0) or 0
         for _ in range(min(PRIORITY_PER_BATCH, len(prio))):
             jobs.append(prio[pc % len(prio)])
             pc += 1
         _state_set(conn, "priority_cursor", pc % max(1, len(prio)))
-        c = _state_get(conn, "cursor", 0) or 0
-        if c >= len(terms):
-            c = 0
+        stats = _term_stats(conn)
         prio_lower = {t.lower() for _, t in jobs}
-        while len(jobs) < n and terms:
-            t = terms[c % len(terms)]
-            c += 1
-            if c >= len(terms):
-                c = 0
-                _state_set(conn, "passes_done", (_state_get(conn, "passes_done", 0) or 0) + 1)
-                _state_set(conn, "pass_started", datetime.now(timezone.utc).isoformat())
-            if t.lower() not in prio_lower:
-                jobs.append(("All terms", t))
-        _state_set(conn, "cursor", c)
+
+        def due(t: str) -> float:
+            st = stats.get(t.lower())
+            hours = 1000.0
+            if st and st["last_searched"]:
+                try:
+                    hours = (now - datetime.fromisoformat(st["last_searched"])).total_seconds() / 3600
+                except ValueError:
+                    pass
+            return hours * term_weight(st)
+
+        for t in sorted((t for t in terms if t.lower() not in prio_lower), key=due, reverse=True):
+            if len(jobs) >= n:
+                break
+            jobs.append(("All terms", t))
+        covered = sum(1 for t in terms if (stats.get(t.lower()) or {}).get("searches"))
+        _state_set(conn, "cursor", covered)
         _state_set(conn, "total_terms", len(terms))
     return jobs
 
@@ -155,6 +200,7 @@ def run_batch(cfg: dict) -> Optional[dict]:
                 if _BLOCKED.search(body) or "checkpoint" in page.url or "/login" in page.url:
                     blocked = "Facebook asked to slow down or confirm the account"
                     break
+                term_new = 0
                 for p in posts:
                     status = mark_seen(Listing(
                         source_name=f"FB Posts — {category}", title=p["title"], url=p["url"],
@@ -162,6 +208,8 @@ def run_batch(cfg: dict) -> Optional[dict]:
                         listing_id=p["id"], posted_at=p["posted_at"]))
                     if status == "new":
                         hits += 1
+                        term_new += 1
+                record_term(term, term_new)
                 done += 1
                 with _conn() as conn:
                     _state_set(conn, "last_term", term)

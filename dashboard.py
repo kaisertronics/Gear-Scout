@@ -324,10 +324,35 @@ def _decorate(listings: list[dict]) -> list[dict]:
     index = _price_index()
     from scrapers.market import load_market
     market = load_market()
+    try:
+        from scrapers.learning import FAST_SALE_DAYS, sale_stats
+        sales = sale_stats()
+    except Exception:
+        logging.exception("Couldn't load sale stats")
+        sales, FAST_SALE_DAYS = {}, 0
+    from scrapers.enrich import model_key, parse_price
+    now = datetime.now(timezone.utc)
     out = []
     for l in listings:
         if exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")):
             continue
+        # Learned from listings that sold: how fast this model goes, and at what price.
+        sale = sales.get(model_key(l.get("title")) or "")
+        l["sale"] = ({"fast": sale["days"] <= FAST_SALE_DAYS, "days": round(sale["days"], 1),
+                      "price": f"${sale['price']:,.0f}", "n": sale["n"]} if sale else None)
+        # Days on market: a listing that has sat for weeks usually has a
+        # seller open to an offer.
+        l["stale"] = None
+        try:
+            since = datetime.fromisoformat(l.get("posted_at") or l.get("first_seen"))
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+            days = (now - since).days
+            value = parse_price(l.get("price"))
+            if days >= 21 and value and not l.get("sold"):
+                l["stale"] = {"days": days, "offer": f"${max(5, round(value * 0.85 / 5) * 5):,}"}
+        except (TypeError, ValueError):
+            pass
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
         l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market,
                                        description=l.get("description"))
@@ -510,7 +535,20 @@ def learning_page():
         groups=L.group_suggestions(cfg),
         excludes=L.exclude_suggestions(cfg),
         board=L.source_scoreboard(), skipped=set(skipped),
+        fast=L.fast_sellers(), sales_known=len(L.sale_stats()),
+        fb_terms=_fb_term_learning(),
     )
+
+
+def _fb_term_learning() -> dict:
+    from scrapers import fb_posts_background as fbbg
+    from scrapers.store import _conn
+    with _conn() as conn:
+        stats = fbbg._term_stats(conn)
+    productive = sorted(((t, s) for t, s in stats.items() if s["hits"]),
+                        key=lambda x: -x[1]["hits"])[:15]
+    quiet = sum(1 for s in stats.values() if fbbg.term_weight(s) < 1)
+    return {"productive": productive, "quiet": quiet, "searched": len(stats)}
 
 
 @app.route("/learning/term/remove", methods=["POST"])

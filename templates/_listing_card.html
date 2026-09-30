@@ -30,8 +30,13 @@
       {% if l.price_ctx and l.price_ctx.typical %}
         <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
-      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold %}
+      {% if l.sale and not l.sale.fast %}
+        <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
+      {% endif %}
+      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or (l.sale and l.sale.fast) or l.stale %}
         <div class="listing-flags">
+          {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
+          {% if l.stale %}<span class="flag flag-stale" title="Listed {{ l.stale.days }} days ago — sellers often take an offer after a few weeks">Listed {{ l.stale.days }}d · try {{ l.stale.offer }}</span>{% endif %}
           {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>{% endif %}
           {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">🔥 Deal · {{ l.price_ctx.pct_under }}% under</span>{% endif %}
           {% if l.previous_price %}<span class="flag flag-drop">Price drop</span>{% endif %}

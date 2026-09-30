@@ -224,8 +224,14 @@ def update_price(url: str, price: str) -> str:
 
 
 def mark_sold(url: str):
+    """Marks a listing sold/removed and remembers when it was noticed — how
+    long gear takes to sell is something Gear Scout learns from."""
     with _conn() as conn:
-        conn.execute("UPDATE seen SET sold = 1 WHERE url = ?", (url,))
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(seen)")}
+        if "sold_at" not in cols:
+            conn.execute("ALTER TABLE seen ADD COLUMN sold_at TEXT")
+        conn.execute("UPDATE seen SET sold = 1, sold_at = COALESCE(sold_at, ?) WHERE url = ?",
+                     (datetime.now(timezone.utc).isoformat(), url))
         conn.commit()
 
 

@@ -103,6 +103,38 @@
   {% endif %}
 
   <section class="panel">
+    <h2>⚡ What sells fast <span class="muted">— learned from {{ sales_known }} model{{ '' if sales_known == 1 else 's' }} Gear Scout watched sell</span></h2>
+    <p class="muted">
+      Every hour Gear Scout checks whether listings are still up. When one disappears, it notes how
+      long it lasted and its price. Models that sell within {{ 4 }} days get a “⚡ Sells in ~Nd” badge
+      (move fast on those); others show what they went for. Listings that sit 3+ weeks show an offer
+      suggestion — sellers often take one by then. This fills in over the coming days.
+    </p>
+    {% if fast %}
+      <table class="status-table">
+        <tr><th>Model</th><th>Sells in</th><th>Went for</th><th>Seen sell</th></tr>
+        {% for key, s in fast %}
+          <tr><td>{{ key.replace(':', ' ').replace('-', ' ') }}</td><td>~{{ '%.1f'|format(s.days) }} days</td><td>${{ '{:,.0f}'.format(s.price) }}</td><td>{{ s.n }}</td></tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">Not enough sales watched yet — needs 3 sales of the same model.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>📣 Facebook post search — what's working <span class="muted">— {{ fb_terms.searched }} terms searched so far</span></h2>
+    <p class="muted">
+      Terms that turn up for-sale posts are searched 3× as often; {{ fb_terms.quiet }} term{{ '' if fb_terms.quiet == 1 else 's' }}
+      that found nothing after 4+ searches now come around 4× less often, so the time goes where the posts are.
+    </p>
+    {% if fb_terms.productive %}
+      <p><strong>Most productive:</strong>
+        {% for t, s in fb_terms.productive %}<span class="learn-chip learn-chip-like">{{ t }} · {{ s.hits }}</span>{% endfor %}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
     <h2>📊 Source scoreboard <span class="muted">— last 7 days</span></h2>
     <p class="muted">
       Runs start with the slowest sources so the whole scrape finishes sooner. The hourly

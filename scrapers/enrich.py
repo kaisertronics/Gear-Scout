@@ -3,6 +3,7 @@ Per-listing helpers shared by the scrape cycle, the dashboard and the email:
 price parsing, "needs repair" detection, cross-post duplicate keys, the
 user's exclude-words list, and typical-price / deal context.
 """
+import functools
 import re
 import statistics
 from typing import Optional
@@ -74,6 +75,7 @@ def _model_tokens(text: str) -> set[str]:
     return out
 
 
+@functools.lru_cache(maxsize=100_000)
 def is_bundle(title: Optional[str]) -> bool:
     """Several different products sold together ("Avalon VT-737SP + Focusrite
     Scarlett 18i20", "EVH 5150 amp & 2x12 cabinet", "mic, interface and
@@ -126,6 +128,7 @@ _PART_FOR = re.compile(
 _PART_WORDS = re.compile(r"\b(?:input|output|interstage|mic) transformers?\b|\bt4b\b|\bopto cell\b", re.I)
 
 
+@functools.lru_cache(maxsize=100_000)
 def is_partial(title: Optional[str]) -> bool:
     if not title:
         return False
@@ -224,6 +227,7 @@ _NOT_AUDIO = re.compile(
     re.I)
 
 
+@functools.lru_cache(maxsize=100_000)
 def is_not_audio(title: Optional[str]) -> bool:
     """True for listings that only share a word with audio gear."""
     t = title or ""
@@ -317,22 +321,22 @@ _BRAND_ALIASES = {
     "bose": ["bose"], "numark": ["numark"], "pioneer": ["pioneer"], "technics": ["technics"],
 }
 _BRAND_DISPLAY = {"universal-audio": "universal audio", "empirical-labs": "empirical labs"}
-_BRAND_RE = [(canon, re.compile(r"(?<![a-z0-9])" + re.escape(alias) + r"(?![a-z0-9])", re.I))
-             for canon, aliases in _BRAND_ALIASES.items() for alias in sorted(aliases, key=len, reverse=True)]
+_ALIAS_TO_BRAND = {alias: canon for canon, aliases in _BRAND_ALIASES.items() for alias in aliases}
+# One pattern for every alias (longest first) — a single scan per title.
+_BRAND_RE = re.compile(
+    r"(?<![a-z0-9])(" + "|".join(re.escape(a) for a in sorted(_ALIAS_TO_BRAND, key=len, reverse=True))
+    + r")(?![a-z0-9])")
 
 
+@functools.lru_cache(maxsize=100_000)
 def canonical_brand(title: Optional[str]) -> Optional[str]:
     """The first known brand/product line in the title, before any "for" /
     "fits" (in "Cable for Neumann U87" the brand is whoever made the cable)."""
     text = (title or "").lower()
     cut = re.search(r"\b(?:for|fits|compatible with|replacement)\b", text)
     head = text[:cut.start()] if cut else text
-    best = None
-    for canon, pattern in _BRAND_RE:
-        m = pattern.search(head)
-        if m and (best is None or m.start() < best[0]):
-            best = (m.start(), canon)
-    return best[1] if best else None
+    m = _BRAND_RE.search(head)
+    return _ALIAS_TO_BRAND[m.group(1)] if m else None
 
 
 def _canonical_model(brand: str, model: str) -> str:
@@ -343,6 +347,7 @@ def _canonical_model(brand: str, model: str) -> str:
     return model
 
 
+@functools.lru_cache(maxsize=100_000)
 def model_key(title: Optional[str]) -> Optional[str]:
     """The first model-number-looking token in a title, normalized and
     prefixed with the brand ("neumann:u87ai", "sennheiser:421",
@@ -364,6 +369,7 @@ def model_key(title: Optional[str]) -> Optional[str]:
     return f"{key}|{form}" if form else key
 
 
+@functools.lru_cache(maxsize=100_000)
 def model_query(title: Optional[str]) -> Optional[str]:
     """The same model as readable search words ("Sennheiser 421",
     "Tascam Portastudio 414", "Universal LA-2A pedal") — used to look the

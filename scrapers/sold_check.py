@@ -90,7 +90,7 @@ def check_url(url: str) -> Optional[bool]:
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=21)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat()
     recheck = (datetime.now(timezone.utc) - timedelta(hours=RECHECK_HOURS)).isoformat()
     fb_clause = "" if include_fb else "AND url NOT LIKE '%facebook.com%'"
     with _conn() as conn:

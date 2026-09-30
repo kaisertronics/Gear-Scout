@@ -30,7 +30,7 @@
     {% endif %}
     {% if bg.enabled %}
       <div class="live-status-banner" style="display:block;">
-        <div class="gs-progress-text">Through your list: term {{ '{:,}'.format(bg.cursor) }} of {{ '{:,}'.format(bg.total) }}{% if bg.passes_done %} · {{ bg.passes_done }} full pass{{ 'es' if bg.passes_done != 1 else '' }} done{% endif %}</div>
+        <div class="gs-progress-text">Searched so far: {{ '{:,}'.format(bg.cursor) }} of {{ '{:,}'.format(bg.total) }} terms · terms that find posts come around more often, ones that never do less often</div>
         <div class="gs-progress"><div class="gs-progress-fill" style="width: {{ [bg.pct, 3]|max }}%;"></div></div>
         <div class="gs-progress-meta">
           Today: {{ bg.today_count }} searches, {{ bg.today_hits }} new for-sale posts
