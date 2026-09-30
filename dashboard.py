@@ -488,10 +488,11 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
     from scrapers.enrich import parse_price
 
     def price_order(r):
-        # Cheapest first: per-piece price for multi-piece ads, US dollars for
-        # Canadian ones; listings without a price go last.
-        value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
-        return (value is None, value or 0)
+        # Cheapest first by the price shown (US dollars for Canadian ads).
+        # No price, or a placeholder like "$1 — make an offer", goes last.
+        value = parse_price(r.get("price"))
+        placeholder = value is None or value < 5
+        return (placeholder, value or 0)
 
     return [(term, sorted((r for r in hits if id(r) in kept), key=price_order)[:per_term])
             for term, hits in out]
