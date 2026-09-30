@@ -611,7 +611,14 @@ def learning_dismiss():
 def index():
     cfg = load_config_raw()
     status = load_run_status()
-    listings = recent_listings(limit=300)
+    listings = recent_listings(limit=450)
+    # Same relevance check the scrapes now use, so listings stored before it
+    # (found only through a broad word like "mic") don't crowd the page.
+    if cfg.get("relevance_check", True):
+        from scrapers.enrich import is_relevant
+        from scrapers.learning import keywords_with_learned
+        terms = tuple(keywords_with_learned(cfg))
+        listings = [l for l in listings if l.get("favorite") or is_relevant(l.get("title"), l.get("price"), terms)][:300]
     grouped_listings = _group_by_source(listings)
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
     last_refresh = None

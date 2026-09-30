@@ -234,7 +234,9 @@ _JUNK = re.compile(
     r"phone (?:mic|microphone)|ham radio|cb radio|two[\s-]way radio|walkie|antennas?|scanner radio|"
     r"(?:reel to reel|cassette|vinyl|8[\s-]?track) (?:tapes?|music|records?)|records? lot|vinyl records?|"
     r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
-    r"bluetooth speaker|boombox|echo dot|alexa|smart speaker)\b", re.I)
+    r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
+    r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
+    r"gift wrap|scrapbook|sewing|craft ribbon)\b", re.I)
 
 # A listing that is only an accessory: cables, stands, cases, pop filters…
 # ("Neumann U87 with case" is the mic; "Microphone stand and pop filter" isn't).
@@ -265,6 +267,9 @@ def is_accessory_only(title: Optional[str]) -> bool:
     if re.search(joiner, after, re.I) and (_MAIN_GEAR.search(after) or _model_tokens(after)
                                            or canonical_brand(after)):
         return False
+    # "Pop filter for mic", "Case for Neumann U87": made for the gear.
+    if re.match(r"\s*(?:\([^)]*\)\s*)?(?:for|fits)\b", after, re.I):
+        return True
     # "Microphone stand", "XLR microphone cables", "Monitor isolation pads":
     # the gear word is only describing the accessory.
     return not _MAIN_GEAR.search(after)
@@ -292,12 +297,77 @@ def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
     return bool(words) and keyword_match(title or "", [str(w) for w in words])
 
 
-def drop_excluded(listings: list, cfg: dict) -> list:
+# Words that describe a kind of gear rather than a particular one. Search
+# terms made only of these ("mic", "condenser", "audio interface") match
+# almost everything on the big marketplaces.
+_GENERIC_WORDS = {
+    "mic", "mics", "microphone", "microphones", "ribbon", "condenser", "dynamic", "tube", "valve",
+    "preamp", "preamps", "pre", "amp", "compressor", "compressors", "limiter", "mixer", "console",
+    "interface", "monitor", "monitors", "studio", "audio", "eq", "equalizer", "vintage", "pro",
+    "recording", "rack", "rackmount", "outboard", "gear", "channel", "strip", "di", "box", "speaker",
+    "speakers", "unit", "machine", "tape", "patchbay", "patch", "bay", "500", "series", "lunchbox",
+    "stereo", "mono", "pair", "old", "german", "russian", "soviet", "japanese", "broadcast", "sdc",
+    "ldc", "fet", "shotgun", "lavalier", "small", "large", "diaphragm",
+}
+# Brands whose everyday gear floods broad searches (podcast mics, USB
+# interfaces, PA) — a brand match alone doesn't make these interesting.
+_CONSUMER_BRANDS = {"blue", "samson", "numark", "bose", "pioneer", "technics", "boss", "zoom",
+                    "m-audio", "peavey", "behringer", "fender", "evh", "marshall"}
+_VINTAGE_SIGNS = re.compile(
+    r"\b(?:vintage|antique|tube|valve|19[2-8]\d|[2-8]0'?s|nos|germany|german|ussr|soviet|west german|"
+    r"telefunken|broadcast|rca|western electric|collins|gates|altec|langevin|ampex|restored|serviced)\b", re.I)
+
+
+# Home stereo (hi-fi) gear — preamps and amps, but not studio gear.
+_HIFI = re.compile(
+    r"\b(?:tuner|am/?fm|fm stereo|receiver|phono|turntable|record player|integrated amp\w*|"
+    r"stereo (?:power )?amp\w*|power amp\w* pair|hi-?fi|audiophile|home (?:theater|stereo)|"
+    r"mcintosh|marantz|nikko|dynaco|sansui|kenwood|onkyo|denon|harman kardon|fisher|luxman|"
+    r"sherwood|realistic|nad|rotel|cambridge audio|pioneer sx|sony str|klipsch|polk|cerwin[- ]vega)\b", re.I)
+
+
+def is_generic_term(term: str) -> bool:
+    words = re.findall(r"[a-z0-9]+", str(term).lower())
+    return bool(words) and all(w in _GENERIC_WORDS for w in words)
+
+
+@functools.lru_cache(maxsize=8)
+def _specific_terms(terms: tuple) -> list:
+    return [t for t in terms if not is_generic_term(t)]
+
+
+def is_relevant(title: Optional[str], price: Optional[str], terms: tuple) -> bool:
+    """Keeps a listing found only through a broad word ("mic", "compressor")
+    when it looks like studio gear: a pro-audio brand, vintage clues, or a
+    price of $200+. Anything matching a specific term always passes."""
+    from scrapers.base import keyword_match
+    t = title or ""
+    specific = _specific_terms(terms)
+    if specific and keyword_match(t, specific):
+        return True
+    if _HIFI.search(t):
+        return False
+    brand = canonical_brand(t)
+    if brand and brand not in _CONSUMER_BRANDS:
+        return True
+    if _VINTAGE_SIGNS.search(t):
+        return True
+    value = parse_price(price)
+    return bool(value and value >= 200)
+
+
+def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> list:
+    """Drops non-audio items, accessory-only listings (setting), exclude
+    words — and, when the run's search terms are given (scheduled/hourly/
+    manual scrapes, not a live search), listings found only through a broad
+    word that don't look like studio gear (see is_relevant)."""
     words = cfg.get("exclude_words") or []
     hide_acc = cfg.get("hide_accessories", True)
+    term_key = tuple(terms) if terms and len(terms) > 1 and cfg.get("relevance_check", True) else None
     return [l for l in listings if not is_not_audio(l.title)
             and not (hide_acc and is_accessory_only(l.title))
-            and not (words and exclude_match(l.title, words))]
+            and not (words and exclude_match(l.title, words))
+            and not (term_key and not is_relevant(l.title, l.price, term_key))]
 
 
 # --- Typical price / deal context -------------------------------------------
@@ -353,10 +423,10 @@ _BRAND_ALIASES = {
     "presonus": ["presonus", "eris", "audiobox", "studiolive"], "motu": ["motu"], "rme": ["rme"],
     "apogee": ["apogee"], "antelope": ["antelope audio", "antelope"], "lynx": ["lynx"],
     "genelec": ["genelec"], "adam": ["adam audio"], "krk": ["krk", "rokit"], "jbl": ["jbl"],
-    "focal": ["focal"], "dynaudio": ["dynaudio"], "neumann-monitors": [], "barefoot": ["barefoot"],
+    "focal": ["focal"], "dynaudio": ["dynaudio"], "barefoot": ["barefoot"],
     "hedd": ["hedd"], "kali": ["kali audio"], "iloud": ["ik multimedia", "iloud"],
     "radial": ["radial"], "cloudlifter": ["cloudlifter", "cloud microphones"], "art": ["art pro audio"],
-    "summit": ["summit audio"], "universal-audio-la": [], "klark-teknik": ["klark teknik"],
+    "summit": ["summit audio"], "klark-teknik": ["klark teknik"],
     "capi": ["capi"], "hairball": ["hairball"], "sound-skulptor": ["sound skulptor"],
     "purple-audio": ["purple audio"], "inward-connections": ["inward connections"],
     "retro": ["retro instruments"], "thermionic": ["thermionic culture"], "spl": ["spl"],
@@ -368,6 +438,21 @@ _BRAND_ALIASES = {
     "langevin": ["langevin"], "gates": ["gates"], "collins": ["collins"], "ampeg": ["ampeg"],
     "furman": ["furman"], "samson": ["samson"], "peavey": ["peavey"], "crown": ["crown"], "qsc": ["qsc"],
     "bose": ["bose"], "numark": ["numark"], "pioneer": ["pioneer"], "technics": ["technics"],
+    "aphex": ["aphex"], "audix": ["audix"], "earthworks": ["earthworks"], "bittree": ["bittree"],
+    "symetrix": ["symetrix"], "rane": ["rane"], "midas": ["midas"], "ams": ["ams"], "fairchild": ["fairchild"],
+    "gyraf": ["gyraf"], "tree-audio": ["tree audio"], "undertone": ["undertone audio", "unfairchild"],
+    "black-lion": ["black lion"], "iron-age": ["iron age"], "mercury": ["mercury recording"],
+    "slate": ["slate digital", "slate"], "trident": ["trident"], "harrison": ["harrison"],
+    "daking": ["daking"], "true-systems": ["true systems"], "millennia": ["millennia"],
+    "grace": ["grace design"], "benchmark": ["benchmark"], "prism": ["prism sound"], "lavry": ["lavry"],
+    "burl": ["burl"], "dangerous-music": ["dangerous"], "sontec": ["sontec"], "massenburg": ["gml", "massenburg"],
+    "summit-audio": ["summit"], "joemeek": ["joemeek", "joe meek"], "tl-audio": ["tl audio"],
+    "focusrite-red": ["focusrite red"], "emt": ["emt"], "akai": ["akai"], "fostex": ["fostex"],
+    "mci": ["mci"], "scully": ["scully"], "3m": ["3m m79", "3m m56"], "kerwax": ["kerwax"],
+    "bock": ["bock audio", "bock"], "brauner": ["brauner"], "microtech-gefell": ["microtech"], "josephson": ["josephson"], "sanken": ["sanken"], "lewitt": ["lewitt"],
+    "austrian-audio": ["austrian audio"], "cad": ["cad equitek"], "sony-c": ["sony c-37", "sony c37", "sony c-38", "sony c38"],
+    "altec-lansing": ["altec lansing"], "atc": ["atc"], "pmc": ["pmc"],
+    "amek": ["amek"],
 }
 _BRAND_DISPLAY = {"universal-audio": "universal audio", "empirical-labs": "empirical labs"}
 _ALIAS_TO_BRAND = {alias: canon for canon, aliases in _BRAND_ALIASES.items() for alias in aliases}

@@ -116,7 +116,7 @@ def run_refresh_cycle(cfg: dict):
         logger.info("Background refresh skipping (failing or never matching lately): %s", ", ".join(skipped))
     start = time.time()
     results = run_sources(sources, keywords, cfg)
-    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg, keywords)
     new_listings = filter_new(all_listings)
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
@@ -220,7 +220,7 @@ def _run_scrape_cycle():
                 logger.warning("    FIX: %s", result.fix_hint)
 
     # Deduplicate — only keep listings we haven't seen before
-    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg, keywords)
     new_listings = filter_new(all_listings)
     # Plus what the hourly background refreshes found since the last email.
     new_listings += _found_since_last_digest({l.global_id for l in new_listings})

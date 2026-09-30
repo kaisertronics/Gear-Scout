@@ -38,7 +38,7 @@ def run_manual_scrape(
                if s.get("enabled", True) and s.get("type") != "facebook_posts"]
     results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
 
-    all_listings = drop_excluded([l for r in results for l in r.listings], cfg)
+    all_listings = drop_excluded([l for r in results for l in r.listings], cfg, keywords)
     new_listings = filter_new(all_listings)
 
     try:
