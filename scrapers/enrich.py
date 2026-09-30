@@ -69,7 +69,7 @@ def _model_tokens(text: str) -> set[str]:
         digits = re.sub(r"\D", "", tok)
         if not digits or re.fullmatch(r"(?:19|20)\d\d", tok) or re.fullmatch(r"\d{1,2}", tok):
             continue  # years and small counts aren't models
-        if re.fullmatch(r"\d+(?:-?bit|khz|hz|w|v|mm|in|ch|u)|\d+x\d+|\d+/\d+", tok):
+        if re.fullmatch(r"\d+(?:-?bit|khz|hz|w|v|mm|in|ch|u|ft|feet|m|pc|pcs|pack)|\d+x\d+|\d+/\d+", tok):
             continue
         out.add(digits)
     return out
@@ -227,10 +227,56 @@ _NOT_AUDIO = re.compile(
     re.I)
 
 
+# Consumer/toy/media/radio items that match "mic", "microphone" etc.
+_JUNK = re.compile(
+    r"\b(?:karaoke|toddler|kids?|children'?s|toy|toys|xbox|playstation|ps[345]|nintendo|wii|rock band|"
+    r"guitar hero|gaming (?:headset|mic|microphone)|webcam|for (?:iphone|android|phone|ipad|laptop|pc)|"
+    r"phone (?:mic|microphone)|ham radio|cb radio|two[\s-]way radio|walkie|antennas?|scanner radio|"
+    r"(?:reel to reel|cassette|vinyl|8[\s-]?track) (?:tapes?|music|records?)|records? lot|vinyl records?|"
+    r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
+    r"bluetooth speaker|boombox|echo dot|alexa|smart speaker)\b", re.I)
+
+# A listing that is only an accessory: cables, stands, cases, pop filters…
+# ("Neumann U87 with case" is the mic; "Microphone stand and pop filter" isn't).
+_ACCESSORY_ONLY = re.compile(
+    r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|pop filters?|windscreens?|wind ?shields?|"
+    r"blimp|dead ?cat|shock ?mounts?|clips?|cases?|road case|flight case|gig bag|bags?|covers?|"
+    r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
+    r"rack rails|rack shelf|shelf|patch cables?|batteries|battery)\b", re.I)
+_MAIN_GEAR = re.compile(
+    r"\b(?:microphones?|mics?|preamps?|pre-amps?|compressors?|limiters?|interfaces?|mixers?|consoles?|"
+    r"monitors?|speakers?|recorders?|decks?|equalizers?|eqs?|amps?|amplifiers?|receivers?|transmitters?|"
+    r"processors?|channel strips?|reverbs?|delays?|synths?|headphones?)\b", re.I)
+
+
+@functools.lru_cache(maxsize=100_000)
+def is_accessory_only(title: Optional[str]) -> bool:
+    t = title or ""
+    m = _ACCESSORY_ONLY.search(t)
+    if not m:
+        return False
+    before, after = t[:m.start()], t[m.end():]
+    joiner = r"(?:\bwith\b|\bw/|\bincl\w*|\bcomes with\b|\bplus\b|\+|&)"
+    # "Shure QLXD24 system w/ handheld mic, case", "Revox A77 recorder w/stand":
+    # the accessory is extra, the listing is the gear.
+    if re.search(joiner, before, re.I):
+        return False
+    # "Gator rack case with Lexicon PCM 70": gear comes with it.
+    if re.search(joiner, after, re.I) and (_MAIN_GEAR.search(after) or _model_tokens(after)
+                                           or canonical_brand(after)):
+        return False
+    # "Microphone stand", "XLR microphone cables", "Monitor isolation pads":
+    # the gear word is only describing the accessory.
+    return not _MAIN_GEAR.search(after)
+
+
 @functools.lru_cache(maxsize=100_000)
 def is_not_audio(title: Optional[str]) -> bool:
-    """True for listings that only share a word with audio gear."""
+    """True for listings that only share a word with audio gear (air
+    compressors, toys, karaoke machines, ham radio, tapes/records…)."""
     t = title or ""
+    if _JUNK.search(t):
+        return True
     # "Viair compressors", "aAir Compressor": "air compressor" even inside a word.
     if _NOT_AUDIO.search(t) or re.search(r"air[\s-]?compressor|air tank|viair", t, re.I):
         return True
@@ -248,7 +294,10 @@ def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
 
 def drop_excluded(listings: list, cfg: dict) -> list:
     words = cfg.get("exclude_words") or []
-    return [l for l in listings if not is_not_audio(l.title) and not (words and exclude_match(l.title, words))]
+    hide_acc = cfg.get("hide_accessories", True)
+    return [l for l in listings if not is_not_audio(l.title)
+            and not (hide_acc and is_accessory_only(l.title))
+            and not (words and exclude_match(l.title, words))]
 
 
 # --- Typical price / deal context -------------------------------------------

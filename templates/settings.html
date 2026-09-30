@@ -164,6 +164,14 @@
         <textarea name="exclude_words" class="settings-keywords-textarea" rows="6" spellcheck="false">{{ exclude_text }}</textarea>
         <button type="submit" class="btn btn-primary">Save exclude words</button>
       </form>
+      <form method="post" action="{{ url_for('settings_accessories') }}" style="margin-top:14px;">
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input type="checkbox" name="hide_accessories" value="1" {{ 'checked' if hide_accessories else '' }} onchange="this.form.submit()">
+          Hide accessory-only listings (cables, stands, cases, pop filters, shock mounts, isolation pads…)
+        </label>
+        <p class="muted" style="margin:4px 0 0 26px;">Gear that comes <em>with</em> accessories still shows (“U87 with case and shock mount”).
+          Toys, karaoke machines, video games, ham radio gear and tapes/records are always left out.</p>
+      </form>
     </div>
 
     <div class="settings-panel" id="tab-data" style="display:none;">

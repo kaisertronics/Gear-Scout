@@ -309,12 +309,14 @@ def _price_index() -> dict:
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
-    from scrapers.enrich import build_price_index, exclude_match, is_not_audio, needs_repair, price_context
+    from scrapers.enrich import (build_price_index, exclude_match, is_accessory_only, is_not_audio,
+                                 needs_repair, price_context)
 
     from scrapers.geo import distance_miles
 
     cfg = load_config_raw()
     exclude_words = cfg.get("exclude_words") or []
+    hide_acc = cfg.get("hide_accessories", True)
     home_zip = str(cfg.get("home_zip") or "")
     try:
         within = int(request.args.get("within") or 0)
@@ -334,7 +336,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
     now = datetime.now(timezone.utc)
     out = []
     for l in listings:
-        if exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")):
+        if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title"))
+                or (hide_acc and is_accessory_only(l.get("title")))):
             continue
         # Learned from listings that sold: how fast this model goes, and at what price.
         sale = sales.get(model_key(l.get("title")) or "")
@@ -1021,6 +1024,14 @@ def listing_hide():
     return redirect(request.form.get("next") or url_for("index"))
 
 
+@app.route("/settings/accessories", methods=["POST"])
+def settings_accessories():
+    cfg = load_config_for_edit()
+    cfg["hide_accessories"] = request.form.get("hide_accessories") == "1"
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="exclude"))
+
+
 @app.route("/settings/exclude", methods=["POST"])
 def settings_exclude():
     cfg = load_config_for_edit()
@@ -1072,6 +1083,7 @@ def settings():
     keywords = cfg.get("keywords", []) or []
     return render_template(
         "settings.html",
+        hide_accessories=load_config_raw().get("hide_accessories", True),
         email_cfg=email_cfg,
         schedule_cfg=schedule_cfg,
         keywords_text="\n".join(keywords),
