@@ -291,10 +291,22 @@ def is_not_audio(title: Optional[str]) -> bool:
                 and not re.search(r"\b(?:audio|studio|rack ?mount|stereo|mic|vocal|channel|limiter|opto|tube|fet|vca|dbx|api|ssl|neve|la-?2a|1176)\b", t, re.I))
 
 
+# Wireless systems often only give the model: Shure BLX/GLXD/QLXD/ULXD/SLXD/
+# PGX/SVX/PSM, Sennheiser ew 100/300/500, EW-D/EW-DX, XSW, AVX, Audio-Technica
+# ATW / System 10 — excluded along with the word "wireless".
+_WIRELESS_MODELS = re.compile(
+    r"\b(?:blx|glxd?|qlxd?|ulxd?|slxd?|pgxd?|svx|psm\s?\d{3,4}|axient|"
+    r"ew[\s-]?(?:100|300|500|d|dx|g[1-4])|xsw|avx|atw-?\w*|system 10)(?:[\d/-]\w*)?\b", re.I)
+
+
 def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
     from scrapers.base import keyword_match
-    words = [w for w in (exclude_words or []) if str(w).strip()]
-    return bool(words) and keyword_match(title or "", [str(w) for w in words])
+    words = [str(w) for w in (exclude_words or []) if str(w).strip()]
+    if not words:
+        return False
+    if "wireless" in (w.lower() for w in words) and _WIRELESS_MODELS.search(title or ""):
+        return True
+    return keyword_match(title or "", words)
 
 
 # Words that describe a kind of gear rather than a particular one. Search
