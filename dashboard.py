@@ -478,14 +478,23 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
             if match(text):
                 seen_urls.add(r["url"])
                 hits.append(r)
-                if len(hits) >= per_term:
+                if len(hits) >= 400:
                     break
         out.append((term, hits))
     # Price context etc. for every hit in one pass (a listing can sit under
     # several terms), then hand each group its decorated copies.
     unique = list({id(r): r for _, hits in out for r in hits}.values())
     kept = {id(r) for r in _decorate(unique)}  # adds display fields in place; drops excluded
-    return [(term, [r for r in hits if id(r) in kept]) for term, hits in out]
+    from scrapers.enrich import parse_price
+
+    def price_order(r):
+        # Cheapest first: per-piece price for multi-piece ads, US dollars for
+        # Canadian ones; listings without a price go last.
+        value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
+        return (value is None, value or 0)
+
+    return [(term, sorted((r for r in hits if id(r) in kept), key=price_order)[:per_term])
+            for term, hits in out]
 
 
 @app.route("/telex")
