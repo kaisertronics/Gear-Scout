@@ -84,6 +84,11 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
         elif "sweetwater" in url:
             return scrape_sweetwater(source, keywords)
         elif "reverb.com" in url:
+            # Reverb's API first (fast); the browser-based reader only if it fails.
+            from scrapers.reverb_api import scrape_reverb_api
+            result = scrape_reverb_api(source, keywords)
+            if result.success:
+                return result
             from scrapers.html_scraper import scrape_reverb
             return scrape_reverb(source, keywords)
         elif "audiogon.com" in url:

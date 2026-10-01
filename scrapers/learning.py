@@ -127,10 +127,22 @@ def skip_on_light_runs(sources: list[dict]) -> tuple[list[dict], list[str]]:
     in the full scheduled scrapes, so they're re-tested several times a
     day and come back on their own once they work or start matching."""
     board = {b["name"]: b for b in source_scoreboard(days=7)}
+    # Dealer stores read in full (whole inventory every time) change slowly:
+    # on hourly refreshes, only every 3 hours.
+    slow_types = {"shopify", "long_mcquade"}
+    recent_ok: dict[str, str] = {}
+    with _conn() as conn:
+        _ensure(conn)
+        for name, ran_at in conn.execute(
+                "SELECT source_name, MAX(ran_at) FROM source_runs WHERE success = 1 GROUP BY source_name"):
+            recent_ok[name] = ran_at
+    three_h_ago = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     keep, skipped = [], []
     for s in sources:
         b = board.get(s["name"])
         if b and (b["fail_streak"] >= 5 or (b["sched_runs"] >= 12 and b["sched_found"] == 0)):
+            skipped.append(s["name"])
+        elif s.get("type") in slow_types and (recent_ok.get(s["name"]) or "") > three_h_ago:
             skipped.append(s["name"])
         else:
             keep.append(s)

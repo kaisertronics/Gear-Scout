@@ -1481,7 +1481,26 @@ def facebook_login_cancel():
     return redirect(url_for("sources"))
 
 
+def _keep_caches_warm():
+    """Pre-computes the slow parts of page loads (price history, taste,
+    sale speeds, market values) at start-up and every 4 minutes, so pages
+    open fast even right after a restart or a big scrape."""
+    while True:
+        try:
+            _price_index_cache["at"] = 0  # force a rebuild
+            _price_index()
+            from scrapers.learning import sale_stats, taste
+            taste(max_age_seconds=0)
+            sale_stats(max_age_seconds=0)
+            from scrapers.market import load_market
+            load_market()
+        except Exception:
+            logging.exception("Cache warm-up failed")
+        time.sleep(240)
+
+
 if __name__ == "__main__":
+    threading.Thread(target=_keep_caches_warm, name="cache-warm", daemon=True).start()
     # A live search's progress lives only in this process's background
     # thread — if the container restarts mid-search (a rebuild, a crash),
     # the thread is gone but the status file was last written mid-run, so

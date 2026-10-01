@@ -300,32 +300,45 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     todo = list(models.items()) + list(by_title.items())
     todo = todo[:max_lookups]
 
-    found = 0
-    for key, query in todo:
-        try:
-            typical, n, label, used = market_typical(query, ebay_cfg, loosen=True)
-            loose = used != lookup_plan(query)[0]
-            if not typical and ":" in key and key[:2] not in ("t:", "p:"):
-                # Brand + model found nothing — try the title's words.
-                from scrapers.enrich import title_query
-                tq = next((title_query(t) for t in titles if value_key(t) == key), None)
-                if tq:
-                    typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
-                    loose = True
-        except Exception as e:
-            logger.warning("Market price lookup failed for %r: %s", query, e)
-            continue
-        with _conn() as conn:
-            _ensure_table(conn)
-            conn.execute(
-                "INSERT OR REPLACE INTO market_prices"
-                " (model_key, query, typical, samples, fetched_at, source, loose) VALUES (?,?,?,?,?,?,?)",
-                (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose)),
-            )
-            conn.commit()
-        if typical:
-            found += 1
+    title_for: dict[str, str] = {}
+    for t in titles:
+        title_for.setdefault(value_key(t), t)
+
+    def lookup(key: str, query: str):
+        typical, n, label, used = market_typical(query, ebay_cfg, loosen=True)
+        loose = used != lookup_plan(query)[0]
+        if not typical and ":" in key and key[:2] not in ("t:", "p:"):
+            # Brand + model found nothing — try the title's words.
+            from scrapers.enrich import title_query
+            tq = title_query(title_for.get(key))
+            if tq:
+                typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
+                loose = True
         time.sleep(pause)
+        return key, typical, n, label, used, loose
+
+    # Three lookups at a time — several times faster, still gentle on
+    # Reverb and eBay. Results are written as they arrive.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    found = 0
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="market") as pool:
+        futures = {pool.submit(lookup, k, q): q for k, q in todo}
+        for fut in as_completed(futures):
+            try:
+                key, typical, n, label, used, loose = fut.result()
+            except Exception as e:
+                logger.warning("Market price lookup failed for %r: %s", futures[fut], e)
+                continue
+            with _conn() as conn:
+                _ensure_table(conn)
+                conn.execute(
+                    "INSERT OR REPLACE INTO market_prices"
+                    " (model_key, query, typical, samples, fetched_at, source, loose) VALUES (?,?,?,?,?,?,?)",
+                    (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose)),
+                )
+                conn.commit()
+            if typical:
+                found += 1
     if todo:
         logger.info("Market prices: looked up %d items, %d usable", len(todo), found)
     return found

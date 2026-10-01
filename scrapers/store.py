@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 DB_PATH = Path("/data/seen_listings.db")
 
 
+_schema_ready = False
+
+
 def _conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     # Several background jobs (hourly refresh, Facebook post search, price
@@ -21,6 +24,11 @@ def _conn() -> sqlite3.Connection:
     # database instead of failing, and use WAL so reads never block writes.
     conn = sqlite3.connect(str(DB_PATH), timeout=60)
     conn.execute("PRAGMA busy_timeout = 60000")
+    # Table setup and upgrades only need to happen once per process — this
+    # function is called for nearly every database read.
+    global _schema_ready
+    if _schema_ready:
+        return conn
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen (
@@ -67,9 +75,15 @@ def _conn() -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_url ON seen(url)")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_dup_key ON seen(dup_key)")
+    # The lookups every page and job makes: newest first, per site, favorites.
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_first_seen ON seen(first_seen)")
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_source ON seen(source_name, first_seen)")
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_favorite ON seen(favorite) WHERE favorite = 1")
+    conn.execute("PRAGMA optimize")
     conn.commit()
     if "dup_key" not in existing_cols:
         _backfill_duplicates(conn)
+    _schema_ready = True
     return conn
 
 

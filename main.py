@@ -120,18 +120,19 @@ def run_refresh_cycle(cfg: dict):
     new_listings = filter_new(all_listings)
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
-    # Catch listings that sold or were taken down since they were found.
-    try:
-        from scrapers.sold_check import run_sold_check
-        run_sold_check()
-    except Exception:
-        logger.exception("Sold check failed")
     try:
         Path("/data/last_refresh.json").write_text(json.dumps({
             "finished": datetime.now(timezone.utc).isoformat(), "new_count": len(new_listings)}))
     except OSError:
         pass
-    try:
+    scraped_at = time.time()
+
+    def sold_job():
+        # Catch listings that sold, went pending or were taken down.
+        from scrapers.sold_check import run_sold_check
+        run_sold_check()
+
+    def market_job():
         # New finds first, then this run's other listings, then anything from
         # the last few days (live searches, Telex matches) still without a value.
         from scrapers.store import _conn
@@ -141,8 +142,27 @@ def run_refresh_cycle(cfg: dict):
                 " ORDER BY first_seen DESC LIMIT 1500")]
         refresh_market_prices([l.title for l in new_listings] + [l.title for l in all_listings] + recent,
                               build_price_index(all_priced_rows()), max_lookups=80, cfg=cfg)
-    except Exception:
-        logger.exception("Market price refresh failed")
+
+    # Independent jobs (listing pages vs. Reverb/eBay lookups): side by side.
+    timings = {}
+
+    def timed(name, fn):
+        t0 = time.time()
+        try:
+            fn()
+        except Exception:
+            logger.exception("%s failed", name)
+        timings[name] = time.time() - t0
+
+    jobs = [threading.Thread(target=timed, args=(n, f), daemon=True)
+            for n, f in (("sold check", sold_job), ("price lookups", market_job))]
+    for j in jobs:
+        j.start()
+    for j in jobs:
+        j.join()
+    logger.info("Background refresh timing: scrape %.0fs, sold check %.0fs, price lookups %.0fs, total %.0fs",
+                scraped_at - start, timings.get("sold check", 0), timings.get("price lookups", 0),
+                time.time() - start)
 
 
 def run_scrape_cycle():

@@ -471,7 +471,12 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
             except Exception:
                 pass
 
-            for step in range(10):
+            # Hourly refreshes read the top of the group (new posts surface
+            # there); full runs go deeper. Either way, stop once two scrolls
+            # in a row bring nothing new — the end of what Facebook will load.
+            max_steps = 4 if source.get("_light") else 10
+            stale_steps = 0
+            for step in range(max_steps):
                 collect()
                 before = len(collected)
                 # Reaching the bottom is what makes Facebook load the next
@@ -484,6 +489,9 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                     if len(collected) > before:
                         break
                 logger.debug("FB group %s scroll %d: %d posts collected", name, step, len(collected))
+                stale_steps = stale_steps + 1 if len(collected) == before else 0
+                if stale_steps >= 2:
+                    break
             collect()
 
             listings = []
