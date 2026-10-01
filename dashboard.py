@@ -1278,6 +1278,23 @@ def settings_fb_posts():
 @app.route("/listing/hide", methods=["POST"])
 def listing_hide():
     _data_changed()
+    # Hiding something Gear Scout called a deal / worth it = its comp was
+    # probably wrong; Gear Scout re-checks comps you dispute.
+    try:
+        gid = request.form.get("global_id", "")
+        from scrapers.store import _conn
+        with _conn() as conn:
+            row = conn.execute("SELECT title, price, description FROM seen WHERE global_id = ?", (gid,)).fetchone()
+        if row and request.form.get("hidden", "1") == "1":
+            from scrapers.enrich import model_key, price_context, value_key
+            from scrapers.learning import record_comp_hide
+            from scrapers.market import load_market
+            ctx = price_context(row[0], row[1], _price_index(), load_market(), description=row[2])
+            if ctx.get("deal") or ctx.get("worth"):
+                key = model_key(row[0]) if ctx.get("source") in ("local", "sold") else value_key(row[0])
+                record_comp_hide(key)
+    except Exception:
+        logging.exception("Couldn't record disputed comp")
     global_id = request.form.get("global_id", "")
     if global_id:
         set_hidden(global_id, request.form.get("hidden", "1") == "1")

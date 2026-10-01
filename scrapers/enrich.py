@@ -751,9 +751,20 @@ def build_price_index(rows: list[dict]) -> dict[str, float]:
         if key and value and quantity(r.get("title")) > 1:
             value = value / quantity(r.get("title")) if not _EACH_RE.search(r.get("title") or "") else value
         if (key and value and value >= 20 and not is_partial(r.get("title"))
+                and not is_bundle(r.get("title")) and not is_not_audio(r.get("title"))
                 and not needs_repair(r.get("title"), r.get("description"))):
             by_model.setdefault(key, []).append(value)
-    return {k: statistics.median(v) for k, v in by_model.items() if len(v) >= 4}
+    out = {}
+    for k, v in by_model.items():
+        if len(v) < 4:
+            continue
+        v.sort()
+        # Prices all over the place (p75 > 2.5x p25) mean the "model" mixes
+        # different things — no solid typical price; Reverb/eBay is used instead.
+        if v[(len(v) * 3) // 4] > 2.5 * v[len(v) // 4]:
+            continue
+        out[k] = statistics.median(v)
+    return out
 
 
 # --- Quantity / "each" pricing -------------------------------------------
@@ -892,7 +903,12 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         return {"basis": "single", "qty": 1, "unit": None, "unit_value": value,
                 "note": "bundle of several items — no single-item comparison"}
     mkey, key = model_key(title), value_key(title)
-    if mkey and mkey in index and not partial:
+    sold = (getattr(market, "sold", {}) or {}) if market else {}
+    if mkey and mkey in sold and not partial:
+        # What this model actually went for, from listings Gear Scout watched
+        # sell — the most trustworthy comp there is.
+        typical, source, threshold = sold[mkey], "sold", 0.75
+    elif mkey and mkey in index and not partial:
         typical, source, threshold = index[mkey], "local", 0.70
     elif market and key and key in market:
         typical = market[key]
@@ -920,8 +936,13 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         return ctx
     # A value found from title words (no model number) or from only one or
     # two listings is a rough gauge — shown, but never used to call a deal.
-    rough = source != "local" and (
+    rough = source not in ("local", "sold") and (
         bool(key and key[:2] in ("t:", "p:")) or key in (getattr(market, "rough", set()) or set()))
+    # A comp you've disputed (hid two listings it called deals) stays a rough
+    # estimate until it's been looked up again.
+    disputed = getattr(market, "distrusted", set()) or set()
+    if key in disputed or (mkey and mkey in disputed):
+        rough = True
     ctx.update({
         "typical": format_price(typical),
         "rough": rough,
@@ -949,7 +970,10 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         ctx["worth"] = (not partial and not is_bundle(title) and unit >= 20
                         and reference * 0.2 <= unit <= reference * 0.9)
         ctx["under_ref_pct"] = round((1 - unit / reference) * 100)
-    if source == "local":
+    if source == "sold":
+        ctx["label"] = f"sold ~{ctx['typical']}"
+        ctx["label_title"] = "What this model actually went for, from listings Gear Scout watched sell"
+    elif source == "local":
         ctx["label"] = f"typically ~{ctx['typical']}"
         ctx["label_title"] = "Typical price of this model across listings Gear Scout has seen"
     else:

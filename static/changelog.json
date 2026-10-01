@@ -4,7 +4,11 @@
     "title": "B-stock value and 'Worth it only'",
     "items": [
       "Each model now gets a B-stock value: what a dealer B-stock / open-box unit goes for (Reverb B-stock listings, or 85% of the new price). Cards show 'B-stock ~$X'.",
-      "New 'Worth it only' switch on the Dashboard and search: only listings at least 10% under B-stock value (or under the used value for vintage gear with no B-stock version)."
+      "New 'Worth it only' switch on the Dashboard and search: only listings at least 10% under B-stock value (or under the used value for vintage gear with no B-stock version).",
+      "Comps learn from you: hiding a listing Gear Scout called a deal or 'worth it' disputes its comp; after two, the comp is re-checked from scratch and shown as a rough estimate until then.",
+      "Sold comps: once Gear Scout has watched a model sell 3+ times, what it actually went for becomes that model's comp ('sold ~$X').",
+      "Mixed-price check: if a model's prices are all over the place (vintage and reissue mixed together), its comp isn't trusted for deals or 'worth it'.",
+      "Header: navigation has its own row with more space; labels no longer break mid-word."
     ]
   },
   {

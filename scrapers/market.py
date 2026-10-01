@@ -50,6 +50,9 @@ class MarketIndex(dict):
         self.sources: dict[str, str] = {}
         self.rough: set[str] = set()
         self.bstock: dict[str, tuple[float, str]] = {}  # key -> (B-stock value, how it was found)
+        self.mixed: set[str] = set()       # comps built from very different prices
+        self.distrusted: set[str] = set()  # comps you disputed by hiding flagged deals
+        self.sold: dict[str, float] = {}   # key -> price Gear Scout watched it sell at (3+ sales)
 
 
 def _ensure_table(conn):
@@ -65,6 +68,10 @@ def _ensure_table(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(market_prices)")}
     if "source" not in cols:
         conn.execute("ALTER TABLE market_prices ADD COLUMN source TEXT")
+    if "spread" not in cols:
+        # p75 / p25 of the prices the value came from — a big spread means
+        # the search mixed different things (vintage + reissue, parts + units).
+        conn.execute("ALTER TABLE market_prices ADD COLUMN spread REAL")
     if "bstock" not in cols:
         conn.execute("ALTER TABLE market_prices ADD COLUMN bstock REAL")
         conn.execute("ALTER TABLE market_prices ADD COLUMN bstock_basis TEXT")
@@ -294,18 +301,27 @@ def load_market() -> MarketIndex:
     with _conn() as conn:
         _ensure_table(conn)
         rows = conn.execute(
-            "SELECT model_key, typical, source, samples, loose, bstock, bstock_basis FROM market_prices"
+            "SELECT model_key, typical, source, samples, loose, bstock, bstock_basis, spread FROM market_prices"
             " WHERE typical IS NOT NULL AND fetched_at >= ?",
             (cutoff,),
         ).fetchall()
     market = MarketIndex()
-    for key, typical, source, samples, loose, bstock, bstock_basis in rows:
+    for key, typical, source, samples, loose, bstock, bstock_basis, spread in rows:
         market[key] = typical
         market.sources[key] = source or "Reverb"
+        if spread and spread > 2.5:
+            market.rough.add(key)
+            market.mixed.add(key)
         if bstock and not loose:
             market.bstock[key] = (bstock, bstock_basis or "")
         if (samples or 0) < MIN_SAMPLES or loose:
             market.rough.add(key)
+    try:
+        from scrapers.learning import distrusted_comps, sale_stats
+        market.distrusted = distrusted_comps()
+        market.sold = {k: v["price"] for k, v in sale_stats().items() if v["n"] >= 3}
+    except Exception:
+        logger.exception("Couldn't load learned comp signals")
     return market
 
 
@@ -355,6 +371,13 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
             if tq:
                 typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
                 loose = True
+        spread = None
+        try:
+            prices = sorted(_reverb_prices(used))
+            if len(prices) >= 4:
+                spread = prices[(len(prices) * 3) // 4] / max(prices[len(prices) // 4], 1)
+        except Exception:
+            pass
         bstock, basis = (None, None)
         if typical and not loose and key[:2] not in ("t:", "p:"):
             try:
@@ -362,7 +385,7 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
             except Exception:
                 pass
         time.sleep(pause)
-        return key, typical, n, label, used, loose, bstock, basis
+        return key, typical, n, label, used, loose, bstock, basis, spread
 
     # Three lookups at a time — several times faster, still gentle on
     # Reverb and eBay. Results are written as they arrive.
@@ -372,7 +395,7 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
         futures = {pool.submit(lookup, k, q): q for k, q in todo}
         for fut in as_completed(futures):
             try:
-                key, typical, n, label, used, loose, bstock, basis = fut.result()
+                key, typical, n, label, used, loose, bstock, basis, spread = fut.result()
             except Exception as e:
                 logger.warning("Market price lookup failed for %r: %s", futures[fut], e)
                 continue
@@ -380,10 +403,10 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
                 _ensure_table(conn)
                 conn.execute(
                     "INSERT OR REPLACE INTO market_prices"
-                    " (model_key, query, typical, samples, fetched_at, source, loose, bstock, bstock_basis)"
-                    " VALUES (?,?,?,?,?,?,?,?,?)",
+                    " (model_key, query, typical, samples, fetched_at, source, loose, bstock, bstock_basis, spread)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose),
-                     bstock, basis),
+                     bstock, basis, spread),
                 )
                 conn.commit()
             if typical:

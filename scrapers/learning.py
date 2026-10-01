@@ -430,3 +430,51 @@ def sale_stats(max_age_seconds: int = 600) -> dict[str, dict]:
 def fast_sellers(limit: int = 20) -> list[tuple[str, dict]]:
     items = [(k, v) for k, v in sale_stats().items() if v["days"] <= FAST_SALE_DAYS]
     return sorted(items, key=lambda kv: kv[1]["days"])[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Comps you don't trust: hiding a listing that was flagged as a deal / worth
+# it says its comparison was probably wrong.
+# ---------------------------------------------------------------------------
+
+def _ensure_flags(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS comp_flags (
+        key TEXT PRIMARY KEY, hides INTEGER DEFAULT 0, last_at TEXT)""")
+
+
+def record_comp_hide(key: str) -> int:
+    """Counts a hide against a comp. On the 2nd, the cached market value is
+    dropped so the next hourly refresh looks it up again from scratch."""
+    if not key:
+        return 0
+    now = _now()
+    with _conn() as conn:
+        _ensure_flags(conn)
+        conn.execute("INSERT INTO comp_flags (key, hides, last_at) VALUES (?, 1, ?)"
+                     " ON CONFLICT(key) DO UPDATE SET hides = hides + 1, last_at = excluded.last_at", (key, now))
+        hides = conn.execute("SELECT hides FROM comp_flags WHERE key = ?", (key,)).fetchone()[0]
+        if hides == 2:
+            try:
+                conn.execute("DELETE FROM market_prices WHERE model_key = ?", (key,))
+            except Exception:
+                pass
+        conn.commit()
+    return hides
+
+
+def distrusted_comps() -> set[str]:
+    """Keys whose comp you've disputed twice (until a fresh lookup), or four
+    times (for good): shown as a rough estimate, never a deal / worth it."""
+    with _conn() as conn:
+        _ensure_flags(conn)
+        rows = conn.execute("SELECT key, hides, last_at FROM comp_flags WHERE hides >= 2").fetchall()
+        fresh = {}
+        try:
+            fresh = {k: f for k, f in conn.execute("SELECT model_key, fetched_at FROM market_prices")}
+        except Exception:
+            pass
+    out = set()
+    for key, hides, last_at in rows:
+        if hides >= 4 or not (fresh.get(key) and fresh[key] > (last_at or "")):
+            out.add(key)
+    return out
