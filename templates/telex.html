@@ -92,6 +92,20 @@
         }
       } catch (e) { setTimeout(poll, 3000); }
     }
+    // Start a search without reloading this (big) page: the button reacts
+    // at once and the progress bar appears right away.
+    document.querySelectorAll('form[action="{{ url_for('telex_scrape') }}"]').forEach(f => {
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btns.forEach(b => b.disabled = true);
+        const term = (new FormData(f)).get('term');
+        gsProgress(banner, term ? `Starting search for “${term}” everywhere…` : 'Starting search of all Telex terms…', {});
+        banner.scrollIntoView({behavior: 'smooth', block: 'center'});
+        try { await fetch(f.action, {method: 'POST', body: new FormData(f)}); } catch (err) {}
+        sawRunning = true;
+        setTimeout(poll, 800);
+      });
+    });
     poll();
   })();
 </script>

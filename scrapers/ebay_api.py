@@ -31,6 +31,41 @@ CONDITION_FILTER = "conditionIds:{1500|2500|3000}"
 _token_cache: dict[str, tuple[str, float]] = {}
 
 
+# eBay allows a fixed number of searches per day (about 5,000). When it says
+# "too many requests", every eBay call pauses until the daily reset (midnight
+# Pacific) instead of failing over and over. Shared by the scraper and the
+# dashboard through the data folder.
+_PAUSE_FILE = "/data/ebay_paused_until.txt"
+
+
+def ebay_paused_until() -> Optional[datetime]:
+    from datetime import timezone
+    try:
+        until = datetime.fromisoformat(open(_PAUSE_FILE).read().strip())
+        return until if until > datetime.now(timezone.utc) else None
+    except Exception:
+        return None
+
+
+def _note_rate_limit() -> None:
+    from datetime import timedelta, timezone
+    from zoneinfo import ZoneInfo
+    pacific = datetime.now(ZoneInfo("America/Los_Angeles"))
+    reset = (pacific + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+    try:
+        with open(_PAUSE_FILE, "w") as f:
+            f.write(reset.astimezone(timezone.utc).isoformat())
+    except OSError:
+        pass
+    logger.warning("eBay daily request limit reached — pausing eBay until %s", reset.strftime("%b %d %I:%M %p PT"))
+
+
+def _check_response(resp) -> None:
+    if resp.status_code == 429:
+        _note_rate_limit()
+        raise RuntimeError("eBay's daily request limit is used up — eBay resumes after midnight (Pacific).")
+
+
 def _get_token(client_id: str, client_secret: str) -> str:
     cached = _token_cache.get(client_id)
     if cached and cached[1] > time.time() + 60:
@@ -90,6 +125,14 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         + (f"&_nkw={requests.utils.quote(keywords[0].strip())}" if is_live_search else "")
     )
 
+    paused = ebay_paused_until()
+    if paused:
+        return ScrapeResult(
+            source_name=name, source_url=manual_url, success=False,
+            error="eBay's daily request limit is used up for today.",
+            fix_hint="Resumes on its own after midnight (Pacific). Nothing to fix.",
+            duration_seconds=time.time() - start,
+        )
     try:
         token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
         resp = requests.get(
@@ -101,6 +144,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             },
             timeout=30,
         )
+        _check_response(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
         items = resp.json().get("itemSummaries", []) or []
@@ -160,6 +204,8 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
     """Cheapest Buy-It-Now listings for `query` on eBay (any category — a
     price-sorted search needs the whole site, not just the newest items).
     Auctions are left out: a current bid isn't what it will sell for."""
+    if ebay_paused_until():
+        return []
     token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
     resp = requests.get(
         SEARCH_URL,
@@ -168,6 +214,7 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
         timeout=30,
     )
+    _check_response(resp)
     resp.raise_for_status()
     out = []
     for item in resp.json().get("itemSummaries", []) or []:

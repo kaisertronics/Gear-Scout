@@ -184,6 +184,8 @@ def _ebay_prices(query: str, api_cfg: dict) -> list[float]:
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
         timeout=20,
     )
+    from scrapers.ebay_api import _check_response
+    _check_response(resp)
     resp.raise_for_status()
     prices = []
     for item in resp.json().get("itemSummaries", []) or []:
@@ -278,7 +280,11 @@ def market_typical(query: str, ebay_cfg: Optional[dict] = None,
             time.sleep(0.5)
         reverb = _reverb_prices(q)
         ebay = []
-        if ebay_cfg and ebay_cfg.get("client_id") and ebay_cfg.get("client_secret"):
+        # eBay only when Reverb alone is thin — the daily eBay allowance is
+        # better spent finding listings than confirming prices.
+        from scrapers.ebay_api import ebay_paused_until
+        if (len(reverb) < 5 and not ebay_paused_until()
+                and ebay_cfg and ebay_cfg.get("client_id") and ebay_cfg.get("client_secret")):
             try:
                 ebay = _ebay_prices(q, ebay_cfg)
             except Exception as e:
