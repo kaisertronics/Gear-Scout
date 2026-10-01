@@ -326,7 +326,9 @@ def _run_scrape_cycle():
         logger.exception("Market price refresh failed")
 
     # Periodic DB cleanup
-    purge_old(days=30)
+    # Kept for 90 days (the hourly checks already take sold listings out of
+    # view) so slow-moving gear stays on the Telex List and in search.
+    purge_old(days=90)
 
     logger.info("Run #%d complete.\n", run_number)
 

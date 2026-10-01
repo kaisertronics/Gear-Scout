@@ -438,6 +438,7 @@ _FORMS = (
 _UA_OWN = {"universal-audio", "teletronix", "urei"}
 
 
+@functools.lru_cache(maxsize=100_000)
 def item_form(title: Optional[str]) -> Optional[str]:
     """'pedal', 'plugin', 'kit', '500' or None (a regular unit)."""
     for name, pattern in _FORMS:

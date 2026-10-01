@@ -4,9 +4,9 @@
 {% block content %}
 
   <section class="panel">
-    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} matching listing{{ '' if total == 1 else 's' }} from the last 30 days</span></h2>
+    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} matching listing{{ "" if total == 1 else "s" }} still for sale</span></h2>
     <p class="muted">
-      Every listing Gear Scout has found in the last 30 days that matches one of these terms, cheapest
+      Every listing Gear Scout has found that's still for sale and matches one of these terms, cheapest
       first (every
       word, any order — “Apollo X8P” also finds “Universal Audio Apollo x8p”). The terms are also
       added to every scrape and the background Facebook post search, and every hour Gear Scout
@@ -30,7 +30,7 @@
       <div class="telex-terms">
         {% for term, items in groups %}
           <span class="telex-chip">
-            <a href="#t-{{ loop.index }}">{{ term }} <span class="muted">{{ items|length }}{{ '+' if items|length >= 60 else '' }}</span></a>
+            <a href="#t-{{ loop.index }}">{{ term }} <span class="muted">{{ items|length }}</span></a>
             <form method="post" action="{{ url_for('telex_remove') }}" onsubmit="return confirm('Remove &quot;{{ term }}&quot; from the Telex List?');">
               <input type="hidden" name="term" value="{{ term }}">
               <button type="submit" class="hide-btn" title="Remove" aria-label="Remove {{ term }}">✕</button>
@@ -43,7 +43,7 @@
 
   {% for term, items in groups %}
   <section class="panel" id="t-{{ loop.index }}">
-    <h2>{{ term }} <span class="muted">— {{ items|length }}{{ '+' if items|length >= 60 else '' }} ·
+    <h2>{{ term }} <span class="muted">— {{ items|length }} ·
       {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
       <a href="{{ url_for('search', q=term) }}">live search →</a></span>
       <form method="post" action="{{ url_for('telex_scrape') }}" class="telex-term-search">
@@ -52,10 +52,18 @@
       </form></h2>
     {% if items %}
       <div class="listing-grid">
-        {% for l in items %}{{ listing_card(l) }}{% endfor %}
+        {% for l in items[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
+      {% if items|length > 24 %}
+        <details class="more-listings">
+          <summary>Show all {{ items|length }} (cheapest first)</summary>
+          <div class="listing-grid">
+            {% for l in items[24:] %}{{ listing_card(l) }}{% endfor %}
+          </div>
+        </details>
+      {% endif %}
     {% else %}
-      <p class="muted">Nothing found in the last 30 days — try the live search above.</p>
+      <p class="muted">Nothing found yet — try “Search everywhere”.</p>
     {% endif %}
   </section>
   {% endfor %}

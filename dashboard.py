@@ -516,19 +516,17 @@ def _telex_terms(cfg) -> list[str]:
     return [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
 
 
-def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list[tuple[str, list[dict]]]:
-    """Stored listings (last `days` days, from scrapes and live searches)
-    matching each Telex term — every word, any order, like the live search."""
+def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, list[dict]]]:
+    """Every stored listing still for sale (from scrapes, live searches and
+    Telex searches) matching each Telex term — every word, any order, like
+    the live search. All of them, cheapest first."""
     import sqlite3
-    from datetime import timedelta
     from scrapers.store import _conn
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
-               AND COALESCE(sold, 0) = 0 AND first_seen >= ? ORDER BY first_seen DESC LIMIT 6000""",
-            (cutoff,)).fetchall()]
+               AND COALESCE(sold, 0) = 0 ORDER BY first_seen DESC""").fetchall()]
     from scrapers.base import _keyword_pattern, _word_matches, fix_brand_spelling
     texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
 
@@ -554,7 +552,7 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
         # when the term asks for them ("LA-2A pedal").
         term_form = item_form(term)
         for r, text in zip(rows, texts):
-            if r["url"] in seen_urls:
+            if r["url"] in seen_urls or not match(text):
                 continue
             form = item_form(r["title"])
             if form in ("pedal", "plugin") and form != term_form:
@@ -563,11 +561,10 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
             # anything "for" the model) aren't the gear you're tracking.
             if is_partial(r["title"]) or is_accessory_only(r["title"]):
                 continue
-            if match(text):
-                seen_urls.add(r["url"])
-                hits.append(r)
-                if len(hits) >= 400:
-                    break
+            seen_urls.add(r["url"])
+            hits.append(r)
+            if len(hits) >= 3000:
+                break
         out.append((term, hits))
     # Price context etc. for every hit in one pass (a listing can sit under
     # several terms), then hand each group its decorated copies.
