@@ -8,7 +8,8 @@
       "Tubes, tube sets, power supplies, transformers, meter bridges, capsules and other parts are valued as parts and never shown as deals.",
       "Model versions are kept apart: AKG C12 VR vs. vintage C12, C414 XLS vs. XLII, U87 Ai, Mk II, reissues.",
       "Bare model numbers after a brand are recognized (Universal Audio 1176, Neve 1073).",
-      "Telex and Lowest Price leave out pedal and plugin versions (UAFX LA-2A pedal, UAD plugins) unless your term asks for them, e.g. 'LA-2A pedal'."
+      "Telex and Lowest Price leave out pedal and plugin versions (UAFX LA-2A pedal, UAD plugins) unless your term asks for them, e.g. 'LA-2A pedal'.",
+      "Telex recognizes Universal Audio pedals sold without the word 'pedal' (LA-2A / 1176 'Studio Compressor', Lion '68…) and UA plugin versions of other makers' gear, and leaves out parts, add-ons and anything priced far below what the model sells for."
     ]
   },
   {
