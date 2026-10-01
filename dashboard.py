@@ -616,25 +616,20 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
         placeholder = value is None or value < 5
         return (placeholder, value or 0)
 
-    # Your rule: a listing shows only when it's 10%+ under the used market
-    # price on Reverb. Listings without a reliable Reverb price go in a
-    # separate, collapsed group so nothing disappears silently.
-    from scrapers.enrich import _ALIAS_TO_BRAND, canonical_brand, is_generic_term, model_key, value_key
+    # Your rule: a listing shows only when it's 10%+ under its comp. Every
+    # listing gets the most trustworthy comp available (see _telex_comp);
+    # only the few with nothing at all to go on are set aside.
+    from scrapers.enrich import _ALIAS_TO_BRAND, canonical_brand, is_generic_term, model_key
     from scrapers.market import load_market
     market = load_market()
-    unreliable = market.rough | market.mixed | market.distrusted
-
-    def reverb_used(r):
-        key = value_key(r.get("title"))
-        if (not key or key[:2] in ("t:", "p:") or key in unreliable or key not in market
-                or "Reverb" not in (market.sources.get(key) or "")):
-            return None
-        return market[key]
+    index = _price_index()
+    similar = _similar_index()
 
     out_groups = []
     for term, hits in out:
         good, unpriced = [], []
         tkey = "telex:" + term.strip().lower()
+        unreliable = market.rough | market.mixed | market.distrusted
         term_ref = market.get(tkey) if tkey in market and tkey not in unreliable else None
         # The term's own price only works as a yardstick when the term names
         # one specific product: a brand plus a model ("Avalon 737") or a
@@ -650,19 +645,118 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
                        and w not in ("clone", "style", "copy", "replica", "type", "series")]
         if not (term_brand and (model_key(term) or names_line or distinctive)):
             term_ref = None
+        term_comp = (term_ref, f"{market.sources.get(tkey) or 'Reverb'} “{term}”") if term_ref else None
         for r in sorted((r for r in hits if id(r) in kept), key=price_order):
-            # The listing's own model on Reverb, else the Telex term itself
-            # (only for listings from the same brand).
-            ref = reverb_used(r) or (term_ref if term_ref and canonical_brand(r.get("title")) == term_brand else None)
+            comp = _telex_comp(r, market, index, similar, term_comp, term_brand)
             value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
-            if ref and value:
+            if comp and value:
+                ref, label, est = comp
                 if ref * 0.2 <= value <= ref * 0.9:
-                    r["under_reverb"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}"}
+                    r["comp"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}",
+                                 "label": label, "est": est}
                     good.append(r)
             else:
                 unpriced.append(r)
         out_groups.append((term, good[:per_term], unpriced[:per_term]))
+    # Tell the hourly refresh which Telex listings still have no comp, so it
+    # looks those up first (Reverb, and eBay when its daily allowance allows).
+    try:
+        Path("/data/nocomp_titles.txt").write_text(
+            "\n".join(dict.fromkeys(r["title"] for _, _, un in out_groups for r in un if r.get("title"))))
+    except OSError:
+        pass
     return out_groups
+
+
+def _telex_comp(r, market, index, similar, term_comp, term_brand):
+    """(comp price, where it came from, is it only an estimate) for a
+    listing — the most trustworthy source first:
+      1. what the model actually sold for (listings Gear Scout watched sell)
+      2. Reverb / eBay used price for the model
+      3. Gear Scout's own price history for the model (all sites, incl. sold)
+      4. Reverb / eBay price of the Telex term (specific products, same brand)
+      5. similar past listings sharing the item's key words (estimate)"""
+    from scrapers.enrich import canonical_brand, is_partial, model_key, value_key
+    title = r.get("title") or ""
+    mkey, key = model_key(title), value_key(title)
+    unreliable = market.rough | market.mixed | market.distrusted
+    if mkey and mkey in market.sold and mkey not in market.distrusted:
+        return market.sold[mkey], "sold", False
+    if key and key[:2] not in ("t:", "p:") and key in market and key not in unreliable:
+        return market[key], f"{market.sources.get(key) or 'Reverb'} used", False
+    if mkey and mkey in index and not is_partial(title) and mkey not in market.distrusted:
+        return index[mkey], "Gear Scout history", False
+    if term_comp and canonical_brand(title) == term_brand:
+        return term_comp[0], term_comp[1], False
+    est = _similar_price(similar, title, r.get("url"))
+    if est:
+        return est, "similar listings", True
+    # A rougher Reverb/eBay lookup (few listings, or a looser search) is still
+    # better than nothing — as an estimate. Disputed or mixed-up ones aren't.
+    if key and key in market and key not in market.distrusted and key not in market.mixed:
+        return market[key], f"{market.sources.get(key) or 'Reverb'}", True
+    return None
+
+
+_similar_cache: dict = {"at": 0.0, "data": None}
+_SIM_SKIP = {"vintage", "used", "new", "mint", "excellent", "great", "good", "condition", "with", "and",
+             "for", "the", "sale", "selling", "black", "silver", "white", "pair", "works", "working",
+             "tested", "audio", "pro", "professional", "studio", "original", "rare", "box", "case",
+             "free", "shipping", "local", "pickup", "obo", "price", "each", "only", "like", "series"}
+
+
+def _sim_words(title: str) -> list[str]:
+    return [w for w in dict.fromkeys(re.findall(r"[a-z0-9][a-z0-9-]*[a-z0-9]", (title or "").lower()))
+            if len(w) >= 3 and w not in _SIM_SKIP and not re.fullmatch(r"(?:19|20)\d\ds?|\d{1,2}", w)]
+
+
+def _similar_index():
+    """Word -> listings index over every priced listing Gear Scout has ever
+    stored (all sites, including ones that sold), for "similar listings"
+    comps. Rebuilt every 10 minutes."""
+    if _similar_cache["data"] is not None and time.time() - _similar_cache["at"] < 600:
+        return _similar_cache["data"]
+    from scrapers.enrich import is_bundle, is_not_audio, is_partial, parse_price, quantity
+    from scrapers.store import _conn
+    prices, urls, words = [], [], {}
+    with _conn() as conn:
+        rows = conn.execute("SELECT title, price, url FROM seen WHERE price IS NOT NULL AND duplicate = 0").fetchall()
+    for title, price, url in rows:
+        value = parse_price(price)
+        if (not value or value < 20 or is_partial(title) or is_bundle(title) or is_not_audio(title)
+                or quantity(title) > 1):
+            continue
+        i = len(prices)
+        prices.append(value)
+        urls.append(url)
+        for w in _sim_words(title):
+            words.setdefault(w, set()).add(i)
+    data = {"prices": prices, "urls": urls, "words": words}
+    _similar_cache.update(at=time.time(), data=data)
+    return data
+
+
+def _similar_price(sim, title: str, url: Optional[str]) -> Optional[float]:
+    """Median price of stored listings sharing this one's most specific words
+    (rarest first): 3 words, else 2, needing 4+ listings with consistent
+    prices."""
+    import statistics
+    ws = [w for w in _sim_words(title) if w in sim["words"] and len(sim["words"][w]) >= 2]
+    ws.sort(key=lambda w: len(sim["words"][w]))
+    for n in (3, 2):
+        if len(ws) < n:
+            continue
+        ids = set.intersection(*(sim["words"][w] for w in ws[:n]))
+        vals = sorted(sim["prices"][i] for i in ids if sim["urls"][i] != url)
+        if len(vals) >= 4 and vals[(len(vals) * 3) // 4] <= 3 * vals[len(vals) // 4]:
+            return statistics.median(vals)
+    # Just the model number ("MK-219", "CM7") when it's the only telling word.
+    for w in ws[:2]:
+        if re.search(r"\d", w) and re.search(r"[a-z]", w):
+            vals = sorted(sim["prices"][i] for i in sim["words"][w] if sim["urls"][i] != url)
+            if len(vals) >= 3 and vals[(len(vals) * 3) // 4] <= 3 * vals[len(vals) // 4]:
+                return statistics.median(vals)
+    return None
 
 
 _telex_cache: dict = {"key": None, "at": 0.0, "groups": None}

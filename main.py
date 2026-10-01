@@ -140,7 +140,11 @@ def run_refresh_cycle(cfg: dict):
             recent = [t for (t,) in conn.execute(
                 "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= datetime('now', '-3 days')"
                 " ORDER BY first_seen DESC LIMIT 1500")]
-        refresh_market_prices([l.title for l in new_listings] + [l.title for l in all_listings] + recent,
+        try:
+            nocomp = [t for t in Path("/data/nocomp_titles.txt").read_text().split("\n") if t.strip()]
+        except OSError:
+            nocomp = []
+        refresh_market_prices(nocomp + [l.title for l in new_listings] + [l.title for l in all_listings] + recent,
                               build_price_index(all_priced_rows()), max_lookups=80, cfg=cfg)
 
     # Independent jobs (listing pages vs. Reverb/eBay lookups): side by side.

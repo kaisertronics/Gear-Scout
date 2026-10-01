@@ -4,9 +4,9 @@
 {% block content %}
 
   <section class="panel">
-    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} listing{{ "" if total == 1 else "s" }} 10%+ under Reverb's used price</span></h2>
+    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} listing{{ "" if total == 1 else "s" }} 10%+ under their comp</span></h2>
     <p class="muted">
-      Listings still for sale that match one of these terms <strong>and are at least 10% under the used price on Reverb</strong>, cheapest
+      Listings still for sale that match one of these terms <strong>and are at least 10% under their comp</strong> — what the model sold for, its Reverb/eBay used price, Gear Scout's price history, or similar past listings (marked est.), cheapest
       first (every
       word, any order — “Apollo X8P” also finds “Universal Audio Apollo x8p”). The terms are also
       added to every scrape and the background Facebook post search, and every hour Gear Scout
@@ -63,11 +63,11 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">Nothing 10%+ under Reverb's used price right now.</p>
+      <p class="muted">Nothing 10%+ under its comp right now.</p>
     {% endif %}
     {% if unpriced %}
       <details class="more-listings">
-        <summary class="muted">{{ unpriced|length }} more without a reliable Reverb price yet — can't tell if they're good</summary>
+        <summary class="muted">{{ unpriced|length }} more with nothing to compare against yet</summary>
         <div class="listing-grid">
           {% for l in unpriced %}{{ listing_card(l) }}{% endfor %}
         </div>
