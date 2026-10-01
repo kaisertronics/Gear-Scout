@@ -386,6 +386,24 @@ def _decorate(listings: list[dict]) -> list[dict]:
     return out
 
 
+def _last_scraped_by_site() -> dict[str, str]:
+    """{site section name: time of its most recent successful scrape}."""
+    from scrapers.store import _conn
+    out: dict[str, str] = {}
+    try:
+        with _conn() as conn:
+            rows = conn.execute("SELECT source_name, MAX(ran_at) FROM source_runs WHERE success = 1"
+                                " AND kind != 'live' GROUP BY source_name").fetchall()
+    except Exception:
+        return out
+    for name, ran_at in rows:
+        family = (name or "").partition(" — ")[0]
+        family = {"FB Marketplace": "Facebook Marketplace", "FB": "Facebook groups"}.get(family, family)
+        if ran_at and ran_at > out.get(family, ""):
+            out[family] = ran_at
+    return out
+
+
 def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
     """Splits decorated listings into ones at least 10% under their comp
     (B-stock value when the model has one, else the best comp from
@@ -973,6 +991,7 @@ def index():
         "index.html",
         last_refresh=last_refresh,
         no_comp=no_comp[:150], no_comp_total=len(no_comp),
+        scraped_at=_last_scraped_by_site(),
         for_you=_for_you(grouped_listings),
         for_you_ceiling=_for_you_cache.get("ceiling"),
         deals=_deals_from(grouped_listings),

@@ -196,7 +196,7 @@
 
   {% for source_name, items in grouped_listings %}
   <section class="panel" id="src-{{ loop.index }}">
-    <h2>{{ source_name }} <span class="muted">— {{ items|length }} recent</span></h2>
+    <h2>{{ source_name }} <span class="muted">— {{ items|length }} recent{% if scraped_at.get(source_name) %} · scraped {{ scraped_at[source_name]|local }}{% endif %}</span></h2>
     <div class="listing-grid">
       {% for l in items[:24] %}
         {{ listing_card(l) }}
