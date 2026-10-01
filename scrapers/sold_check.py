@@ -127,45 +127,60 @@ def _record(url: str, gone: Optional[bool]) -> None:
 
 
 def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
+    """Website checks run 4 at a time while the Facebook checks (one
+    browser, paced) run alongside them."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
     start = time.time()
     checked = sold = 0
+    lock = threading.Lock()
     http = [u for u, _ in _candidates(max_http * 2, include_fb=False)][:max_http]
-    for url in http:
+
+    def check_one(url):
+        nonlocal checked, sold
         try:
             gone = check_url(url)
         except Exception as e:
             logger.debug("Sold check failed for %s: %s", url, e)
             gone = None
         _record(url, gone)
-        checked += 1
-        sold += bool(gone)
-        time.sleep(0.4)
+        with lock:
+            checked += 1
+            sold += bool(gone)
 
-    fb = [u for u, _ in _candidates(max_fb * 4, include_fb=True) if "facebook.com/marketplace/item" in u][:max_fb]
-    if fb:
-        try:
-            from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
-            if SESSION_FILE.exists():
-                with _browser() as browser:
-                    page = _new_context(browser).new_page()
-                    for url in fb:
-                        gone = None
-                        try:
-                            page.goto(url, wait_until="domcontentloaded", timeout=40000)
-                            page.wait_for_timeout(2000)
-                            text = page.inner_text("body")[:5000]
-                            gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
-                                        or "/marketplace/item/" not in page.url)
-                            if not gone:
-                                from scrapers.store import set_pending
-                                set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
-                        except Exception as e:
-                            logger.debug("FB sold check failed for %s: %s", url, e)
-                        _record(url, gone)
-                        checked += 1
-                        sold += bool(gone)
-                        time.sleep(1.5)
-        except Exception:
-            logger.exception("Facebook sold check skipped")
+    def fb_checks():
+        nonlocal checked, sold
+        fb = [u for u, _ in _candidates(max_fb * 4, include_fb=True) if "facebook.com/marketplace/item" in u][:max_fb]
+        if fb:
+            try:
+                from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
+                if SESSION_FILE.exists():
+                    with _browser() as browser:
+                        page = _new_context(browser).new_page()
+                        for url in fb:
+                            gone = None
+                            try:
+                                page.goto(url, wait_until="domcontentloaded", timeout=40000)
+                                page.wait_for_timeout(2000)
+                                text = page.inner_text("body")[:5000]
+                                gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
+                                            or "/marketplace/item/" not in page.url)
+                                if not gone:
+                                    from scrapers.store import set_pending
+                                    set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
+                            except Exception as e:
+                                logger.debug("FB sold check failed for %s: %s", url, e)
+                            _record(url, gone)
+                            checked += 1
+                            sold += bool(gone)
+                            time.sleep(1.5)
+            except Exception:
+                logger.exception("Facebook sold check skipped")
+
+    fb_thread = threading.Thread(target=fb_checks, name="sold-check-fb", daemon=True)
+    fb_thread.start()
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="sold-check") as pool:
+        list(pool.map(check_one, http))
+    fb_thread.join()
     logger.info("Sold check: %d listings checked, %d sold or removed, %.0fs", checked, sold, time.time() - start)
     return {"checked": checked, "sold": sold}

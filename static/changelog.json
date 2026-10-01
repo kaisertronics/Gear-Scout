@@ -1,21 +1,34 @@
 [
-  {"date": "2026-10-01", "title": "Faster everywhere", "items": [
-    "Reverb now comes through Reverb's data feed instead of a full browser: about 9 seconds instead of 25, and it sees every listing from the last 3 hours instead of just the first page.",
-    "Facebook groups are read more briefly on hourly refreshes and stop as soon as there's nothing new.",
-    "Dealer stores (Alto, Rudy's, Long & McQuade) are read every 3 hours on hourly refreshes — their stock changes slowly. Full scheduled runs still read them every time.",
-    "Market-price lookups run three at a time, and the hourly sold/pending checks run alongside them instead of after — the hourly refresh finishes in about half the time.",
-    "Pages open faster: the database got indexes for the lookups every page makes, and the dashboard pre-calculates prices and learning data in the background."
-  ]},
-  {"date": "2026-09-30", "title": "Cleaner results, eBay, Telex", "items": [
-    "eBay connected: in scrapes, live search, Lowest Price (cheapest first), market values and Telex searches.",
-    "Broad search words (mic, condenser, preamp…) only count when a listing looks like studio gear: a pro brand, vintage clues, or $200+.",
-    "Filtered out: toys, karaoke, video games, ham radio, tapes/records, home-stereo gear, wireless mic systems, and accessory-only listings (setting).",
-    "Telex: cheapest first, eBay included, 'Search all terms now' and per-term 'Search everywhere' buttons with progress.",
-    "Facebook 'Pending' listings tracked and badged; pending items aren't counted as deals.",
-    "Dashboard: one section per site with a jump bar; a small site tag on every listing."
-  ]},
-  {"date": "2026-09-29", "title": "Smarter comps and learning", "items": [
-    "Comp prices compare like with like: brands recognized anywhere in the title, pedal/plugin/kit/500-series versions valued separately, bundles and parts handled.",
-    "Learning: how fast each model sells and what it went for, offer hints on listings up 3+ weeks, and Facebook post search that spends its time on terms that find posts."
-  ]}
+  {
+    "date": "2026-10-01",
+    "title": "Faster everywhere",
+    "items": [
+      "Reverb now comes through Reverb's data feed instead of a full browser: about 9 seconds instead of 25, and it sees every listing from the last 3 hours instead of just the first page.",
+      "Facebook groups are read more briefly on hourly refreshes and stop as soon as there's nothing new.",
+      "Dealer stores (Alto, Rudy's, Long & McQuade) are read every 3 hours on hourly refreshes — their stock changes slowly. Full scheduled runs still read them every time.",
+      "Market-price lookups run three at a time, and the hourly sold/pending checks run alongside them instead of after — the hourly refresh finishes in about half the time.",
+      "Pages open faster: the database got indexes for the lookups every page makes, and the dashboard pre-calculates prices and learning data in the background.",
+      "Sold/pending checks run several at a time, with Facebook checked alongside — the hourly check went from about 9 minutes to a couple."
+    ]
+  },
+  {
+    "date": "2026-09-30",
+    "title": "Cleaner results, eBay, Telex",
+    "items": [
+      "eBay connected: in scrapes, live search, Lowest Price (cheapest first), market values and Telex searches.",
+      "Broad search words (mic, condenser, preamp…) only count when a listing looks like studio gear: a pro brand, vintage clues, or $200+.",
+      "Filtered out: toys, karaoke, video games, ham radio, tapes/records, home-stereo gear, wireless mic systems, and accessory-only listings (setting).",
+      "Telex: cheapest first, eBay included, 'Search all terms now' and per-term 'Search everywhere' buttons with progress.",
+      "Facebook 'Pending' listings tracked and badged; pending items aren't counted as deals.",
+      "Dashboard: one section per site with a jump bar; a small site tag on every listing."
+    ]
+  },
+  {
+    "date": "2026-09-29",
+    "title": "Smarter comps and learning",
+    "items": [
+      "Comp prices compare like with like: brands recognized anywhere in the title, pedal/plugin/kit/500-series versions valued separately, bundles and parts handled.",
+      "Learning: how fast each model sells and what it went for, offer hints on listings up 3+ weeks, and Facebook post search that spends its time on terms that find posts."
+    ]
+  }
 ]
