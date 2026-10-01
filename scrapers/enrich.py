@@ -123,7 +123,8 @@ _PART_FOR = re.compile(
     r"\b(?:cables?|cords?|case|mount|shock ?mount|clip|tool|wrench|transformers?|tubes?|valves?|knobs?|"
     r"power suppl(?:y|ies)|psu|capsules?|grilles?|foam|windscreen|manual|schematics?|adapter|bracket|"
     r"rack ears?|faceplate|meters?|pcbs?|boards?|pots?|switch|jacks?|cover|bag|spider|screws?|feet|"
-    r"lamp|bulb|fuse|parts?|motor|belt|head ?stack|pinch roller|remote)\b.{0,40}?\b(?:for|fits|from|compatible with)\b",
+    r"lamp|bulb|fuse|parts?|motor|belt|head ?stack|pinch roller|remote|box|panels?|buttons?|"
+    r"decals?|badges?|stickers?|labels?|faders?|caps?|dust covers?)\b.{0,40}?\b(?:for|fits|from|compatible with)\b",
     re.I)
 _PART_WORDS = re.compile(r"\b(?:input|output|interstage|mic) transformers?\b|\bt4b\b|\bopto cell\b", re.I)
 # Vacuum tubes sold on their own (12AX7, EL34, ECC83, 6072…) and parts named
@@ -136,8 +137,12 @@ _PART_NAMED = re.compile(
     r"\b(?:power suppl(?:y|ies)|psu|meter bridge|vu meters?|capstan(?: motor)?|head ?stack|head ?block|"
     r"pinch roller|capsules?|tubes? only|valves? only|faceplate|front panel|chassis only|pcb set|board set|"
     r"tube set|tube kit|valve set|tube replacement|retube kit|transformers?|part:|part #|part number|"
-    r"insert jack|input jack|output jack|channel strip board|replacement (?:board|card|module)|card only)\b", re.I)
-_WITH = re.compile(r"\b(?:with|w/|incl\w*|plus|comes with)\b|\+|&", re.I)
+    r"insert jack|input jack|output jack|channel strip board|replacement (?:board|card|module)|card only|"
+    r"knobs?|lamps?|bulbs?|rack ears?|input panel|break-?in panel|push ?button switch|switch caps?|"
+    r"owners? manual|user manual|service manual|manuals?|brochure|schematics?|catalog|poster)\b", re.I)
+# "comes with" wording — not "&", which also joins words in a part's own name
+# ("Microphone & Line Input Panel").
+_WITH = re.compile(r"\b(?:with|incl\w*|plus|comes with)\b|\bw/", re.I)
 
 
 def _is_named_part(title: str) -> bool:
@@ -416,18 +421,43 @@ def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> li
 # not a Teletronix LA-2A ($3,800) even though the model name matches, so
 # these become part of the model's identity and of its price lookups.
 _FORMS = (
-    ("pedal", re.compile(r"\b(?:pedal|stomp ?box|uafx)\b", re.I)),
-    ("plugin", re.compile(r"\b(?:plug-?in|software|licen[sc]e|vst|aax)\b", re.I)),
+    # Universal Audio's pedals are often listed without the word "pedal":
+    # "Teletronix LA-2A Studio Compressor", "1176 Studio Compressor",
+    # "Golden Reverberator", "Lion '68"…
+    ("pedal", re.compile(
+        r"\b(?:pedal|stomp ?box|uafx|(?:la-?2a|1176|teletronix)\b.{0,30}\bstudio compressor|"
+        r"golden reverberator|starlight echo|galaxy '?74|astra modulation|max preamp|"
+        r"(?:lion|ruby|dream|woodrow|enigmatic|anti|evermore|knuckles)\s*'?\d{2}|orange \w+ amp emulat\w*)", re.I)),
+    ("plugin", re.compile(r"\b(?:plug-?ins?|software|licen[sc]e|vst|aax|download code|"
+                          r"uad-?2 (?:plug|powered plug))\b|\(download\)|\bdigital download\b", re.I)),
     ("kit", re.compile(r"\b(?:diy|pcb|bare boards?|unbuilt|unassembled|(?:partial|build|clone|diy|project) kit|kit (?:build|form|only))\b", re.I)),
     ("500", re.compile(r"\b500[\s-]?series\b|\bapi[\s-]?500\b|\b500 (?:module|format)\b|\(500\)|\b(?:lunchbox|vpr)\b", re.I)),
 )
 
 
+_UA_OWN = {"universal-audio", "teletronix", "urei"}
+
+
 def item_form(title: Optional[str]) -> Optional[str]:
     """'pedal', 'plugin', 'kit', '500' or None (a regular unit)."""
     for name, pattern in _FORMS:
-        if pattern.search(title or ""):
-            return name
+        m = pattern.search(title or "")
+        if not m:
+            continue
+        # "Apollo x8p + 33 UAD Plug-ins", "interface with plugins": software
+        # that comes with the hardware.
+        if name == "plugin" and re.search(r"(?:\+|&|\bwith\b|\bw/|\bincl\w*|\band\b)[^+&]{0,25}$",
+                                          (title or "")[:m.start()], re.I):
+            continue
+        return name
+    # "Universal Audio Empirical Labs Distressor", "UAD Neve 1073": UA's
+    # software versions of other makers' gear (UA doesn't build those).
+    text = (title or "").lower()
+    first = canonical_brand(title)
+    if first == "universal-audio":
+        later = canonical_brand(_BRAND_RE.sub("", text, count=1))
+        if later and later not in _UA_OWN:
+            return "plugin"
     return None
 
 

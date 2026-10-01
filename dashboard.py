@@ -545,7 +545,7 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
         return lambda t: (plain is None or plain in t) and (
             bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
 
-    from scrapers.enrich import item_form
+    from scrapers.enrich import is_accessory_only, is_partial, item_form
     out = []
     for term in terms:
         hits, seen_urls = [], set()
@@ -559,6 +559,10 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
             form = item_form(r["title"])
             if form in ("pedal", "plugin") and form != term_form:
                 continue
+            # Parts and add-ons (knobs, lamps, rack ears, panels, manuals,
+            # anything "for" the model) aren't the gear you're tracking.
+            if is_partial(r["title"]) or is_accessory_only(r["title"]):
+                continue
             if match(text):
                 seen_urls.add(r["url"])
                 hits.append(r)
@@ -569,6 +573,17 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
     # several terms), then hand each group its decorated copies.
     unique = list({id(r): r for _, hits in out for r in hits}.values())
     kept = {id(r) for r in _decorate(unique)}  # adds display fields in place; drops excluded
+
+    def too_cheap(r):
+        # Under 15% of what the model really goes for: a pedal, plugin or
+        # part with a vague title ("Universal Audio Teletronix LA-2A — $110").
+        ctx = r.get("price_ctx") or {}
+        typical = parse_price(ctx.get("typical")) if ctx.get("typical") and not ctx.get("rough") else None
+        value = ctx.get("unit_value") or parse_price(r.get("price"))
+        return bool(typical and value and value < typical * 0.15)
+    from scrapers.enrich import parse_price
+    by_id = {id(r): r for r in unique}
+    kept = {k for k in kept if not too_cheap(by_id[k])}
     from scrapers.enrich import parse_price
 
     def price_order(r):
