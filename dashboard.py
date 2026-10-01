@@ -9,6 +9,8 @@ Run with: python3 dashboard.py  (inside the container — see docker-compose.yml
 """
 import json
 from typing import Optional
+
+from scrapers.comps import best_comp, similar_index
 import logging
 import os
 import re
@@ -302,10 +304,11 @@ _price_index_cache: dict = {"at": 0.0, "index": None}
 def _price_index() -> dict:
     """Typical prices from local history — rebuilt at most every 5 minutes
     (it reads every priced listing and takes a couple of seconds)."""
-    from scrapers.enrich import build_price_index
-    if _price_index_cache["index"] is None or time.time() - _price_index_cache["at"] > 300:
-        _price_index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
-    return _price_index_cache["index"]
+    from scrapers.comps import _index_cache, price_index
+    if _price_index_cache["at"] == 0:
+        _index_cache["at"] = 0  # forced rebuild requested (cache warmer)
+    _price_index_cache["at"] = time.time()
+    return price_index()
 
 
 def _decorate(listings: list[dict]) -> list[dict]:
@@ -386,12 +389,12 @@ def _decorate(listings: list[dict]) -> list[dict]:
 def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
     """Splits decorated listings into ones at least 10% under their comp
     (B-stock value when the model has one, else the best comp from
-    _telex_comp) and ones with no comp yet. Listings above the threshold are
+    scrapers/comps.py) and ones with no comp yet. Listings above the threshold are
     dropped. Favorites always stay; auctions (a current bid isn't a price)
     go with the no-comp group."""
     from scrapers.enrich import parse_price
     from scrapers.market import load_market
-    market, index, similar = load_market(), _price_index(), _similar_index()
+    market, index, similar = load_market(), _price_index(), similar_index()
     worth, no_comp = [], []
     for l in listings:
         if l.get("favorite"):
@@ -405,7 +408,7 @@ def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
         if ctx.get("bstock") and not ctx.get("rough"):
             ref, label, est = parse_price(ctx["bstock"]), "B-stock", False
         else:
-            comp = _telex_comp(l, market, index, similar, None, None)
+            comp = best_comp(l, market, index, similar, None, None)
             if not comp:
                 no_comp.append(l)
                 continue
@@ -650,13 +653,13 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
         return (placeholder, value or 0)
 
     # Your rule: a listing shows only when it's 10%+ under its comp. Every
-    # listing gets the most trustworthy comp available (see _telex_comp);
+    # listing gets the most trustworthy comp available (see scrapers/comps.py);
     # only the few with nothing at all to go on are set aside.
     from scrapers.enrich import _ALIAS_TO_BRAND, canonical_brand, is_generic_term, model_key
     from scrapers.market import load_market
     market = load_market()
     index = _price_index()
-    similar = _similar_index()
+    similar = similar_index()
 
     out_groups = []
     for term, hits in out:
@@ -680,7 +683,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
             term_ref = None
         term_comp = (term_ref, f"{market.sources.get(tkey) or 'Reverb'} “{term}”") if term_ref else None
         for r in sorted((r for r in hits if id(r) in kept), key=price_order):
-            comp = _telex_comp(r, market, index, similar, term_comp, term_brand)
+            comp = best_comp(r, market, index, similar, term_comp, term_brand)
             value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
             if comp and value:
                 ref, label, est = comp
@@ -699,97 +702,6 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
     except OSError:
         pass
     return out_groups
-
-
-def _telex_comp(r, market, index, similar, term_comp, term_brand):
-    """(comp price, where it came from, is it only an estimate) for a
-    listing — the most trustworthy source first:
-      1. what the model actually sold for (listings Gear Scout watched sell)
-      2. Reverb / eBay used price for the model
-      3. Gear Scout's own price history for the model (all sites, incl. sold)
-      4. Reverb / eBay price of the Telex term (specific products, same brand)
-      5. similar past listings sharing the item's key words (estimate)"""
-    from scrapers.enrich import canonical_brand, is_partial, model_key, value_key
-    title = r.get("title") or ""
-    mkey, key = model_key(title), value_key(title)
-    unreliable = market.rough | market.mixed | market.distrusted
-    if mkey and mkey in market.sold and mkey not in market.distrusted:
-        return market.sold[mkey], "sold", False
-    if key and key[:2] not in ("t:", "p:") and key in market and key not in unreliable:
-        return market[key], f"{market.sources.get(key) or 'Reverb'} used", False
-    if mkey and mkey in index and not is_partial(title) and mkey not in market.distrusted:
-        return index[mkey], "Gear Scout history", False
-    if term_comp and canonical_brand(title) == term_brand:
-        return term_comp[0], term_comp[1], False
-    est = _similar_price(similar, title, r.get("url"))
-    if est:
-        return est, "similar listings", True
-    # A rougher Reverb/eBay lookup (few listings, or a looser search) is still
-    # better than nothing — as an estimate. Disputed or mixed-up ones aren't.
-    if key and key in market and key not in market.distrusted and key not in market.mixed:
-        return market[key], f"{market.sources.get(key) or 'Reverb'}", True
-    return None
-
-
-_similar_cache: dict = {"at": 0.0, "data": None}
-_SIM_SKIP = {"vintage", "used", "new", "mint", "excellent", "great", "good", "condition", "with", "and",
-             "for", "the", "sale", "selling", "black", "silver", "white", "pair", "works", "working",
-             "tested", "audio", "pro", "professional", "studio", "original", "rare", "box", "case",
-             "free", "shipping", "local", "pickup", "obo", "price", "each", "only", "like", "series"}
-
-
-def _sim_words(title: str) -> list[str]:
-    return [w for w in dict.fromkeys(re.findall(r"[a-z0-9][a-z0-9-]*[a-z0-9]", (title or "").lower()))
-            if len(w) >= 3 and w not in _SIM_SKIP and not re.fullmatch(r"(?:19|20)\d\ds?|\d{1,2}", w)]
-
-
-def _similar_index():
-    """Word -> listings index over every priced listing Gear Scout has ever
-    stored (all sites, including ones that sold), for "similar listings"
-    comps. Rebuilt every 10 minutes."""
-    if _similar_cache["data"] is not None and time.time() - _similar_cache["at"] < 600:
-        return _similar_cache["data"]
-    from scrapers.enrich import is_bundle, is_not_audio, is_partial, parse_price, quantity
-    from scrapers.store import _conn
-    prices, urls, words = [], [], {}
-    with _conn() as conn:
-        rows = conn.execute("SELECT title, price, url FROM seen WHERE price IS NOT NULL AND duplicate = 0").fetchall()
-    for title, price, url in rows:
-        value = parse_price(price)
-        if (not value or value < 20 or is_partial(title) or is_bundle(title) or is_not_audio(title)
-                or quantity(title) > 1):
-            continue
-        i = len(prices)
-        prices.append(value)
-        urls.append(url)
-        for w in _sim_words(title):
-            words.setdefault(w, set()).add(i)
-    data = {"prices": prices, "urls": urls, "words": words}
-    _similar_cache.update(at=time.time(), data=data)
-    return data
-
-
-def _similar_price(sim, title: str, url: Optional[str]) -> Optional[float]:
-    """Median price of stored listings sharing this one's most specific words
-    (rarest first): 3 words, else 2, needing 4+ listings with consistent
-    prices."""
-    import statistics
-    ws = [w for w in _sim_words(title) if w in sim["words"] and len(sim["words"][w]) >= 2]
-    ws.sort(key=lambda w: len(sim["words"][w]))
-    for n in (3, 2):
-        if len(ws) < n:
-            continue
-        ids = set.intersection(*(sim["words"][w] for w in ws[:n]))
-        vals = sorted(sim["prices"][i] for i in ids if sim["urls"][i] != url)
-        if len(vals) >= 4 and vals[(len(vals) * 3) // 4] <= 3 * vals[len(vals) // 4]:
-            return statistics.median(vals)
-    # Just the model number ("MK-219", "CM7") when it's the only telling word.
-    for w in ws[:2]:
-        if re.search(r"\d", w) and re.search(r"[a-z]", w):
-            vals = sorted(sim["prices"][i] for i in sim["words"][w] if sim["urls"][i] != url)
-            if len(vals) >= 3 and vals[(len(vals) * 3) // 4] <= 3 * vals[len(vals) // 4]:
-                return statistics.median(vals)
-    return None
 
 
 _telex_cache: dict = {"key": None, "at": 0.0, "groups": None}
@@ -1379,8 +1291,11 @@ def fb_posts_page():
     from scrapers.fb_posts import priority_terms
     cfg = load_config_raw()
     rows = _fbposts_rows()
+    # Same rule as everywhere: posts 10%+ under their comp; the rest of the
+    # posts with no comp (most posts have no clear price) are collapsed.
+    worth, no_comp = _apply_comp_rule(_decorate(rows))
     groups: dict[str, list[dict]] = {}
-    for r in _decorate(rows):
+    for r in worth:
         groups.setdefault(r["source_name"].replace("FB Posts — ", ""), []).append(r)
     try:
         status = json.loads(FBPOSTS_STATUS_PATH.read_text())
@@ -1389,6 +1304,7 @@ def fb_posts_page():
     return render_template(
         "fb_posts.html",
         groups=sorted(groups.items()),
+        no_comp=no_comp,
         terms=priority_terms(cfg),
         enabled=any(s.get("type") == "facebook_posts" and s.get("enabled", True) for s in cfg.get("sources", [])),
         status=status,

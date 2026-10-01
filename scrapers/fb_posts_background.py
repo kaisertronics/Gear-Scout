@@ -260,7 +260,7 @@ def roundup_rows(hours: int = 24) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def build_roundup_html(rows: list[dict], dashboard_url: str) -> str:
+def build_roundup_html(rows: list[dict], dashboard_url: str, no_comp: int = 0) -> str:
     from html import escape
     cards = []
     for r in rows:
@@ -272,6 +272,10 @@ def build_roundup_html(rows: list[dict], dashboard_url: str) -> str:
                  if r.get("price") else "")
         from scrapers.timefmt import local_time
         when = local_time(r.get("posted_at"))
+        comp = r.get("comp")
+        if comp:
+            price += (f'<span style="font-size:11px;color:#166534;font-weight:600;">&nbsp;{escape(comp["label"])} '
+                      f'~${comp["ref"]:,.0f}{" (est.)" if comp.get("est") else ""} · {comp["pct"]}% under</span>')
         cards.append(f"""
         <div style="display:flex;gap:12px;padding:12px;margin-bottom:8px;background:#fff;
              border:1px solid #e2e8f0;border-radius:10px;align-items:flex-start;">
@@ -289,7 +293,8 @@ def build_roundup_html(rows: list[dict], dashboard_url: str) -> str:
         <h2 style="color:#1e3a5f;margin:0 0 4px;">Facebook posts roundup</h2>
         <p style="color:#64748b;margin:0 0 14px;font-size:14px;">
           {len(rows)} for-sale post{'s' if len(rows) != 1 else ''} found in the last 24 hours while searching
-          your whole term list in the background. Every post here is from the last 14 days.</p>
+          your whole term list in the background — only ones at least 10% under their comp. Every post here
+          is from the last 14 days.{f" {no_comp} more had no price or nothing to compare against (see FB Posts)." if no_comp else ""}</p>
         <p style="margin:0 0 16px;"><a href="{escape(dashboard_url)}/fb-posts"
            style="display:inline-block;padding:10px 16px;background:#1e3a5f;color:#fff;border-radius:8px;
            text-decoration:none;font-weight:600;">Open FB Posts in Gear Scout →</a></p>
@@ -299,13 +304,25 @@ def build_roundup_html(rows: list[dict], dashboard_url: str) -> str:
 
 def send_roundup(cfg: dict) -> bool:
     from scrapers.emailer import send_html_email
-    rows = roundup_rows()
+    from scrapers.comps import evaluate, price_index, similar_index
+    from scrapers.market import load_market
+    all_rows = roundup_rows()
     st = state()
+    # Same rule as everywhere: only posts 10%+ under their comp.
+    market, index, similar = load_market(), price_index(), similar_index()
+    rows, no_comp = [], 0
+    for r in all_rows:
+        c = evaluate(r.get("title"), r.get("price"), r.get("description"), r.get("url"), market, index, similar)
+        if not c:
+            no_comp += 1
+        elif c["worth"]:
+            r["comp"] = c
+            rows.append(r)
     if not rows:
-        logger.info("FB posts roundup: nothing new in the last 24 hours — no email.")
+        logger.info("FB posts roundup: %d posts, none 10%%+ under a comp — no email.", len(all_rows))
         return False
     email_cfg = cfg["email"]
-    html = build_roundup_html(rows, email_cfg.get("dashboard_url", "http://localhost:8420"))
+    html = build_roundup_html(rows, email_cfg.get("dashboard_url", "http://localhost:8420"), no_comp)
     ok = send_html_email(html, f"Gear Scout — Facebook posts roundup: {len(rows)} for sale "
                                f"({st.get('today_count') or 0} searches today)", email_cfg)
     logger.info("FB posts roundup email %s (%d posts)", "sent" if ok else "FAILED", len(rows))

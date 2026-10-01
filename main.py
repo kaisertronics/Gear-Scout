@@ -99,6 +99,26 @@ def _found_since_last_digest(exclude: set[str]) -> list:
     return out
 
 
+def _worth_only(listings: list) -> tuple[list, int]:
+    from scrapers.comps import evaluate, price_index, similar_index
+    from scrapers.market import load_market
+    market, index, similar = load_market(), price_index(), similar_index()
+    keep, no_comp = [], 0
+    for l in listings:
+        if (l.description or "").startswith("Auction"):
+            no_comp += 1
+            continue
+        c = evaluate(l.title, l.price, l.description, l.url, market, index, similar)
+        if not c:
+            no_comp += 1
+        elif c["worth"]:
+            l.comp = c
+            keep.append(l)
+    logger.info("Digest: %d of %d new listings are 10%%+ under their comp (%d without a comp)",
+                len(keep), len(listings), no_comp)
+    return keep, no_comp
+
+
 def run_refresh_cycle(cfg: dict):
     """Hourly background refresh (no email): re-reads every source so the
     dashboard always has the latest. Lighter than a full run — Facebook
@@ -259,6 +279,16 @@ def _run_scrape_cycle():
         logger.exception("Saving pictures failed")
     # Plus what the hourly background refreshes found since the last email.
     new_listings += _found_since_last_digest({l.global_id for l in new_listings})
+    # Only what's worth your time: 10%+ under its comp. Auctions (a current
+    # bid isn't a price) and listings with no comp yet aren't emailed; the
+    # email says how many there were.
+    # Give brand-new finds a comp first (quick lookups), then filter.
+    try:
+        refresh_market_prices([l.title for l in new_listings], build_price_index(all_priced_rows()),
+                              max_lookups=60, pause=0.2, cfg=cfg)
+    except Exception:
+        logger.exception("Market price lookup for new listings failed")
+    new_listings, no_comp_count = _worth_only(new_listings)
 
     failed_sources = [r for r in results if not r.success]
     has_failures = bool(failed_sources)
@@ -274,12 +304,6 @@ def _run_scrape_cycle():
     # Typical prices for models seen too rarely locally: look them up on
     # Reverb (cached, capped per run) so this run's listings and email get one.
     local_index = build_price_index(all_priced_rows())
-    try:
-        # A few before the email (so it has values); the rest after it, so
-        # lookups never hold up the email by several minutes.
-        refresh_market_prices([l.title for l in new_listings], local_index, max_lookups=30, cfg=cfg)
-    except Exception:
-        logger.exception("Reverb market price refresh failed")
 
     # Favorites: re-check each one's own page for a price change, then gather
     # any drops not yet reported (from this check or from scrapes above).
@@ -316,6 +340,7 @@ def _run_scrape_cycle():
             price_index=local_index,
             market_index=load_market(),
             price_drops=price_drops,
+            no_comp_count=no_comp_count,
         )
         success = send_email(
             html=html,

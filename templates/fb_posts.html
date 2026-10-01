@@ -74,8 +74,16 @@
     </div>
   </section>
   {% else %}
-  <section class="panel"><p class="muted">No Facebook posts found in the last 14 days yet.</p></section>
+  <section class="panel"><p class="muted">No posts 10%+ under their comp in the last 14 days.</p></section>
   {% endfor %}
+  {% if no_comp %}
+  <section class="panel">
+    <details class="more-listings">
+      <summary class="muted">{{ no_comp|length }} more post{{ '' if no_comp|length == 1 else 's' }} with no price or nothing to compare against — tap to look</summary>
+      <div class="listing-grid">{% for l in no_comp %}{{ listing_card(l) }}{% endfor %}</div>
+    </details>
+  </section>
+  {% endif %}
 
   <script>
     const fbBanner = document.getElementById('fbposts-status');

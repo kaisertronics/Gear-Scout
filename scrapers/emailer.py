@@ -36,12 +36,15 @@ def build_email_html(
     price_index: Optional[dict] = None,
     market_index: Optional[dict] = None,
     price_drops: Optional[list[dict]] = None,
+    no_comp_count: int = 0,
 ) -> str:
     """
     Build a full HTML email.
     - Top section: new listings (only sent when there are some)
     - Bottom section: source status report (always included)
     """
+    no_comp_note = (f" — {no_comp_count} more new listing{'s' if no_comp_count != 1 else ''} had nothing to compare"
+                    " against yet (or were auctions) and are on the dashboard") if no_comp_count else ""
 
     # --- Source status tiles ---
     # Blocked sources (Guitar Center/Sweetwater/eBay behind Akamai) aren't
@@ -190,7 +193,12 @@ def build_email_html(
                 if ctx.get("note"):
                     price_html += f"""
                 <span style="font-size:11px;color:#b45309;font-weight:600;">&nbsp;{ctx['note']}</span>"""
-                if ctx.get("typical"):
+                comp = getattr(item, "comp", None)
+                if comp:
+                    est = " (est.)" if comp.get("est") else ""
+                    price_html += f"""
+                <span style="font-size:11px;color:#166534;font-weight:600;">&nbsp;{comp['label']} ~${comp['ref']:,.0f}{est} · {comp['pct']}% under</span>"""
+                elif ctx.get("typical"):
                     each = " each" if ctx.get("qty", 1) > 1 else ""
                     price_html += f"""
                 <span style="font-size:11px;color:#94a3b8;">&nbsp;{ctx['label']}{each}</span>"""
@@ -285,7 +293,7 @@ def build_email_html(
           border-radius:8px;display:flex;align-items:center;justify-content:space-between;
           flex-wrap:wrap;gap:10px;">
         <span style="color:#ffffff;font-size:13px;">
-          This email never lists <strong>all</strong> your results — only a capped preview.
+          Only listings at least <strong>10% under their comp</strong> are listed here{no_comp_note}.
         </span>
         <a href="{dashboard_url}" target="_blank" rel="noopener"
            style="display:inline-block;padding:8px 18px;background:#ffffff;
