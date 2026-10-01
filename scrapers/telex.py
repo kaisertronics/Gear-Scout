@@ -2,7 +2,7 @@
 Telex List sweep: actively searches each Telex term on the sites where a
 listing can hide from the regular scrapes — the ones that are browsed as a
 feed rather than read in full (Facebook Marketplace in all 8 regions, your
-Facebook groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb, Long &
+Facebook groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb, eBay, Long &
 McQuade). Each hourly cycle searches the next few terms, so the whole list
 comes around several times a day. Finds are stored like any scrape result:
 they show on the Telex page and the Dashboard and go into the next digest.
@@ -31,7 +31,8 @@ def terms(cfg: dict) -> list[str]:
 
 def sweep_sources(cfg: dict) -> list[dict]:
     return [s for s in cfg.get("sources", []) if s.get("enabled", True) and (
-        s.get("type") in SEARCH_TYPES or "reverb.com" in (s.get("url") or ""))]
+        s.get("type") in SEARCH_TYPES or "reverb.com" in (s.get("url") or "")
+        or "ebay.com" in (s.get("url") or ""))]
 
 
 def state() -> dict[str, dict]:
