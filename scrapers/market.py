@@ -49,6 +49,7 @@ class MarketIndex(dict):
         super().__init__(*args, **kwargs)
         self.sources: dict[str, str] = {}
         self.rough: set[str] = set()
+        self.bstock: dict[str, tuple[float, str]] = {}  # key -> (B-stock value, how it was found)
 
 
 def _ensure_table(conn):
@@ -64,6 +65,9 @@ def _ensure_table(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(market_prices)")}
     if "source" not in cols:
         conn.execute("ALTER TABLE market_prices ADD COLUMN source TEXT")
+    if "bstock" not in cols:
+        conn.execute("ALTER TABLE market_prices ADD COLUMN bstock REAL")
+        conn.execute("ALTER TABLE market_prices ADD COLUMN bstock_basis TEXT")
     if "loose" not in cols:
         # 1 = found only after loosening the search — shown as a rough estimate.
         conn.execute("ALTER TABLE market_prices ADD COLUMN loose INTEGER DEFAULT 0")
@@ -111,21 +115,56 @@ def _usable(title: str, query: str, value: Optional[float]) -> bool:
                 and (keyword_match(title, [query]) or _title_fits(title, query)))
 
 
-def _reverb_prices(query: str) -> list[float]:
+_by_condition_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _reverb_by_condition(query: str) -> dict[str, list[float]]:
+    """{condition: [prices]} for Reverb listings that really match `query`
+    — one API call serves both the used value and the B-stock value."""
+    cached = _by_condition_cache.get(query)
+    if cached and time.time() - cached[0] < 600:
+        return cached[1]
     resp = requests.get(API_URL, params={"query": query, "per_page": 50},
                         headers=HEADERS, timeout=20)
     resp.raise_for_status()
-    prices = []
+    out: dict[str, list[float]] = {}
     for item in resp.json().get("listings", []) or []:
         title = item.get("title") or ""
         price = item.get("price") or {}
         condition = ((item.get("condition") or {}).get("display_name") or "").lower()
-        if price.get("currency") != "USD" or condition in _SKIP_CONDITIONS:
+        if price.get("currency") != "USD":
             continue
         value = parse_price(str(price.get("amount") or ""))
         if _usable(title, query, value):
-            prices.append(value)
-    return prices
+            out.setdefault(condition, []).append(value)
+    if len(_by_condition_cache) > 2000:
+        _by_condition_cache.clear()
+    _by_condition_cache[query] = (time.time(), out)
+    return out
+
+
+def _reverb_prices(query: str) -> list[float]:
+    return [v for c, vs in _reverb_by_condition(query).items() if c not in _SKIP_CONDITIONS for v in vs]
+
+
+def bstock_value(query: str, used_typical: Optional[float] = None) -> tuple[Optional[float], Optional[str]]:
+    """What a dealer B-stock / open-box unit goes for: Reverb's B-Stock
+    listings (2+), else 85% of the Brand New price (3+ listings) — dealer
+    B-stock usually runs 10–20% under new. None for gear with no new or
+    B-stock equivalent (vintage). A "new" price far under the used value is
+    accessories or clones, not the item, and is ignored."""
+    import statistics
+    d = _reverb_by_condition(query)
+    b, new = d.get("b-stock") or [], d.get("brand new") or []
+    if len(b) >= 2:
+        value, basis = statistics.median(b), "B-stock listings"
+    elif len(new) >= 3:
+        value, basis = statistics.median(new) * 0.85, "new price −15%"
+    else:
+        return None, None
+    if used_typical and value < used_typical * 0.6:
+        return None, None
+    return value, basis
 
 
 def _ebay_prices(query: str, api_cfg: dict) -> list[float]:
@@ -255,14 +294,16 @@ def load_market() -> MarketIndex:
     with _conn() as conn:
         _ensure_table(conn)
         rows = conn.execute(
-            "SELECT model_key, typical, source, samples, loose FROM market_prices"
+            "SELECT model_key, typical, source, samples, loose, bstock, bstock_basis FROM market_prices"
             " WHERE typical IS NOT NULL AND fetched_at >= ?",
             (cutoff,),
         ).fetchall()
     market = MarketIndex()
-    for key, typical, source, samples, loose in rows:
+    for key, typical, source, samples, loose, bstock, bstock_basis in rows:
         market[key] = typical
         market.sources[key] = source or "Reverb"
+        if bstock and not loose:
+            market.bstock[key] = (bstock, bstock_basis or "")
         if (samples or 0) < MIN_SAMPLES or loose:
             market.rough.add(key)
     return market
@@ -314,8 +355,14 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
             if tq:
                 typical, n, label, used = market_typical(tq, ebay_cfg, loosen=True)
                 loose = True
+        bstock, basis = (None, None)
+        if typical and not loose and key[:2] not in ("t:", "p:"):
+            try:
+                bstock, basis = bstock_value(used, typical)
+            except Exception:
+                pass
         time.sleep(pause)
-        return key, typical, n, label, used, loose
+        return key, typical, n, label, used, loose, bstock, basis
 
     # Three lookups at a time — several times faster, still gentle on
     # Reverb and eBay. Results are written as they arrive.
@@ -325,7 +372,7 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
         futures = {pool.submit(lookup, k, q): q for k, q in todo}
         for fut in as_completed(futures):
             try:
-                key, typical, n, label, used, loose = fut.result()
+                key, typical, n, label, used, loose, bstock, basis = fut.result()
             except Exception as e:
                 logger.warning("Market price lookup failed for %r: %s", futures[fut], e)
                 continue
@@ -333,8 +380,10 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
                 _ensure_table(conn)
                 conn.execute(
                     "INSERT OR REPLACE INTO market_prices"
-                    " (model_key, query, typical, samples, fetched_at, source, loose) VALUES (?,?,?,?,?,?,?)",
-                    (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose)),
+                    " (model_key, query, typical, samples, fetched_at, source, loose, bstock, bstock_basis)"
+                    " VALUES (?,?,?,?,?,?,?,?,?)",
+                    (key, used, typical, n, datetime.now(timezone.utc).isoformat(), label, int(loose),
+                     bstock, basis),
                 )
                 conn.commit()
             if typical:

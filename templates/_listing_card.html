@@ -33,6 +33,9 @@
       {% if l.price_ctx and l.price_ctx.typical %}
         <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
+      {% if l.price_ctx and l.price_ctx.bstock %}
+        <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
+      {% endif %}
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}

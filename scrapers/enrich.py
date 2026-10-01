@@ -930,6 +930,17 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         "pct_under": round((1 - unit / typical) * 100) if unit else None,
         "source": source,
     })
+    # "Worth a look": at least 10% under what a dealer B-stock / open-box
+    # unit costs (or, for vintage gear with no such thing, under a solid
+    # used value). Needs a comp to judge.
+    bstock = (getattr(market, "bstock", {}) or {}).get(key or "") if market else None
+    reference = bstock[0] if bstock else (None if rough else typical)
+    if bstock:
+        ctx["bstock"] = format_price(bstock[0])
+        ctx["bstock_basis"] = bstock[1]
+    if reference and unit:
+        ctx["worth"] = unit <= reference * 0.9
+        ctx["under_ref_pct"] = round((1 - unit / reference) * 100)
     if source == "local":
         ctx["label"] = f"typically ~{ctx['typical']}"
         ctx["label_title"] = "Typical price of this model across listings Gear Scout has seen"

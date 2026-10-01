@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-01",
+    "title": "B-stock value and 'Worth it only'",
+    "items": [
+      "Each model now gets a B-stock value: what a dealer B-stock / open-box unit goes for (Reverb B-stock listings, or 85% of the new price). Cards show 'B-stock ~$X'.",
+      "New 'Worth it only' switch on the Dashboard and search: only listings at least 10% under B-stock value (or under the used value for vintage gear with no B-stock version)."
+    ]
+  },
+  {
+    "date": "2026-10-01",
     "title": "Picked for you = real deals; cleaner Deals",
     "items": [
       "Picked for you now only shows gear like your favorites that is 20%+ under a solid market value and within your usual price range (learned from your favorites), best deals first.",

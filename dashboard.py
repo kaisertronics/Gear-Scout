@@ -292,7 +292,8 @@ def _distance_filter_context():
     except Exception:
         home_zip = ""
     return {"home_zip_set": bool(home_zip), "within_value": request.args.get("within", ""),
-            "deals_only": request.args.get("deals") == "1"}
+            "deals_only": request.args.get("deals") == "1",
+            "worth_only": request.args.get("worth") == "1"}
 
 
 _price_index_cache: dict = {"at": 0.0, "index": None}
@@ -324,6 +325,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
     except ValueError:
         within = 0
     deals_only = request.args.get("deals") == "1"
+    worth_only = request.args.get("worth") == "1"
     index = _price_index()
     from scrapers.market import load_market
     market = load_market()
@@ -371,6 +373,10 @@ def _decorate(listings: list[dict]) -> list[dict]:
             continue
         l["is_deal"] = bool(l["price_ctx"] and l["price_ctx"].get("deal"))
         if deals_only and not l["is_deal"]:
+            continue
+        # "Worth it only": 10%+ under B-stock value (or a solid used value for
+        # vintage gear); listings without a comp yet are left out.
+        if worth_only and not (l["price_ctx"] or {}).get("worth"):
             continue
         out.append(l)
     return out
