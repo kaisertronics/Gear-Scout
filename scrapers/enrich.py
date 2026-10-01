@@ -139,7 +139,8 @@ _PART_NAMED = re.compile(
     r"tube set|tube kit|valve set|tube replacement|retube kit|transformers?|part:|part #|part number|"
     r"insert jack|input jack|output jack|channel strip board|replacement (?:board|card|module)|card only|"
     r"knobs?|lamps?|bulbs?|rack ears?|input panel|break-?in panel|push ?button switch|switch caps?|"
-    r"owners? manual|user manual|service manual|manuals?|brochure|schematics?|catalog|poster)\b", re.I)
+    r"owners? manual|user manual|service manual|manuals?|brochure|schematics?|catalog|poster|"
+    r"parts (?:original|lot|only|unit)|spare parts|parts\s*$)\b", re.I)
 # "comes with" wording — not "&", which also joins words in a part's own name
 # ("Microphone & Line Input Panel").
 _WITH = re.compile(r"\b(?:with|incl\w*|plus|comes with)\b|\bw/", re.I)
@@ -276,7 +277,10 @@ _JUNK = re.compile(
     # consumer / car / PA / hi-fi speakers
     r"bluetooth|helmet|bike|bicycle|car (?:speakers?|subwoofer|stereo)|subwoofer box|dd audio|kicker|"
     r"rockford|jl audio|skar|sundown audio|ultra boom|party ?box|partybox|pa system|pa speakers?|"
-    r"dj speakers?|bookshelf|wharfedale|tower speakers?|floor ?standing|home audio|soundbar|sound bar)\b", re.I)
+    r"dj speakers?|bookshelf|wharfedale|tower speakers?|floor ?standing|home audio|soundbar|sound bar|"
+    r"rental only|for rent|rentals?|rent (?:only|per day|by the day)|"
+    r"dryer|washer|washing machine|dishwasher|refrigerator|fridge|microwave|oven|stove|range hood|"
+    r"kenmore|whirlpool|maytag|frigidaire|vacuum cleaner|lawn ?mower|chainsaw|generator)\b", re.I)
 
 # A listing that is only an accessory: cables, stands, cases, pop filters…
 # ("Neumann U87 with case" is the mic; "Microphone stand and pop filter" isn't).
@@ -939,7 +943,11 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
         ctx["bstock"] = format_price(bstock[0])
         ctx["bstock_basis"] = bstock[1]
     if reference and unit:
-        ctx["worth"] = unit <= reference * 0.9
+        # Same guards as deals: no parts/bundles, no placeholder prices, and
+        # more than 85% under is a mismatch (or a "$1, make an offer"), not
+        # a real price.
+        ctx["worth"] = (not partial and not is_bundle(title) and unit >= 20
+                        and reference * 0.2 <= unit <= reference * 0.9)
         ctx["under_ref_pct"] = round((1 - unit / reference) * 100)
     if source == "local":
         ctx["label"] = f"typically ~{ctx['typical']}"

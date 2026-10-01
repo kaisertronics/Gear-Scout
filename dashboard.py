@@ -366,6 +366,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
         l["is_auction"] = (l.get("description") or "").startswith("Auction")
         if (l.get("sold") or l.get("pending") or l["is_auction"]) and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
+            l["price_ctx"]["worth"] = False  # a current bid isn't a price
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
         # Listings with no known distance (shipped-item sites, older rows)
         # stay visible — the radius only filters what can be measured.
