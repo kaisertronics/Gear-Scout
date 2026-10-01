@@ -832,3 +832,4 @@ section[id^="src-"] { scroll-margin-top: 64px; }
   .source-tag-offerup { background: #14532d; color: #dcfce7; } .source-tag-kijiji { background: #0c4a6e; color: #e0f2fe; }
   .source-tag-sgw { background: #1e3a8a; color: #dbeafe; } .source-tag-forum { background: #831843; color: #fce7f3; }
 }
+.whats-new-list { margin: 8px 0 0; padding-left: 20px; line-height: 1.55; } .whats-new-list li { margin-bottom: 6px; }

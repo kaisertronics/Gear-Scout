@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — What's new{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>🆕 What's new</h2>
+    <p class="muted">Improvements to Gear Scout, newest first.</p>
+  </section>
+  {% for e in entries %}
+  <section class="panel">
+    <h2>{{ e.title }} <span class="muted">— {{ e.date }}</span></h2>
+    <ul class="whats-new-list">
+      {% for item in e["items"] %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <section class="panel"><p class="muted">Nothing here yet.</p></section>
+  {% endfor %}
+{% endblock %}

@@ -607,6 +607,15 @@ def telex_remove():
     return redirect(url_for("telex"))
 
 
+@app.route("/whats-new")
+def whats_new():
+    try:
+        entries = json.loads((Path(app.static_folder) / "changelog.json").read_text())
+    except Exception:
+        entries = []
+    return render_template("whats_new.html", entries=entries)
+
+
 @app.route("/learning")
 def learning_page():
     from scrapers import learning as L
