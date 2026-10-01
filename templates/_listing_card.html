@@ -65,6 +65,11 @@
     <button type="submit" class="fav-star {{ 'is-favorite' if l.favorite else '' }}" title="{{ 'Remove from favorites' if l.favorite else 'Add to favorites' }}">★</button>
   </form>
 
+  <form method="post" action="{{ url_for('telex_add_from_listing') }}" class="listing-telex-form">
+    <input type="hidden" name="title" value="{{ l.title }}">
+    <button type="submit" class="telex-add-btn" title="Add this to your Telex List" aria-label="Add this to your Telex List">📋</button>
+  </form>
+
   <form method="post" action="{{ url_for('listing_hide') }}" class="listing-hide-form">
     <input type="hidden" name="global_id" value="{{ l.global_id }}">
     <input type="hidden" name="next" value="{{ request.full_path }}">

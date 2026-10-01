@@ -75,6 +75,22 @@
         return;
       }
 
+      if (form.classList.contains('listing-telex-form')) {
+        e.preventDefault();
+        const btn = form.querySelector('button');
+        btn.disabled = true;
+        let msg = 'Couldn’t add that — try again.';
+        try {
+          const resp = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+          const data = await resp.json();
+          msg = data.message || msg;
+          if (data.ok) { btn.textContent = '✓'; btn.classList.add('is-added'); }
+        } catch (err) { /* keep the default message */ }
+        btn.disabled = false;
+        gsToast(msg);
+        return;
+      }
+
       if (form.classList.contains('listing-hide-form')) {
         e.preventDefault();
         const card = form.closest('.listing-card');
@@ -119,6 +135,16 @@
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   </script>
+<div id="gs-toast" class="gs-toast" role="status" aria-live="polite"></div>
+<script>
+  function gsToast(text) {
+    const t = document.getElementById('gs-toast');
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+</script>
 <script>
   // Progress bar inside a status banner. `data` is a status payload:
   // {done, total, started (seconds), current_source}. With no total yet it

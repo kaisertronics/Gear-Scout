@@ -833,3 +833,12 @@ section[id^="src-"] { scroll-margin-top: 64px; }
   .source-tag-sgw { background: #1e3a8a; color: #dbeafe; } .source-tag-forum { background: #831843; color: #fce7f3; }
 }
 .whats-new-list { margin: 8px 0 0; padding-left: 20px; line-height: 1.55; } .whats-new-list li { margin-bottom: 6px; }
+
+.listing-telex-form { position: absolute; top: 40px; right: 6px; margin: 0; }
+.telex-add-btn { border: none; cursor: pointer; background: rgba(255,255,255,0.9); width: 28px; height: 28px;
+  border-radius: 50%; font-size: 14px; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.15); padding: 0; }
+.telex-add-btn.is-added { background: #dcfce7; color: #166534; font-weight: 700; }
+.gs-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0;
+  background: #1e293b; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: 90vw;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 50; }
+.gs-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

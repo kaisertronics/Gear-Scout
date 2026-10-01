@@ -706,6 +706,43 @@ def telex_add():
     return redirect(url_for("telex"))
 
 
+def _telex_term_for(title: str) -> Optional[str]:
+    """The Telex term for a listing: brand + model ("neumann U87 ai"), or
+    its first few meaningful words when there's no model number."""
+    from scrapers.enrich import model_query, title_query
+    q = model_query(title)
+    if q:
+        return q.strip()
+    words = (title_query(title) or "").split()
+    return " ".join(words[:4]) or None
+
+
+@app.route("/telex/add-from-listing", methods=["POST"])
+def telex_add_from_listing():
+    """One-click "add to Telex" from any listing card."""
+    global _telex_thread
+    term = _telex_term_for(request.form.get("title", ""))
+    if not term:
+        return jsonify({"ok": False, "message": "Couldn't work out a search term for this one."}), 400
+    cfg = load_config_for_edit()
+    terms = list(cfg.get("telex_list") or [])
+    already = term.lower() in (str(t).lower() for t in terms)
+    if not already:
+        cfg["telex_list"] = terms + [term]
+        save_config_raw(cfg)
+        _data_changed()
+        # Search it right away on the fast sites (the hourly rotation adds
+        # Facebook later), if no other Telex search is running.
+        if _telex_thread is None or not _telex_thread.is_alive():
+            TELEX_STATUS_PATH.write_text(json.dumps({"state": "running", "started": time.time(),
+                                                     "done": 0, "total": 1}))
+            _telex_thread = threading.Thread(target=_run_telex_job, args=([term], True), daemon=True)
+            _telex_thread.start()
+    return jsonify({"ok": True, "term": term, "already": already,
+                    "message": (f"“{term}” is already on your Telex List" if already
+                                else f"Added “{term}” to your Telex List — searching now")})
+
+
 @app.route("/telex/remove", methods=["POST"])
 def telex_remove():
     _data_changed()
