@@ -36,10 +36,22 @@ body {
 .topbar-inner {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 16px 20px;
+  padding: 14px 20px 10px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 10px 20px;
+}
+/* The nav gets its own row under the logo + search, with room to breathe;
+   link labels never break in the middle ("Lowest / Price"). */
+.topbar nav {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  line-height: 1.5;
 }
 .brand {
   color: #fff;
@@ -51,7 +63,8 @@ body {
 .topbar nav a {
   color: var(--navy-light);
   text-decoration: none;
-  margin-left: 24px;
+  white-space: nowrap;
+  padding-top: 2px;
   font-size: 14px;
   font-weight: 600;
   padding-bottom: 4px;
@@ -573,7 +586,7 @@ code {
   font-size: 13px;
   margin: 0 0 14px;
 }
-.logout-form { display: inline; margin-left: 24px; }
+.logout-form { display: inline; margin-left: auto; }
 .logout-form button {
   background: none;
   border: none;
@@ -707,9 +720,10 @@ code {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 16px;
+    gap: 12px 18px;
+    padding: 2px 0 4px;
   }
-  .topbar nav a { margin-left: 0; font-size: 14px; }
+  .topbar nav a { margin-left: 0; font-size: 15px; padding: 2px 0 4px; }
   .logout-form { margin-left: 0; }
   .topbar-search {
     order: 3;
