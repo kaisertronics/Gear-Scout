@@ -646,7 +646,9 @@ def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
         text = (title or "").lower()
         for m in re.finditer(r"(?<![\w$.,/])(\d{3,4}[a-z]{0,3})(?![\w/])", text):
             tok = m.group(1)
-            if re.fullmatch(r"(?:19|20)\d\d", tok) or _COUNT_WORD_AFTER.match(text[m.end():]):
+            # Years and decades ("1968", "2010s" — Reverb adds them to titles)
+            # aren't model numbers.
+            if re.fullmatch(r"(?:19|20)\d\d'?s?", tok) or _COUNT_WORD_AFTER.match(text[m.end():]):
                 continue
             return f"{brand}:{tok}", f"{brand.replace('-', ' ')} {title[m.start():m.end()]}"
     return None
