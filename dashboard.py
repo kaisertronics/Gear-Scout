@@ -622,11 +622,19 @@ def _run_telex_job(terms: list[str], fast_only: bool):
         TELEX_STATUS_PATH.write_text(json.dumps({"state": state, "started": started, "found": found,
                                                  "new": new, "fast_only": fast_only, **extra}))
     try:
-        for i, term in enumerate(terms):
-            write("running", done=i, total=len(terms), current_source=term)
-            res = search_term(term, cfg, fast_only=fast_only)
-            found += res["found"]
-            new += res["new"]
+        # Fast sites answer in a second or two, so several terms run at once;
+        # a Facebook search (one term, "Search everywhere") runs on its own.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        done = 0
+        write("running", done=0, total=len(terms), current_source=terms[0])
+        with ThreadPoolExecutor(max_workers=3 if fast_only else 1, thread_name_prefix="telex") as pool:
+            futures = {pool.submit(search_term, term, cfg, None, fast_only): term for term in terms}
+            for fut in as_completed(futures):
+                res = fut.result()
+                found += res["found"]
+                new += res["new"]
+                done += 1
+                write("running", done=done, total=len(terms), current_source=futures[fut])
         write("done", done=len(terms), total=len(terms))
         _data_changed()
     except Exception as e:
