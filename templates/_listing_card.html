@@ -2,7 +2,8 @@
 <div class="listing-card{{ ' is-deal' if l.is_deal else '' }}">
   {% set card_body %}
     {% if l.image_url %}
-      <img src="{{ l.image_url }}" alt="" class="listing-img" loading="lazy">
+      <img src="{{ l.image_url|img }}" alt="" class="listing-img" loading="lazy"
+           onerror="this.onerror=null; this.classList.add('img-failed'); this.removeAttribute('src');">
     {% else %}
       <div class="listing-img listing-img-placeholder">
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">

@@ -154,8 +154,14 @@ def run_refresh_cycle(cfg: dict):
             logger.exception("%s failed", name)
         timings[name] = time.time() - t0
 
+    def picture_job():
+        # Save Facebook pictures while their links still work (they expire).
+        from scrapers.image_cache import cache_images, cache_recent
+        cache_images([l.image_url for l in all_listings if l.image_url])
+        cache_recent(days=2)
+
     jobs = [threading.Thread(target=timed, args=(n, f), daemon=True)
-            for n, f in (("sold check", sold_job), ("price lookups", market_job))]
+            for n, f in (("sold check", sold_job), ("price lookups", market_job), ("pictures", picture_job))]
     for j in jobs:
         j.start()
     for j in jobs:
@@ -242,6 +248,11 @@ def _run_scrape_cycle():
     # Deduplicate — only keep listings we haven't seen before
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg, keywords)
     new_listings = filter_new(all_listings)
+    try:
+        from scrapers.image_cache import cache_images
+        cache_images([l.image_url for l in all_listings if l.image_url])
+    except Exception:
+        logger.exception("Saving pictures failed")
     # Plus what the hourly background refreshes found since the last email.
     new_listings += _found_since_last_digest({l.global_id for l in new_listings})
 

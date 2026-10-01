@@ -7,7 +7,7 @@
       {% for c in top %}
         <a class="lowest-row" href="{{ c.url }}" target="_blank" rel="noopener">
           <span class="lowest-rank">#{{ loop.index }}</span>
-          {% if c.image_url %}<img src="{{ c.image_url }}" alt="" class="lowest-img" loading="lazy">{% else %}<span class="lowest-img lowest-img-empty"></span>{% endif %}
+          {% if c.image_url %}<img src="{{ c.image_url|img }}" alt="" class="lowest-img" loading="lazy">{% else %}<span class="lowest-img lowest-img-empty"></span>{% endif %}
           <span class="lowest-info">
             <span class="lowest-title">{{ c.title }}</span>
             <span class="muted">{{ c.source_name }}{% if c.location %} · 📍 {{ c.location.split(' @')[0] }}{% endif %}</span>

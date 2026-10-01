@@ -490,6 +490,25 @@ _SOURCE_TAGS = [
 ]
 
 
+@app.route("/img/<name>")
+def cached_image(name):
+    """Locally saved copies of pictures whose links expire (Facebook)."""
+    if not re.fullmatch(r"[0-9a-f]{20}\.jpg", name):
+        return "", 404
+    from scrapers.image_cache import IMAGE_DIR
+    resp = send_from_directory(IMAGE_DIR, name, mimetype="image/jpeg", max_age=86400 * 30)
+    return resp
+
+
+@app.template_filter("img")
+def _img_filter(url):
+    """The saved copy of a picture when there is one, else the original link."""
+    from scrapers.image_cache import cache_name, cached_path
+    if cached_path(url):
+        return url_for("cached_image", name=cache_name(url))
+    return url
+
+
 @app.template_filter("source_tag")
 def _source_tag_filter(source_name):
     """'Craigslist — Seattle' -> ('Craigslist', 'cl'): short site name + color group."""

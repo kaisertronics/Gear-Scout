@@ -166,6 +166,11 @@ def mark_seen(listing, live_only: bool = False) -> str:
         ).fetchone()
         if existing:
             status = "seen"
+            # Facebook picture links expire after a few days; a listing seen
+            # again comes with a fresh one.
+            if getattr(listing, "image_url", None):
+                conn.execute("UPDATE seen SET image_url = ? WHERE global_id = ? AND COALESCE(image_url, '') != ?",
+                             (listing.image_url, listing.global_id, listing.image_url))
             if getattr(listing, "location", None):
                 conn.execute(
                     "UPDATE seen SET location = ? WHERE global_id = ? AND location IS NULL",
