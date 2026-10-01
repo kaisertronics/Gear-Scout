@@ -635,9 +635,15 @@ def telex_scrape():
 @app.route("/telex/status")
 def telex_status():
     try:
-        return json.loads(TELEX_STATUS_PATH.read_text())
+        st = json.loads(TELEX_STATUS_PATH.read_text())
     except Exception:
         return {"state": "idle"}
+    # "Running" with no search actually running here (the dashboard was
+    # restarted mid-search): say so instead of spinning forever.
+    if st.get("state") == "running" and (_telex_thread is None or not _telex_thread.is_alive()):
+        st = {"state": "failed", "reason": "That search was interrupted (Gear Scout restarted) — run it again."}
+        TELEX_STATUS_PATH.write_text(json.dumps(st))
+    return st
 
 
 @app.route("/telex/add", methods=["POST"])
@@ -1005,7 +1011,12 @@ def lowest_run():
 
 @app.route("/lowest/status")
 def lowest_status():
-    return jsonify(_load_lowest_status())
+    st = _load_lowest_status()
+    if st.get("state") == "running" and (_lowest_thread is None or not _lowest_thread.is_alive()):
+        st = {"state": "failed", "query": st.get("query"),
+              "reason": "That search was interrupted (Gear Scout restarted) — run it again."}
+        _write_lowest_status(st)
+    return jsonify(st)
 
 
 @app.route("/lowest/track", methods=["POST"])
@@ -1156,9 +1167,14 @@ def fb_posts_search():
 @app.route("/fb-posts/status")
 def fb_posts_status():
     try:
-        return jsonify(json.loads(FBPOSTS_STATUS_PATH.read_text()))
+        st = json.loads(FBPOSTS_STATUS_PATH.read_text())
     except Exception:
         return jsonify({"state": "idle"})
+    if st.get("state") == "running" and (_fbposts_thread is None or not _fbposts_thread.is_alive()):
+        st = {"state": "failed", "query": st.get("query"),
+              "reason": "That search was interrupted (Gear Scout restarted) — run it again."}
+        FBPOSTS_STATUS_PATH.write_text(json.dumps(st))
+    return jsonify(st)
 
 
 @app.route("/settings/fb-posts", methods=["POST"])
@@ -1582,6 +1598,17 @@ if __name__ == "__main__":
             "query": stale.get("query"),
             "reason": "Dashboard restarted before this search finished — try again.",
         })
+
+    # Every other background search: a "running" left over from before the
+    # restart can't still be running.
+    for path in (TELEX_STATUS_PATH, LOWEST_STATUS_PATH, FBPOSTS_STATUS_PATH):
+        try:
+            st = json.loads(path.read_text())
+            if st.get("state") == "running":
+                path.write_text(json.dumps({"state": "failed", "query": st.get("query"),
+                                            "reason": "Gear Scout restarted before this finished — run it again."}))
+        except Exception:
+            pass
 
     stale_scrape = _load_manual_scrape_status()
     if stale_scrape.get("state") == "running":
