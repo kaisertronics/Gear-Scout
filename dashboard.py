@@ -8,6 +8,7 @@ service, so it always reflects the real current state.
 Run with: python3 dashboard.py  (inside the container — see docker-compose.yml)
 """
 import json
+from typing import Optional
 import logging
 import os
 import re
@@ -400,25 +401,75 @@ def _group_by_source(listings: list[dict]) -> list[tuple]:
     return sorted(groups.items(), key=lambda kv: kv[1][0]["first_seen"], reverse=True)
 
 
+_for_you_cache: dict = {"at": 0.0, "items": None, "ceiling": None}
+
+
+def _favorite_price_ceiling() -> Optional[float]:
+    """Your price range, learned from favorites: 1.2x the price that three
+    quarters of your favorites are under (at least $150)."""
+    from scrapers.enrich import parse_price
+    from scrapers.store import _conn
+    with _conn() as conn:
+        prices = sorted(v for v in (parse_price(p) for (p,) in conn.execute(
+            "SELECT price FROM seen WHERE favorite = 1")) if v)
+    if len(prices) < 5:
+        return None
+    return max(150.0, prices[int(len(prices) * 0.75) - 1] * 1.2)
+
+
 def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
-    """Listings that best match what you favorite (learned taste)."""
+    """Really good deals on the kind of gear you favorite: like your
+    favorites (learned taste), priced well under market value (15%+, or
+    25%+ when the value is a rough estimate), and within your price range.
+    Ranked by discount, boosted by how well it matches your taste. Drawn
+    from the last 7 days, not just the newest listings."""
+    if _for_you_cache["items"] is not None and time.time() - _for_you_cache["at"] < 300:
+        return _for_you_cache["items"]
     try:
-        from scrapers.learning import taste
+        import sqlite3
+        from scrapers.enrich import is_bundle, is_partial, is_relevant
+        from scrapers.learning import keywords_with_learned, taste
+        from scrapers.store import _conn
         t = taste()
         if not t.ready:
             return []
+        ceiling = _favorite_price_ceiling()
+        cfg = load_config_raw()
+        terms = tuple(keywords_with_learned(cfg))
+        with _conn() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = [dict(r) for r in conn.execute(
+                """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
+                   AND sold = 0 AND COALESCE(pending, 0) = 0 AND favorite = 0
+                   AND first_seen >= datetime('now', '-7 days') ORDER BY first_seen DESC LIMIT 4000""")]
+        # Taste first (cheap), then full price context only for those.
+        rows = [r for r in rows if t.score(r.get("title") or "") >= 1.0
+                and is_relevant(r.get("title"), r.get("price"), terms)]
         scored, seen_urls = [], set()
-        for _, items in grouped:
-            for l in items:
-                if l.get("favorite") or l.get("sold") or l.get("url") in seen_urls:
-                    continue
-                seen_urls.add(l.get("url"))
-                s = t.score(l.get("title") or "")
-                if s >= 1.5:
-                    scored.append((s, l))
-        return [l for _, l in sorted(scored, key=lambda x: -x[0])[:n]]
+        for l in _decorate(rows):
+            ctx = l.get("price_ctx") or {}
+            unit = ctx.get("unit_value")
+            pct = ctx.get("pct_under")
+            if (l.get("url") in seen_urls or l.get("is_auction") or not unit or pct is None
+                    or not ctx.get("typical") or ctx.get("rough") or (ceiling and unit > ceiling)
+                    or is_partial(l.get("title")) or is_bundle(l.get("title"))):
+                continue
+            # 20%+ under a solid comp; more than 75% under is almost always a
+            # mismatch (a part, a card, a different version), not a steal.
+            if pct < 20 or pct > 75:
+                continue
+            same_ad = (l.get("title") or "").lower(), l.get("price")
+            if same_ad in seen_urls:  # the same ad cross-listed / re-posted
+                continue
+            seen_urls.add(l.get("url"))
+            seen_urls.add(same_ad)
+            match = min(t.score(l.get("title") or ""), 6.0)
+            scored.append((pct * (1 + match / 3), l))
+        items = [l for _, l in sorted(scored, key=lambda x: -x[0])[:n]]
+        _for_you_cache.update(at=time.time(), items=items, ceiling=ceiling)
+        return items
     except Exception:
-        logging.exception("Couldn't score listings for you")
+        logging.exception("Couldn't pick deals for you")
         return []
 
 
@@ -715,6 +766,7 @@ def index():
         "index.html",
         last_refresh=last_refresh,
         for_you=_for_you(grouped_listings),
+        for_you_ceiling=_for_you_cache.get("ceiling"),
         deals=_deals_from(grouped_listings),
         status=status,
         grouped_listings=grouped_listings,

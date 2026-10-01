@@ -18,7 +18,7 @@
 
 {% if for_you and not deals_only %}
 <section class="panel for-you-panel" id="for-you">
-  <h2>✨ Picked for you <span class="muted">— most like what you favorite · <a href="{{ url_for('learning_page') }}">how it learns</a></span></h2>
+  <h2>✨ Picked for you <span class="muted">— gear like your favorites, priced well under market{% if for_you_ceiling %}, up to ${{ '{:,.0f}'.format(for_you_ceiling) }} (your usual range){% endif %} · best deals first · <a href="{{ url_for('learning_page') }}">how it learns</a></span></h2>
   <div class="listing-grid">
     {% for l in for_you %}{{ listing_card(l) }}{% endfor %}
   </div>

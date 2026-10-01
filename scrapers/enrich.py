@@ -126,6 +126,33 @@ _PART_FOR = re.compile(
     r"lamp|bulb|fuse|parts?|motor|belt|head ?stack|pinch roller|remote)\b.{0,40}?\b(?:for|fits|from|compatible with)\b",
     re.I)
 _PART_WORDS = re.compile(r"\b(?:input|output|interstage|mic) transformers?\b|\bt4b\b|\bopto cell\b", re.I)
+# Vacuum tubes sold on their own (12AX7, EL34, ECC83, 6072…) and parts named
+# as the item ("GA-8000 Power Supply", "Ampex 300 VU Meter Bridge").
+_TUBE_TYPES = re.compile(
+    r"\b(?:12a[xtuy]7a?|12ay7|ecc8[1-3]|ecc88|e8[0-9]cc|el3[4-7]|el84|6l6\w*|6v6\w*|6ca7|kt\d{2}|ef86|ef14|"
+    r"6072a?|5751|6sn7\w*|6sl7\w*|6922|7025|6267|5879|vf14|ac701|6au6|6as7|5ar4|gz3[2-4]|5y3|274b|300b|2a3|"
+    r"6dj8|6bq5|6bq7|6cg7|6fq7|e88cc|cv4004)\b", re.I)
+_PART_NAMED = re.compile(
+    r"\b(?:power suppl(?:y|ies)|psu|meter bridge|vu meters?|capstan(?: motor)?|head ?stack|head ?block|"
+    r"pinch roller|capsules?|tubes? only|valves? only|faceplate|front panel|chassis only|pcb set|board set|"
+    r"tube set|tube kit|valve set|tube replacement|retube kit|transformers?|part:|part #|part number|"
+    r"insert jack|input jack|output jack|channel strip board|replacement (?:board|card|module)|card only)\b", re.I)
+_WITH = re.compile(r"\b(?:with|w/|incl\w*|plus|comes with)\b|\+|&", re.I)
+
+
+def _is_named_part(title: str) -> bool:
+    """A tube or part that is the item itself — not one that comes with it
+    ("Neumann U67 with power supply" is the mic)."""
+    for pattern in (_TUBE_TYPES, _PART_NAMED):
+        m = pattern.search(title)
+        if m and not _WITH.search(title[:m.start()]):
+            # "Telefunken ELA M 251 tube microphone" names a tube type only in
+            # passing; a tube listing doesn't call itself a microphone etc.
+            if (pattern is _TUBE_TYPES and _MAIN_GEAR.search(title)
+                    and not re.search(r"\b(?:vacuum tubes?|triode|pentode|nos tubes?|matched (?:pair|quad))\b", title, re.I)):
+                continue
+            return True
+    return False
 
 
 @functools.lru_cache(maxsize=100_000)
@@ -134,7 +161,7 @@ def is_partial(title: Optional[str]) -> bool:
         return False
     # "Swivel mount cable for a U87", "Sowter LA-2A output transformer",
     # "Allen wrench for EL8 Distressor": a part made for the model, not the model.
-    if _PART_FOR.search(title) or _PART_WORDS.search(title):
+    if _PART_FOR.search(title) or _PART_WORDS.search(title) or _is_named_part(title):
         return True
     for m in _PARTIAL_RE.finditer(title):
         before = title[:m.start()].lower().rstrip()
@@ -296,7 +323,8 @@ def is_not_audio(title: Optional[str]) -> bool:
 # ATW / System 10 — excluded along with the word "wireless".
 _WIRELESS_MODELS = re.compile(
     r"\b(?:blx|glxd?|qlxd?|ulxd?|slxd?|pgxd?|svx|psm\s?\d{3,4}|axient|"
-    r"ew[\s-]?(?:100|300|500|d|dx|g[1-4])|xsw|avx|atw-?\w*|system 10)(?:[\d/-]\w*)?\b", re.I)
+    r"ew[\s-]?(?:100|300|500|d|dx|g[1-4])|xsw|avx|atw-?\w*|system 10|(?:true )?diversity receivers?|"
+    r"em-?\d{3,4}\w*|sk-?\d{3,4}\w*)(?:[\d/-]\w*)?\b", re.I)
 
 
 def exclude_match(title: Optional[str], exclude_words: list[str]) -> bool:
@@ -510,9 +538,30 @@ def model_key(title: Optional[str]) -> Optional[str]:
         # a known brand as the "model's letters" means the same thing.
         brand = known
     model = _canonical_model(brand, model)
+    variant = _model_variant(title, found[1])
+    if variant:
+        model = f"{model}{variant}"
     key = f"{brand}:{model}" if brand else model
     form = item_form(title)
     return f"{key}|{form}" if form else key
+
+
+_VARIANT = re.compile(r"[\s-]+(vr|xls|xlii|xl|eb|ai|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
+
+
+def _model_variant(title: Optional[str], query: str) -> Optional[str]:
+    """The version written after the model as its own word — "C12 VR",
+    "C414 XLS" / "XLII", "U87 Ai", "Mk II" — which can change the price a
+    lot (a C12 VR reissue vs. a vintage C12)."""
+    shown = (query or "").split()[-1] if query else ""
+    if not shown or not title:
+        return None
+    m = re.search(re.escape(shown) + _VARIANT.pattern, title, re.I)
+    if not m:
+        return None
+    v = re.sub(r"\W|mark|mk", "", m.group(1).lower())
+    v = {"2": "ii", "3": "iii", "4": "iv", "5": "v"}.get(v, v)
+    return v
 
 
 @functools.lru_cache(maxsize=100_000)
@@ -534,11 +583,31 @@ def model_query(title: Optional[str]) -> Optional[str]:
         if not " ".join(words).lower().startswith(display):
             words = display.split() + words
         query = " ".join(words)
+    variant = _model_variant(title, found[1])
+    if variant:
+        query = f"{query} {variant}"
     form = item_form(title)
     return f"{query} {'500 series' if form == '500' else form}" if form else query
 
 
 def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
+    found = _model_match_inner(title)
+    if found:
+        return found
+    # "Universal Audio 1176", "Neve 1073 DPA": a bare model number right after
+    # a known brand (the word before it may be "Audio", which isn't a brand).
+    brand = canonical_brand(title)
+    if brand:
+        text = (title or "").lower()
+        for m in re.finditer(r"(?<![\w$.,/])(\d{3,4}[a-z]{0,3})(?![\w/])", text):
+            tok = m.group(1)
+            if re.fullmatch(r"(?:19|20)\d\d", tok) or _COUNT_WORD_AFTER.match(text[m.end():]):
+                continue
+            return f"{brand}:{tok}", f"{brand.replace('-', ' ')} {title[m.start():m.end()]}"
+    return None
+
+
+def _model_match_inner(title: Optional[str]) -> Optional[tuple[str, str]]:
     raw = title or ""
     text = raw.lower()
     # "LOMO 19A9", "19-A19": number-letter-number models (common on Soviet gear).
@@ -779,11 +848,11 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
                 "note": "bundle of several items — no single-item comparison"}
     mkey, key = model_key(title), value_key(title)
     if mkey and mkey in index and not partial:
-        typical, source, threshold = index[mkey], "local", 0.75
+        typical, source, threshold = index[mkey], "local", 0.70
     elif market and key and key in market:
         typical = market[key]
         source = (getattr(market, "sources", {}) or {}).get(key, "reverb")
-        threshold = 0.65
+        threshold = 0.60
     else:
         typical, source, threshold = None, None, None
     if value:
@@ -811,7 +880,12 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
     ctx.update({
         "typical": format_price(typical),
         "rough": rough,
-        "deal": bool(unit) and not rough and unit <= typical * threshold and unit >= 20,
+        # A real deal: 30%+ under what this model goes for (40%+ under
+        # Reverb/eBay asking prices) — but more than 85% under is almost
+        # always a comparison with the wrong thing (a reissue vs. a vintage
+        # original, a part vs. the whole unit), not a deal.
+        "deal": (bool(unit) and not rough and not partial and unit >= 20
+                 and typical * 0.15 <= unit <= typical * threshold),
         "pct_under": round((1 - unit / typical) * 100) if unit else None,
         "source": source,
     })
