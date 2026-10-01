@@ -10,7 +10,8 @@
       "Bare model numbers after a brand are recognized (Universal Audio 1176, Neve 1073).",
       "Telex and Lowest Price leave out pedal and plugin versions (UAFX LA-2A pedal, UAD plugins) unless your term asks for them, e.g. 'LA-2A pedal'.",
       "Telex recognizes Universal Audio pedals sold without the word 'pedal' (LA-2A / 1176 'Studio Compressor', Lion '68…) and UA plugin versions of other makers' gear, and leaves out parts, add-ons and anything priced far below what the model sells for.",
-      "Telex shows every matching listing still for sale (not just recent ones or the cheapest 60): first 24 on screen, 'Show all' for the rest. Listings are kept 90 days instead of 30."
+      "Telex shows every matching listing still for sale (not just recent ones or the cheapest 60): first 24 on screen, 'Show all' for the rest. Listings are kept 90 days instead of 30.",
+      "Air/HVAC compressors (tons, horsepower, R22, Trane, Campbell Hausfeld, Sears…) and consumer speakers (Bluetooth, car audio, PA systems, bookshelf/hi-fi) are filtered out; broad-word matches now need a pro brand or vintage clues, not just a $200+ price."
     ]
   },
   {

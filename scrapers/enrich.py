@@ -268,7 +268,15 @@ _JUNK = re.compile(
     r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
-    r"gift wrap|scrapbook|sewing|craft ribbon)\b", re.I)
+    r"gift wrap|scrapbook|sewing|craft ribbon|"
+    # air / HVAC compressors
+    r"r-?22|r-?410a?|\d+(?:\.\d+)?[\s-]?tons?|\d+(?:\.\d+)?\s?(?:hp|horse ?power)|head pump|pump head|"
+    r"trane|carrier|lennox|goodman|copeland|rheem|bryant|hausf[ie]+ld|champion compressor|sears compressor|"
+    r"compressor pump|shop compressor|garage compressor|tire compressor|sears|hrs? power|"
+    # consumer / car / PA / hi-fi speakers
+    r"bluetooth|helmet|bike|bicycle|car (?:speakers?|subwoofer|stereo)|subwoofer box|dd audio|kicker|"
+    r"rockford|jl audio|skar|sundown audio|ultra boom|party ?box|partybox|pa system|pa speakers?|"
+    r"dj speakers?|bookshelf|wharfedale|tower speakers?|floor ?standing|home audio|soundbar|sound bar)\b", re.I)
 
 # A listing that is only an accessory: cables, stands, cases, pop filters…
 # ("Neumann U87 with case" is the mic; "Microphone stand and pop filter" isn't).
@@ -357,7 +365,10 @@ _GENERIC_WORDS = {
 # Brands whose everyday gear floods broad searches (podcast mics, USB
 # interfaces, PA) — a brand match alone doesn't make these interesting.
 _CONSUMER_BRANDS = {"blue", "samson", "numark", "bose", "pioneer", "technics", "boss", "zoom",
-                    "m-audio", "peavey", "behringer", "fender", "evh", "marshall"}
+                    "m-audio", "peavey", "behringer", "fender", "evh", "marshall", "krk", "mackie",
+                    "yamaha", "jbl", "presonus", "alesis", "rode", "audio-technica", "focusrite", "tascam",
+                    "sony", "roland", "korg", "steinberg", "native-instruments", "arturia", "iloud", "kali",
+                    "art", "cad", "lewitt", "warm-audio"}
 _VINTAGE_SIGNS = re.compile(
     r"\b(?:vintage|antique|tube|valve|19[2-8]\d|[2-8]0'?s|nos|germany|german|ussr|soviet|west german|"
     r"telefunken|broadcast|rca|western electric|collins|gates|altec|langevin|ampex|restored|serviced)\b", re.I)
@@ -395,10 +406,9 @@ def is_relevant(title: Optional[str], price: Optional[str], terms: tuple) -> boo
     brand = canonical_brand(t)
     if brand and brand not in _CONSUMER_BRANDS:
         return True
-    if _VINTAGE_SIGNS.search(t):
-        return True
-    value = parse_price(price)
-    return bool(value and value >= 200)
+    # Vintage clues — but a "vintage" consumer speaker or a "tube" in an
+    # air compressor ad isn't studio gear (those are filtered separately).
+    return bool(_VINTAGE_SIGNS.search(t))
 
 
 def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> list:
