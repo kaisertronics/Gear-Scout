@@ -321,7 +321,7 @@ def _dashboard_job_running() -> bool:
     check or an FB post search from the dashboard — background jobs step
     aside so your search gets the machine (and the Facebook account)."""
     for name in ("manual_scrape_status.json", "live_search_status.json",
-                 "lowest_status.json", "fbposts_status.json"):
+                 "lowest_status.json", "fbposts_status.json", "telex_status.json"):
         p = Path("/data") / name
         try:
             if time.time() - p.stat().st_mtime < 900 and json.loads(p.read_text()).get("state") == "running":

@@ -514,6 +514,54 @@ def telex():
                            total=sum(len(g) for _, g in groups), sweep=telex_state())
 
 
+TELEX_STATUS_PATH = Path("/data/telex_status.json")
+_telex_thread = None
+
+
+def _run_telex_job(terms: list[str], fast_only: bool):
+    from scrapers.telex import search_term
+    started = time.time()
+    cfg = load_config_raw()
+    found = new = 0
+
+    def write(state, **extra):
+        TELEX_STATUS_PATH.write_text(json.dumps({"state": state, "started": started, "found": found,
+                                                 "new": new, "fast_only": fast_only, **extra}))
+    try:
+        for i, term in enumerate(terms):
+            write("running", done=i, total=len(terms), current_source=term)
+            res = search_term(term, cfg, fast_only=fast_only)
+            found += res["found"]
+            new += res["new"]
+        write("done", done=len(terms), total=len(terms))
+    except Exception as e:
+        logging.exception("Telex search failed")
+        write("failed", reason=str(e))
+
+
+@app.route("/telex/scrape", methods=["POST"])
+def telex_scrape():
+    """Search all Telex terms on the fast sites, or one term everywhere."""
+    global _telex_thread
+    from scrapers.telex import terms as telex_terms
+    one = request.form.get("term", "").strip()
+    terms = [one] if one else telex_terms(load_config_raw())
+    if terms and (_telex_thread is None or not _telex_thread.is_alive()):
+        TELEX_STATUS_PATH.write_text(json.dumps({"state": "running", "started": time.time(),
+                                                 "done": 0, "total": len(terms)}))
+        _telex_thread = threading.Thread(target=_run_telex_job, args=(terms, not one), daemon=True)
+        _telex_thread.start()
+    return redirect(url_for("telex"))
+
+
+@app.route("/telex/status")
+def telex_status():
+    try:
+        return json.loads(TELEX_STATUS_PATH.read_text())
+    except Exception:
+        return {"state": "idle"}
+
+
 @app.route("/telex/add", methods=["POST"])
 def telex_add():
     new = [l.strip() for l in request.form.get("terms", "").splitlines() if l.strip()]

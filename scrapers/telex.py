@@ -48,10 +48,16 @@ def next_terms(cfg: dict, n: int) -> list[str]:
     return sorted(terms(cfg), key=lambda t: (st.get(t, {}).get("searched_at") or ""))[:n]
 
 
-def search_term(term: str, cfg: dict, on_progress=None) -> dict:
+FB_TYPES = {"facebook_marketplace_region", "facebook"}
+
+
+def search_term(term: str, cfg: dict, on_progress=None, fast_only: bool = False) -> dict:
+    """Searches one term on every search-based site. fast_only leaves out
+    Facebook (8 regions + groups take ~2 minutes per term)."""
     from scrapers.enrich import drop_excluded
     from scrapers.runner import run_sources
-    results = run_sources(sweep_sources(cfg), [term], cfg, on_progress=on_progress)
+    sources = [s for s in sweep_sources(cfg) if not (fast_only and s.get("type") in FB_TYPES)]
+    results = run_sources(sources, [term], cfg, on_progress=on_progress)
     found = new = 0
     for r in results:
         for l in drop_excluded(r.listings, cfg):

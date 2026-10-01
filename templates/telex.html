@@ -14,6 +14,14 @@
       groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb, eBay and Long &amp; McQuade — so the whole
       list is searched every few hours. New terms go first.
     </p>
+    <div class="telex-actions">
+      <form method="post" action="{{ url_for('telex_scrape') }}">
+        <button type="submit" id="telex-scrape-btn" class="btn btn-primary">🔄 Search all terms now</button>
+      </form>
+      <span class="muted">eBay, Reverb, OfferUp, Craigslist, Kijiji, ShopGoodwill and Long &amp; McQuade — a few minutes.
+        For Facebook, use “Search everywhere” on a term (about 2–3 minutes each); the hourly rotation covers Facebook too.</span>
+    </div>
+    <div id="telex-status" class="live-status-banner" style="display:none;"></div>
     <form method="post" action="{{ url_for('telex_add') }}" class="telex-add">
       <textarea name="terms" rows="3" placeholder="Add terms — one per line" class="search-input"></textarea>
       <button type="submit" class="btn btn-primary">Add to Telex List</button>
@@ -37,7 +45,11 @@
   <section class="panel" id="t-{{ loop.index }}">
     <h2>{{ term }} <span class="muted">— {{ items|length }}{{ '+' if items|length >= 60 else '' }} ·
       {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
-      <a href="{{ url_for('search', q=term) }}">live search every site now →</a></span></h2>
+      <a href="{{ url_for('search', q=term) }}">live search →</a></span>
+      <form method="post" action="{{ url_for('telex_scrape') }}" class="telex-term-search">
+        <input type="hidden" name="term" value="{{ term }}">
+        <button type="submit" class="btn btn-sm" title="Search this term on every site including all Facebook regions (about 2–3 minutes)">🔍 Search everywhere</button>
+      </form></h2>
     {% if items %}
       <div class="listing-grid">
         {% for l in items %}{{ listing_card(l) }}{% endfor %}
@@ -48,4 +60,31 @@
   </section>
   {% endfor %}
 
+<script>
+  (function () {
+    const banner = document.getElementById('telex-status');
+    const btns = document.querySelectorAll('#telex-scrape-btn, .telex-term-search button');
+    let sawRunning = false;
+    async function poll() {
+      try {
+        const d = await (await fetch("{{ url_for('telex_status') }}")).json();
+        if (d.state === 'running') {
+          sawRunning = true;
+          btns.forEach(b => b.disabled = true);
+          const what = d.total > 1 ? `Searching ${d.total} Telex terms${d.fast_only ? ' (fast sites)' : ''}…`
+                                   : `Searching “${d.current_source || ''}” everywhere…`;
+          gsProgress(banner, what, {...d, current_source: d.total > 1 ? d.current_source : null});
+          setTimeout(poll, 1500);
+        } else if (sawRunning && d.state === 'done') {
+          gsProgressText(banner, `Done — ${d.found} matches, ${d.new} new. Loading…`);
+          setTimeout(() => location.reload(), 1200);
+        } else if (sawRunning && d.state === 'failed') {
+          btns.forEach(b => b.disabled = false);
+          gsProgressText(banner, '⚠️ Search failed: ' + (d.reason || 'unknown error'));
+        }
+      } catch (e) { setTimeout(poll, 3000); }
+    }
+    poll();
+  })();
+</script>
 {% endblock %}

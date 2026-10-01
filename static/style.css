@@ -808,3 +808,7 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 
 .flag-pending { background: #fef3c7; color: #92400e; }
 @media (prefers-color-scheme: dark) { .flag-pending { background: #451a03; color: #fde68a; } }
+
+.telex-actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 10px; }
+.telex-actions form { margin: 0; }
+.telex-term-search { display: inline; margin-left: 8px; }
