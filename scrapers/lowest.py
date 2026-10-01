@@ -141,9 +141,9 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
                 if (own and value < own * MIN_FRACTION_OF_TYPICAL) or _is_accessory(title):
                     continue
             row = conn.execute(
-                "SELECT hidden, duplicate, sold FROM seen WHERE global_id = ?", (l.global_id,)
+                "SELECT hidden, duplicate, sold, pending FROM seen WHERE url = ? ORDER BY sold DESC LIMIT 1", (l.url,)
             ).fetchone()
-            if row and (row[0] or row[2]):
+            if row and (row[0] or row[2] or row[3]) or getattr(l, "pending", False):
                 continue
             seen_urls.add(l.url)
             out.append({

@@ -755,7 +755,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     if not listing_url.startswith("http"):
                         listing_url = "https://www.facebook.com" + listing_url
 
-                    listings.append(Listing(
+                    found = Listing(
                         source_name=name,
                         title=title,
                         url=listing_url,
@@ -763,7 +763,14 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                         image_url=image_url,
                         listing_id=item_id,
                         location=location,
-                    ))
+                    )
+                    # Marketplace labels a card "Pending" or "Sold" on the
+                    # card itself — recorded each time the listing is seen,
+                    # so status changes are caught on every scrape.
+                    status_text = f"{text_content}\n{aria_label}"
+                    found.pending = bool(re.search(r"(?mi)^\s*pending\s*$|\bsale pending\b|,\s*pending\b", status_text))
+                    found.sold = bool(re.search(r"(?mi)^\s*sold\s*$|,\s*sold\b", status_text))
+                    listings.append(found)
                 except Exception as e:
                     logger.debug("Error parsing FB Marketplace card: %s", e)
                     continue

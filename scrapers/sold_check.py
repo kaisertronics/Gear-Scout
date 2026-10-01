@@ -12,7 +12,10 @@ How each site says "gone" (all checked live):
   Forums           thread title marked SOLD (GroupDIY, The Gear Page…)
   Craigslist, OfferUp, Long & McQuade, everything else
                    page removed (404/410) or a "deleted / no longer available" notice
-  Facebook         item page says sold / no longer available (browser; fewer per run)
+  Facebook         item page says sold / no longer available, or "Pending"
+                   (Facebook hides pending items from searches and feeds, so
+                   only the item page shows it; 60 per run, pending ones
+                   re-checked every 3 hours)
 """
 import logging
 import re
@@ -92,6 +95,8 @@ def check_url(url: str) -> Optional[bool]:
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat()
     recheck = (datetime.now(timezone.utc) - timedelta(hours=RECHECK_HOURS)).isoformat()
+    # Pending items change fast (sold, or back on the market): every 3 hours.
+    pending_recheck = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     fb_clause = "" if include_fb else "AND url NOT LIKE '%facebook.com%'"
     with _conn() as conn:
         _ensure(conn)
@@ -99,11 +104,15 @@ def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
             f"""SELECT url, MAX(favorite) AS fav, MAX(first_seen) AS seen FROM seen
                 WHERE url LIKE 'http%' AND sold = 0 AND hidden = 0 AND duplicate = 0
                 AND (first_seen >= ? OR favorite = 1)
-                AND (sold_checked_at IS NULL OR sold_checked_at < ?)
+                AND (sold_checked_at IS NULL OR sold_checked_at < ?
+                     OR (COALESCE(pending, 0) = 1 AND sold_checked_at < ?))
                 AND url NOT LIKE '%shopgoodwill.com%' AND url NOT LIKE '%search/posts%'
                 {fb_clause}
-                GROUP BY url ORDER BY fav DESC, seen DESC LIMIT ?""",
-            (cutoff, recheck, limit)).fetchall()
+                GROUP BY url
+                ORDER BY fav DESC, MAX(COALESCE(pending, 0)) DESC,
+                         MAX(sold_checked_at) IS NULL DESC, MAX(sold_checked_at) ASC, seen DESC
+                LIMIT ?""",
+            (cutoff, recheck, pending_recheck, limit)).fetchall()
     return [(u, "fav" if f else "") for u, f, _ in rows]
 
 
@@ -117,7 +126,7 @@ def _record(url: str, gone: Optional[bool]) -> None:
         mark_sold(url)
 
 
-def run_sold_check(max_http: int = 120, max_fb: int = 20) -> dict:
+def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     start = time.time()
     checked = sold = 0
     http = [u for u, _ in _candidates(max_http * 2, include_fb=False)][:max_http]
@@ -147,6 +156,9 @@ def run_sold_check(max_http: int = 120, max_fb: int = 20) -> dict:
                             text = page.inner_text("body")[:5000]
                             gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
                                         or "/marketplace/item/" not in page.url)
+                            if not gone:
+                                from scrapers.store import set_pending
+                                set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
                         except Exception as e:
                             logger.debug("FB sold check failed for %s: %s", url, e)
                         _record(url, gone)

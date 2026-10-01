@@ -60,6 +60,8 @@ def _conn() -> sqlite3.Connection:
         ("drop_notified", "INTEGER NOT NULL DEFAULT 1"),
         ("location", "TEXT"),
         ("sold", "INTEGER NOT NULL DEFAULT 0"),
+        ("pending", "INTEGER NOT NULL DEFAULT 0"),
+        ("sold_at", "TEXT"),
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -120,6 +122,23 @@ def is_seen(global_id: str) -> bool:
         return row is not None
 
 
+def _record_status(conn, listing) -> None:
+    """Pending/sold labels a source shows on the listing itself (Facebook
+    Marketplace cards). None means the source doesn't say."""
+    pending = getattr(listing, "pending", None)
+    if pending is not None:
+        conn.execute("UPDATE seen SET pending = ? WHERE url = ?", (1 if pending else 0, listing.url))
+    if getattr(listing, "sold", None):
+        conn.execute("UPDATE seen SET sold = 1, sold_at = COALESCE(sold_at, ?) WHERE url = ?",
+                     (datetime.now(timezone.utc).isoformat(), listing.url))
+
+
+def set_pending(url: str, pending: bool) -> None:
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET pending = ? WHERE url = ?", (1 if pending else 0, url))
+        conn.commit()
+
+
 def mark_seen(listing, live_only: bool = False) -> str:
     """Stores a listing. Returns "new", "duplicate" (same item already
     stored from elsewhere), "price_drop" (seen before, now cheaper) or
@@ -146,6 +165,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                     (listing.price, existing[0], now, listing.global_id),
                 )
                 status = "price_drop"
+            _record_status(conn, listing)
             if not live_only:
                 # A standing-keyword scrape found something a live search
                 # already stored — it's a real match, so show it on the
@@ -183,6 +203,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 getattr(listing, "location", None),
             ),
         )
+        _record_status(conn, listing)
         conn.commit()
         return "duplicate" if duplicate else "new"
 

@@ -805,3 +805,6 @@ code {
 .more-listings summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 section[id^="src-"] { scroll-margin-top: 64px; }
 #for-you, #deals { scroll-margin-top: 64px; }
+
+.flag-pending { background: #fef3c7; color: #92400e; }
+@media (prefers-color-scheme: dark) { .flag-pending { background: #451a03; color: #fde68a; } }

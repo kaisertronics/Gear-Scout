@@ -34,11 +34,12 @@
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}
-      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or (l.sale and l.sale.fast) or l.stale %}
+      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale %}
         <div class="listing-flags">
           {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
           {% if l.stale %}<span class="flag flag-stale" title="Listed {{ l.stale.days }} days ago — sellers often take an offer after a few weeks">Listed {{ l.stale.days }}d · try {{ l.stale.offer }}</span>{% endif %}
-          {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>{% endif %}
+          {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>
+          {% elif l.pending %}<span class="flag flag-pending" title="The seller marked this Pending — a sale is in progress. Gear Scout re-checks it every few hours.">⏳ Pending</span>{% endif %}
           {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">🔥 Deal · {{ l.price_ctx.pct_under }}% under</span>{% endif %}
           {% if l.previous_price %}<span class="flag flag-drop">Price drop</span>{% endif %}
           {% if l.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
