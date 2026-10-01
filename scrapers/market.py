@@ -420,3 +420,37 @@ def refresh_market_prices(titles: list[str], local_index: dict[str, float],
     if todo:
         logger.info("Market prices: looked up %d items, %d usable", len(todo), found)
     return found
+
+
+def refresh_telex_term_values(terms: list[str], max_age_days: int = 7) -> int:
+    """Reverb used price for each specific Telex term itself ("Cascade
+    Fathead", "Audioscape 260VU") — the yardstick for listings matching the
+    term that don't name a model Gear Scout can look up on its own. Broad
+    terms ("Tube mic") get none: they cover very different gear."""
+    from scrapers.enrich import is_generic_term
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    with _conn() as conn:
+        _ensure_table(conn)
+        fresh = {k for (k,) in conn.execute("SELECT model_key FROM market_prices WHERE fetched_at >= ?", (cutoff,))}
+    found = 0
+    for term in terms:
+        key = "telex:" + term.strip().lower()
+        if is_generic_term(term) or key in fresh:
+            continue
+        try:
+            prices = sorted(_reverb_prices(term))
+        except Exception as e:
+            logger.warning("Telex term price lookup failed for %r: %s", term, e)
+            continue
+        typical = statistics.median(prices) if len(prices) >= MIN_SAMPLES else None
+        spread = (prices[(len(prices) * 3) // 4] / max(prices[len(prices) // 4], 1)) if len(prices) >= 4 else None
+        with _conn() as conn:
+            _ensure_table(conn)
+            conn.execute(
+                "INSERT OR REPLACE INTO market_prices"
+                " (model_key, query, typical, samples, fetched_at, source, loose, spread) VALUES (?,?,?,?,?,?,?,?)",
+                (key, term, typical, len(prices), datetime.now(timezone.utc).isoformat(), "Reverb", 0, spread))
+            conn.commit()
+        found += bool(typical)
+        time.sleep(0.3)
+    return found

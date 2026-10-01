@@ -73,6 +73,15 @@ def search_term(term: str, cfg: dict, on_progress=None, fast_only: bool = False)
 
 
 def run_sweep(cfg: dict) -> list[dict]:
+    try:
+        from scrapers.market import refresh_telex_term_values
+        refresh_telex_term_values(terms(cfg))
+    except Exception:
+        logger.exception("Telex term price lookup failed")
+    return _run_sweep(cfg)
+
+
+def _run_sweep(cfg: dict) -> list[dict]:
     per_hour = int((cfg.get("telex_sweep") or {}).get("per_hour", DEFAULT_PER_HOUR) or DEFAULT_PER_HOUR)
     out = []
     for term in next_terms(cfg, max(1, per_hour)):

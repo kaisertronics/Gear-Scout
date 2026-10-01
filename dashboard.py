@@ -616,8 +616,53 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
         placeholder = value is None or value < 5
         return (placeholder, value or 0)
 
-    return [(term, sorted((r for r in hits if id(r) in kept), key=price_order)[:per_term])
-            for term, hits in out]
+    # Your rule: a listing shows only when it's 10%+ under the used market
+    # price on Reverb. Listings without a reliable Reverb price go in a
+    # separate, collapsed group so nothing disappears silently.
+    from scrapers.enrich import _ALIAS_TO_BRAND, canonical_brand, is_generic_term, model_key, value_key
+    from scrapers.market import load_market
+    market = load_market()
+    unreliable = market.rough | market.mixed | market.distrusted
+
+    def reverb_used(r):
+        key = value_key(r.get("title"))
+        if (not key or key[:2] in ("t:", "p:") or key in unreliable or key not in market
+                or "Reverb" not in (market.sources.get(key) or "")):
+            return None
+        return market[key]
+
+    out_groups = []
+    for term, hits in out:
+        good, unpriced = [], []
+        tkey = "telex:" + term.strip().lower()
+        term_ref = market.get(tkey) if tkey in market and tkey not in unreliable else None
+        # The term's own price only works as a yardstick when the term names
+        # one specific product: a brand plus a model ("Avalon 737") or a
+        # product line ("Distressor", "Apollo X8P") — not "LA-2A" (clones of
+        # every price) or a bare brand ("audioscape").
+        term_brand = canonical_brand(term)
+        lowered = term.lower()
+        names_line = any(alias in lowered and alias not in (term_brand or "").replace("-", " ")
+                         for alias, canon in _ALIAS_TO_BRAND.items() if canon == term_brand and len(alias) > 3)
+        brand_words = set((term_brand or "").replace("-", " ").split())
+        distinctive = [w for w in re.findall(r"[a-z0-9-]+", lowered)
+                       if len(w) >= 3 and w not in brand_words and not is_generic_term(w)
+                       and w not in ("clone", "style", "copy", "replica", "type", "series")]
+        if not (term_brand and (model_key(term) or names_line or distinctive)):
+            term_ref = None
+        for r in sorted((r for r in hits if id(r) in kept), key=price_order):
+            # The listing's own model on Reverb, else the Telex term itself
+            # (only for listings from the same brand).
+            ref = reverb_used(r) or (term_ref if term_ref and canonical_brand(r.get("title")) == term_brand else None)
+            value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
+            if ref and value:
+                if ref * 0.2 <= value <= ref * 0.9:
+                    r["under_reverb"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}"}
+                    good.append(r)
+            else:
+                unpriced.append(r)
+        out_groups.append((term, good[:per_term], unpriced[:per_term]))
+    return out_groups
 
 
 _telex_cache: dict = {"key": None, "at": 0.0, "groups": None}
@@ -643,7 +688,7 @@ def telex():
         _telex_cache.update(key=key, at=time.time(), groups=groups)
     from scrapers.telex import state as telex_state
     return render_template("telex.html", groups=groups, terms=terms,
-                           total=sum(len(g) for _, g in groups), sweep=telex_state())
+                           total=sum(len(g) for _, g, _ in groups), sweep=telex_state())
 
 
 TELEX_STATUS_PATH = Path("/data/telex_status.json")
@@ -660,6 +705,11 @@ def _run_telex_job(terms: list[str], fast_only: bool):
         TELEX_STATUS_PATH.write_text(json.dumps({"state": state, "started": started, "found": found,
                                                  "new": new, "fast_only": fast_only, **extra}))
     try:
+        try:
+            from scrapers.market import refresh_telex_term_values
+            refresh_telex_term_values(terms)
+        except Exception:
+            logging.exception("Telex term price lookup failed")
         # Fast sites answer in a second or two, so several terms run at once;
         # a Facebook search (one term, "Search everywhere") runs on its own.
         from concurrent.futures import ThreadPoolExecutor, as_completed

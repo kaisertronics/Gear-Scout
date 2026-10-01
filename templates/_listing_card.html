@@ -34,6 +34,9 @@
       {% if l.price_ctx and l.price_ctx.typical %}
         <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
+      {% if l.under_reverb %}
+        <div class="listing-typical" title="Used price on Reverb right now">Reverb used ~{{ l.under_reverb.ref }} · <strong>{{ l.under_reverb.pct }}% under</strong></div>
+      {% endif %}
       {% if l.price_ctx and l.price_ctx.bstock %}
         <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
       {% endif %}

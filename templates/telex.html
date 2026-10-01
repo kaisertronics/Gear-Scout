@@ -4,9 +4,9 @@
 {% block content %}
 
   <section class="panel">
-    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} matching listing{{ "" if total == 1 else "s" }} still for sale</span></h2>
+    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} listing{{ "" if total == 1 else "s" }} 10%+ under Reverb's used price</span></h2>
     <p class="muted">
-      Every listing Gear Scout has found that's still for sale and matches one of these terms, cheapest
+      Listings still for sale that match one of these terms <strong>and are at least 10% under the used price on Reverb</strong>, cheapest
       first (every
       word, any order — “Apollo X8P” also finds “Universal Audio Apollo x8p”). The terms are also
       added to every scrape and the background Facebook post search, and every hour Gear Scout
@@ -28,7 +28,7 @@
     </form>
     {% if terms %}
       <div class="telex-terms">
-        {% for term, items in groups %}
+        {% for term, items, unpriced in groups %}
           <span class="telex-chip">
             <a href="#t-{{ loop.index }}">{{ term }} <span class="muted">{{ items|length }}</span></a>
             <form method="post" action="{{ url_for('telex_remove') }}" onsubmit="return confirm('Remove &quot;{{ term }}&quot; from the Telex List?');">
@@ -41,7 +41,7 @@
     {% endif %}
   </section>
 
-  {% for term, items in groups %}
+  {% for term, items, unpriced in groups %}
   <section class="panel" id="t-{{ loop.index }}">
     <h2>{{ term }} <span class="muted">— {{ items|length }} ·
       {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
@@ -63,7 +63,15 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">Nothing found yet — try “Search everywhere”.</p>
+      <p class="muted">Nothing 10%+ under Reverb's used price right now.</p>
+    {% endif %}
+    {% if unpriced %}
+      <details class="more-listings">
+        <summary class="muted">{{ unpriced|length }} more without a reliable Reverb price yet — can't tell if they're good</summary>
+        <div class="listing-grid">
+          {% for l in unpriced %}{{ listing_card(l) }}{% endfor %}
+        </div>
+      </details>
     {% endif %}
   </section>
   {% endfor %}
