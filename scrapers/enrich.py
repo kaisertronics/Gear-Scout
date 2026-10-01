@@ -678,7 +678,7 @@ def _model_match_inner(title: Optional[str]) -> Optional[tuple[str, str]]:
         if sep == " " and len(digits) < 3 and len(letters) > 3 and not suffix:
             continue
         # "circa 1965", "from 1972": a year, not a model number.
-        if len(digits) == 4 and 1920 <= int(digits) <= 2035 and not suffix:
+        if len(digits) == 4 and 1920 <= int(digits) <= 2035 and suffix in ("", "s"):
             continue
         # "12 channel", "16 track", "8 input": a count, not a model number.
         if not suffix and _COUNT_WORD_AFTER.match(text[m.end():]):
