@@ -14,6 +14,8 @@
       </div>
     {% endif %}
     <div class="listing-body">
+      {% set tag = l.source_name|source_tag %}
+      <span class="source-tag source-tag-{{ tag[1] }}" title="{{ l.source_name }}">{{ tag[0] }}</span>
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">

@@ -812,3 +812,23 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 .telex-actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 10px; }
 .telex-actions form { margin: 0; }
 .telex-term-search { display: inline; margin-left: 8px; }
+
+/* Tiny site tag on every listing card */
+.source-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .02em; line-height: 1;
+  padding: 3px 6px; border-radius: 4px; margin-bottom: 4px; background: #e2e8f0; color: #334155; }
+.source-tag-fb { background: #e7f0ff; color: #1d4ed8; }
+.source-tag-ebay { background: #fef9c3; color: #854d0e; }
+.source-tag-reverb { background: #ffedd5; color: #c2410c; }
+.source-tag-cl { background: #ede9fe; color: #6d28d9; }
+.source-tag-offerup { background: #dcfce7; color: #15803d; }
+.source-tag-kijiji { background: #e0f2fe; color: #0369a1; }
+.source-tag-sgw { background: #dbeafe; color: #1e40af; }
+.source-tag-store { background: #f1f5f9; color: #0f172a; }
+.source-tag-forum { background: #fce7f3; color: #be185d; }
+@media (prefers-color-scheme: dark) {
+  .source-tag { background: #334155; color: #e2e8f0; }
+  .source-tag-fb { background: #1e3a8a; color: #dbeafe; } .source-tag-ebay { background: #713f12; color: #fef9c3; }
+  .source-tag-reverb { background: #7c2d12; color: #ffedd5; } .source-tag-cl { background: #4c1d95; color: #ede9fe; }
+  .source-tag-offerup { background: #14532d; color: #dcfce7; } .source-tag-kijiji { background: #0c4a6e; color: #e0f2fe; }
+  .source-tag-sgw { background: #1e3a8a; color: #dbeafe; } .source-tag-forum { background: #831843; color: #fce7f3; }
+}

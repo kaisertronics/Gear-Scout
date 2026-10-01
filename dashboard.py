@@ -422,6 +422,26 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
         return []
 
 
+_SOURCE_TAGS = [
+    ("FB Posts", "FB post", "fb"), ("FB Marketplace", "Facebook", "fb"), ("FB —", "FB group", "fb"),
+    ("eBay", "eBay", "ebay"), ("Reverb", "Reverb", "reverb"), ("Craigslist", "Craigslist", "cl"),
+    ("OfferUp", "OfferUp", "offerup"), ("Kijiji", "Kijiji", "kijiji"), ("ShopGoodwill", "ShopGoodwill", "sgw"),
+    ("Vintage King", "Vintage King", "store"), ("Long & McQuade", "L&M", "store"), ("Alto Music", "Alto", "store"),
+    ("Rudy", "Rudy's", "store"), ("GroupDIY", "GroupDIY", "forum"), ("The Gear Page", "Gear Page", "forum"),
+    ("AudioKarma", "AudioKarma", "forum"), ("Gearspace", "Gearspace", "forum"),
+]
+
+
+@app.template_filter("source_tag")
+def _source_tag_filter(source_name):
+    """'Craigslist — Seattle' -> ('Craigslist', 'cl'): short site name + color group."""
+    name = source_name or ""
+    for prefix, label, css in _SOURCE_TAGS:
+        if name.startswith(prefix):
+            return (label, css)
+    return (name.split(" — ")[0][:14] or "Other", "other")
+
+
 @app.template_filter("usd")
 def _usd_filter(price):
     from scrapers.enrich import display_price
