@@ -121,7 +121,10 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
                 continue
             title = l.title or ""
             value = parse_price(l.price)
-            from scrapers.enrich import is_not_audio
+            from scrapers.enrich import is_not_audio, item_form
+            # Pedal/plugin versions only when the search asks for them.
+            if item_form(title) in ("pedal", "plugin") and item_form(title) != item_form(query):
+                continue
             if (not value or value < MIN_PRICE or _WANTED.match(title) or _RENTAL.search(title) or is_not_audio(title)
                     or _FOR_ITEM.search(title) or is_partial(title)):
                 continue

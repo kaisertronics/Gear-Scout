@@ -545,12 +545,19 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
         return lambda t: (plain is None or plain in t) and (
             bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
 
+    from scrapers.enrich import item_form
     out = []
     for term in terms:
         hits, seen_urls = [], set()
         match = matcher(term)
+        # "LA-2A" means the studio unit: pedal and plugin versions only show
+        # when the term asks for them ("LA-2A pedal").
+        term_form = item_form(term)
         for r, text in zip(rows, texts):
             if r["url"] in seen_urls:
+                continue
+            form = item_form(r["title"])
+            if form in ("pedal", "plugin") and form != term_form:
                 continue
             if match(text):
                 seen_urls.add(r["url"])

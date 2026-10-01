@@ -7,7 +7,8 @@
       "Deals need 30%+ under typical (40%+ under Reverb/eBay asking); anything over 85% under is treated as a mismatch, not a deal.",
       "Tubes, tube sets, power supplies, transformers, meter bridges, capsules and other parts are valued as parts and never shown as deals.",
       "Model versions are kept apart: AKG C12 VR vs. vintage C12, C414 XLS vs. XLII, U87 Ai, Mk II, reissues.",
-      "Bare model numbers after a brand are recognized (Universal Audio 1176, Neve 1073)."
+      "Bare model numbers after a brand are recognized (Universal Audio 1176, Neve 1073).",
+      "Telex and Lowest Price leave out pedal and plugin versions (UAFX LA-2A pedal, UAD plugins) unless your term asks for them, e.g. 'LA-2A pedal'."
     ]
   },
   {
