@@ -24,6 +24,7 @@
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
       {% endif %}
+      {% if l.source_detail %}<div class="listing-source">{{ l.source_detail }}</div>{% endif %}
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}

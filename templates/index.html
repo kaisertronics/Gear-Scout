@@ -12,6 +12,16 @@
   </div>
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
 
+  {% if grouped_listings %}
+  <nav class="source-jump" aria-label="Jump to a site">
+    {% if for_you %}<a href="#for-you" class="source-jump-chip">✨ For you</a>{% endif %}
+    {% if deals %}<a href="#deals" class="source-jump-chip">🔥 Deals <span class="muted">{{ deals|length }}</span></a>{% endif %}
+    {% for source_name, items in grouped_listings %}
+      <a href="#src-{{ loop.index }}" class="source-jump-chip">{{ source_name }} <span class="muted">{{ items|length }}</span></a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
   <div class="stat-row">
     <div class="stat-card">
       <div class="stat-label">Last run</div>
@@ -183,14 +193,23 @@
   </section>
   {% endif %}
 
+
   {% for source_name, items in grouped_listings %}
-  <section class="panel">
+  <section class="panel" id="src-{{ loop.index }}">
     <h2>{{ source_name }} <span class="muted">— {{ items|length }} recent</span></h2>
     <div class="listing-grid">
-      {% for l in items %}
+      {% for l in items[:24] %}
         {{ listing_card(l) }}
       {% endfor %}
     </div>
+    {% if items|length > 24 %}
+      <details class="more-listings">
+        <summary>Show {{ items|length - 24 }} more from {{ source_name }}</summary>
+        <div class="listing-grid">
+          {% for l in items[24:] %}{{ listing_card(l) }}{% endfor %}
+        </div>
+      </details>
+    {% endif %}
   </section>
   {% endfor %}
 

@@ -795,3 +795,13 @@ code {
 
 .flag-stale { background: #eef2ff; color: #3730a3; }
 @media (prefers-color-scheme: dark) { .flag-stale { background: #1e1b4b; color: #c7d2fe; } }
+
+.source-jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; position: sticky; top: 0; z-index: 5;
+  padding: 8px 0; background: var(--bg, #f8fafc); }
+.source-jump-chip { padding: 4px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 999px; font-size: 13px;
+  text-decoration: none; background: var(--panel, #fff); white-space: nowrap; }
+.listing-source { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.more-listings { margin-top: 12px; }
+.more-listings summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+section[id^="src-"] { scroll-margin-top: 64px; }
+#for-you, #deals { scroll-margin-top: 64px; }

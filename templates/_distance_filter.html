@@ -17,7 +17,7 @@
 </form>
 
 {% if for_you and not deals_only %}
-<section class="panel for-you-panel">
+<section class="panel for-you-panel" id="for-you">
   <h2>✨ Picked for you <span class="muted">— most like what you favorite · <a href="{{ url_for('learning_page') }}">how it learns</a></span></h2>
   <div class="listing-grid">
     {% for l in for_you %}{{ listing_card(l) }}{% endfor %}
@@ -25,7 +25,7 @@
 </section>
 {% endif %}
 {% if deals and not deals_only %}
-<section class="panel deals-panel">
+<section class="panel deals-panel" id="deals">
   <h2>🔥 Deals <span class="muted">— {{ deals|length }} priced 25%+ under their typical price, biggest discount first</span></h2>
   <div class="listing-grid">
     {% for l in deals[:24] %}{{ listing_card(l) }}{% endfor %}

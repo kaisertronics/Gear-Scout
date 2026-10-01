@@ -388,7 +388,13 @@ def _group_by_source(listings: list[dict]) -> list[tuple]:
     source has the single most recent listing."""
     groups: dict[str, list[dict]] = {}
     for listing in _decorate(listings):
-        groups.setdefault(listing["source_name"], []).append(listing)
+        # One section per site: every Craigslist town / Facebook region /
+        # Vintage King list goes under its site, with the town or region
+        # shown on the card instead.
+        family, _, detail = (listing.get("source_name") or "").partition(" — ")
+        family = {"FB Marketplace": "Facebook Marketplace", "FB": "Facebook groups"}.get(family, family)
+        listing["source_detail"] = detail or None
+        groups.setdefault(family, []).append(listing)
     # `listings` arrives newest-first, so the first listing seen for a given
     # source is already that source's most recent one.
     return sorted(groups.items(), key=lambda kv: kv[1][0]["first_seen"], reverse=True)
