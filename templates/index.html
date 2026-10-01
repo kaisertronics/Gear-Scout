@@ -213,6 +213,25 @@
   </section>
   {% endfor %}
 
+  <section class="panel">
+    <p class="muted" style="margin:0;">
+      Showing only listings at least <strong>10% under their comp</strong> — the B-stock value when the model
+      has one, otherwise what it sold for, its Reverb/eBay used price, Gear Scout's price history or similar
+      listings. Anything priced above that is left out. Search still shows everything.
+    </p>
+  </section>
+  {% if no_comp_total %}
+  <section class="panel">
+    <details class="more-listings">
+      <summary class="muted">{{ no_comp_total }} recent listing{{ '' if no_comp_total == 1 else 's' }} with nothing to compare against yet (or auctions) — tap to look</summary>
+      <div class="listing-grid">
+        {% for l in no_comp %}{{ listing_card(l) }}{% endfor %}
+      </div>
+      {% if no_comp_total > no_comp|length %}<p class="muted">Showing the newest {{ no_comp|length }}.</p>{% endif %}
+    </details>
+  </section>
+  {% endif %}
+
   <script>
     const scrapeBanner = document.getElementById('scrape-status-banner');
     const scrapeBtn = document.getElementById('scrape-now-btn');

@@ -5,10 +5,6 @@
     <input type="checkbox" name="deals" value="1" {{ 'checked' if deals_only else '' }} onchange="this.form.submit()">
     🔥 Deals only
   </label>
-  <label class="deals-toggle {{ 'is-on' if worth_only else '' }}" title="Only listings at least 10% under what a dealer B-stock / open-box unit costs (or under the used value, for vintage gear with no B-stock). Listings without a comp yet are hidden while this is on.">
-    <input type="checkbox" name="worth" value="1" {{ 'checked' if worth_only else '' }} onchange="this.form.submit()">
-    ✓ Worth it only <span class="muted">(10%+ under B-stock)</span>
-  </label>
   {% if home_zip_set %}
   <label class="muted">Local pickup within
     <select name="within" onchange="this.form.submit()">

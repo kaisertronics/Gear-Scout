@@ -13,7 +13,8 @@
       "Specific Telex terms ('Avalon 737', 'Distressor', 'Apollo X8P') get their own Reverb price, used for same-brand listings that don't name a model.",
       "Facebook pictures are saved locally while their links work (Facebook links expire), so they keep showing; any picture that still fails shows a clean placeholder.",
       "eBay pauses itself until the daily reset when its daily request allowance is used up; Telex buttons react instantly.",
-      "Every Telex listing gets a comp when at all possible: what the model sold for, its Reverb/eBay used price, Gear Scout's own price history (incl. sold listings), the Telex term's price, or similar past listings (est.). The card says which. Listings still without one are looked up first on each hourly refresh."
+      "Every Telex listing gets a comp when at all possible: what the model sold for, its Reverb/eBay used price, Gear Scout's own price history (incl. sold listings), the Telex term's price, or similar past listings (est.). The card says which. Listings still without one are looked up first on each hourly refresh.",
+      "Dashboard only shows listings at least 10% under their comp (B-stock value when known, otherwise sold / Reverb-eBay used / history / similar listings) — no checkbox; listings without a comp are in one collapsed group at the bottom."
     ]
   },
   {

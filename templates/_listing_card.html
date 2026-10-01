@@ -37,7 +37,7 @@
       {% if l.comp %}
         <div class="listing-typical" title="{{ 'An estimate from similar past listings' if l.comp.est else 'Comp used for the Telex List' }}">{{ l.comp.label }} ~{{ l.comp.ref }}{% if l.comp.est %} (est.){% endif %} · <strong>{{ l.comp.pct }}% under</strong></div>
       {% endif %}
-      {% if l.price_ctx and l.price_ctx.bstock %}
+      {% if l.price_ctx and l.price_ctx.bstock and not l.comp %}
         <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
       {% endif %}
       {% if l.sale and not l.sale.fast %}

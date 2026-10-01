@@ -383,6 +383,39 @@ def _decorate(listings: list[dict]) -> list[dict]:
     return out
 
 
+def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Splits decorated listings into ones at least 10% under their comp
+    (B-stock value when the model has one, else the best comp from
+    _telex_comp) and ones with no comp yet. Listings above the threshold are
+    dropped. Favorites always stay; auctions (a current bid isn't a price)
+    go with the no-comp group."""
+    from scrapers.enrich import parse_price
+    from scrapers.market import load_market
+    market, index, similar = load_market(), _price_index(), _similar_index()
+    worth, no_comp = [], []
+    for l in listings:
+        if l.get("favorite"):
+            worth.append(l)
+            continue
+        ctx = l.get("price_ctx") or {}
+        value = ctx.get("unit_value") or parse_price(l.get("price"))
+        if l.get("is_auction") or l.get("sold") or l.get("pending") or not value:
+            no_comp.append(l)
+            continue
+        if ctx.get("bstock") and not ctx.get("rough"):
+            ref, label, est = parse_price(ctx["bstock"]), "B-stock", False
+        else:
+            comp = _telex_comp(l, market, index, similar, None, None)
+            if not comp:
+                no_comp.append(l)
+                continue
+            ref, label, est = comp
+        if ref * 0.2 <= value <= ref * 0.9:
+            l["comp"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}", "label": label, "est": est}
+            worth.append(l)
+    return worth, no_comp
+
+
 def _deals_from(grouped: list[tuple]) -> list[dict]:
     """Every deal across all sources, biggest discount first — shown in its
     own section above the per-source groups."""
@@ -390,12 +423,12 @@ def _deals_from(grouped: list[tuple]) -> list[dict]:
     return sorted(deals, key=lambda l: l["price_ctx"].get("pct_under", 0), reverse=True)
 
 
-def _group_by_source(listings: list[dict]) -> list[tuple]:
+def _group_by_source(listings: list[dict], decorated: bool = False) -> list[tuple]:
     """Group already-newest-first listings by source, preserving recency
     order within each group, and order the groups themselves by whichever
     source has the single most recent listing."""
     groups: dict[str, list[dict]] = {}
-    for listing in _decorate(listings):
+    for listing in (listings if decorated else _decorate(listings)):
         # One section per site: every Craigslist town / Facebook region /
         # Vintage King list goes under its site, with the town or region
         # shown on the card instead.
@@ -1004,15 +1037,18 @@ def learning_dismiss():
 def index():
     cfg = load_config_raw()
     status = load_run_status()
-    listings = recent_listings(limit=450)
+    listings = recent_listings(limit=3000)
     # Same relevance check the scrapes now use, so listings stored before it
     # (found only through a broad word like "mic") don't crowd the page.
     if cfg.get("relevance_check", True):
         from scrapers.enrich import is_relevant
         from scrapers.learning import keywords_with_learned
         terms = tuple(keywords_with_learned(cfg))
-        listings = [l for l in listings if l.get("favorite") or is_relevant(l.get("title"), l.get("price"), terms)][:300]
-    grouped_listings = _group_by_source(listings)
+        listings = [l for l in listings if l.get("favorite") or is_relevant(l.get("title"), l.get("price"), terms)]
+    # Only what's worth your time: 10%+ under its comp. The rest of what has
+    # no comp yet sits in one collapsed group at the bottom.
+    worth, no_comp = _apply_comp_rule(_decorate(listings))
+    grouped_listings = _group_by_source(worth[:300], decorated=True)
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
     last_refresh = None
     try:
@@ -1024,6 +1060,7 @@ def index():
     return render_template(
         "index.html",
         last_refresh=last_refresh,
+        no_comp=no_comp[:150], no_comp_total=len(no_comp),
         for_you=_for_you(grouped_listings),
         for_you_ceiling=_for_you_cache.get("ceiling"),
         deals=_deals_from(grouped_listings),
