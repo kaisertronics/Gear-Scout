@@ -16,6 +16,10 @@ services:
       - .:/config:ro
     environment:
       - PYTHONUNBUFFERED=1
+    # Background scraping yields to the dashboard when the computer is busy
+    # (the dashboard and your own searches get twice the CPU share), so
+    # pages stay quick while scheduled scrapes run.
+    cpu_shares: 512
     # No ports needed for normal operation.
     # Facebook login runs through the dashboard's own port — see USER_GUIDE.md.
 

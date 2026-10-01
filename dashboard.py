@@ -582,11 +582,27 @@ def _telex_matches(terms: list[str], days: int = 30, per_term: int = 60) -> list
             for term, hits in out]
 
 
+_telex_cache: dict = {"key": None, "at": 0.0, "groups": None}
+_data_version = [0]  # bumped whenever you hide/favorite/change terms or a search finishes
+
+
+def _data_changed():
+    _data_version[0] += 1
+
+
 @app.route("/telex")
 def telex():
     cfg = load_config_raw()
     terms = _telex_terms(cfg)
-    groups = _telex_matches(terms)
+    # Matching thousands of listings against every term takes a few seconds
+    # (much longer while a scrape runs); reuse it for 3 minutes unless
+    # something changed.
+    key = (tuple(terms), request.query_string, _data_version[0])
+    if _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180:
+        groups = _telex_cache["groups"]
+    else:
+        groups = _telex_matches(terms)
+        _telex_cache.update(key=key, at=time.time(), groups=groups)
     from scrapers.telex import state as telex_state
     return render_template("telex.html", groups=groups, terms=terms,
                            total=sum(len(g) for _, g in groups), sweep=telex_state())
@@ -612,6 +628,7 @@ def _run_telex_job(terms: list[str], fast_only: bool):
             found += res["found"]
             new += res["new"]
         write("done", done=len(terms), total=len(terms))
+        _data_changed()
     except Exception as e:
         logging.exception("Telex search failed")
         write("failed", reason=str(e))
@@ -648,6 +665,7 @@ def telex_status():
 
 @app.route("/telex/add", methods=["POST"])
 def telex_add():
+    _data_changed()
     new = [l.strip() for l in request.form.get("terms", "").splitlines() if l.strip()]
     if new:
         cfg = load_config_for_edit()
@@ -664,6 +682,7 @@ def telex_add():
 
 @app.route("/telex/remove", methods=["POST"])
 def telex_remove():
+    _data_changed()
     term = request.form.get("term", "").strip()
     cfg = load_config_for_edit()
     cfg["telex_list"] = [t for t in (cfg.get("telex_list") or []) if str(t).strip() != term]
@@ -857,6 +876,7 @@ def favorites():
 
 @app.route("/listing/favorite", methods=["POST"])
 def listing_favorite():
+    _data_changed()
     global_id = request.form.get("global_id", "")
     favorite = request.form.get("favorite") == "1"
     if global_id:
@@ -1193,6 +1213,7 @@ def settings_fb_posts():
 
 @app.route("/listing/hide", methods=["POST"])
 def listing_hide():
+    _data_changed()
     global_id = request.form.get("global_id", "")
     if global_id:
         set_hidden(global_id, request.form.get("hidden", "1") == "1")
