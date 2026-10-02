@@ -8,7 +8,8 @@
       "New '🆕 New since your last visit' section at the top of the Dashboard (all sites, newest first) and NEW badges, so you don't see the same top listings every time.",
       "ShopGoodwill: reads the Musical Instruments and Vintage Electronics categories page by page (about 1,000 newest lots per full run) plus deeper searches.",
       "New '🔨 Auctions' section: auctions whose current bid is still 10%+ under the comp, ending soonest first.",
-      "The top listings on the Dashboard and Telex are checked for sold/ended right after each page is built (not just hourly), and sold ones are taken off immediately."
+      "The top listings on the Dashboard and Telex are checked for sold/ended right after each page is built (not just hourly), and sold ones are taken off immediately.",
+      "New 'Ask AI' page: ask in plain English about the gear Gear Scout has found; Google Gemini (your own free key, Settings → AI) plans the search and answers with links to the listings and their comps."
     ]
   },
   {

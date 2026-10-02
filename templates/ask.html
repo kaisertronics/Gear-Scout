@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Ask AI{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>🤖 Ask AI</h2>
+    <p class="muted">
+      Ask about the gear Gear Scout has found — e.g. “any Neve or API preamps under $1,000 that are real deals?”,
+      “best LA-2A style compressor listed right now?”, “cheapest Neumann U87 near me?”. Gemini plans the search,
+      Gear Scout searches every listing it has (with comps), and Gemini answers with links.
+      {% if not has_key %}<br><strong>First add your free Gemini API key in <a href="{{ url_for('settings') }}#ai">Settings → AI</a>.</strong>{% endif %}
+    </p>
+    <form id="ask-form" class="search-form">
+      <input type="text" name="q" id="ask-q" class="search-input" placeholder="What are you looking for?" required {{ '' if has_key else 'disabled' }}>
+      <button type="submit" id="ask-btn" {{ '' if has_key else 'disabled' }}>Ask</button>
+    </form>
+    <div id="ask-status" class="live-status-banner" style="display:none;"></div>
+  </section>
+  <div id="ask-result"></div>
+
+  <script>
+    const form = document.getElementById('ask-form'), status = document.getElementById('ask-status');
+    const out = document.getElementById('ask-result'), btn = document.getElementById('ask-btn');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      gsProgress(status, 'Thinking — searching your listings and asking Gemini…', {started: Date.now() / 1000});
+      out.innerHTML = '';
+      try {
+        const resp = await fetch("{{ url_for('ask_query') }}", {method: 'POST', body: new FormData(form)});
+        out.innerHTML = await resp.text();
+        status.style.display = 'none';
+      } catch (err) {
+        gsProgressText(status, '⚠️ Something went wrong — try again.');
+      }
+      btn.disabled = false;
+    });
+  </script>
+{% endblock %}

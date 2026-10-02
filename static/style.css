@@ -864,3 +864,6 @@ section[id^="src-"] { scroll-margin-top: 64px; }
   margin: 0 0 4px 4px; background: #16a34a; color: #fff; letter-spacing: .03em; }
 #new { scroll-margin-top: 64px; }
 #auctions { scroll-margin-top: 64px; }
+
+.ask-answer { line-height: 1.6; } .ask-answer p { margin: 0 0 10px; } .ask-answer ul { margin: 0 0 10px; padding-left: 20px; }
+.ask-card-wrap { position: relative; } .ask-num { position: absolute; z-index: 3; bottom: 8px; right: 10px; font-weight: 800; font-size: 12px; color: var(--muted); }

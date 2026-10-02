@@ -1040,6 +1040,66 @@ def whats_new():
     return render_template("whats_new.html", entries=entries)
 
 
+@app.route("/ask")
+def ask_page():
+    cfg = load_config_raw()
+    return render_template("ask.html", has_key=bool(((cfg.get("ai") or {}).get("gemini_api_key") or "").strip()))
+
+
+def _answer_html(text: str, n: int) -> str:
+    """Gemini's answer as simple HTML: paragraphs, **bold**, bullet lines,
+    and [#n] citations as links to the listing cards below."""
+    from html import escape
+    t = escape(text or "")
+    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    t = re.sub(r"\[#(\d+)\]", lambda m: f'<a href="#ask-{m.group(1)}">[#{m.group(1)}]</a>'
+               if 1 <= int(m.group(1)) <= n else m.group(0), t)
+    lines, html, in_list = t.split("\n"), [], False
+    for line in lines:
+        bullet = re.match(r"\s*[-*•]\s+(.*)", line)
+        if bullet:
+            if not in_list:
+                html.append("<ul>")
+                in_list = True
+            html.append(f"<li>{bullet.group(1)}</li>")
+        else:
+            if in_list:
+                html.append("</ul>")
+                in_list = False
+            if line.strip():
+                html.append(f"<p>{line}</p>")
+    if in_list:
+        html.append("</ul>")
+    return "".join(html)
+
+
+@app.route("/ask/query", methods=["POST"])
+def ask_query():
+    from scrapers.assistant import ask
+    try:
+        res = ask(request.form.get("q", ""), load_config_raw())
+    except Exception as e:
+        logging.exception("Ask AI failed")
+        return render_template("_ask_answer.html", error=str(e) if isinstance(e, (PermissionError, RuntimeError))
+                               else "Something went wrong talking to Gemini — try again.")
+    listings = _decorate(res["listings"])
+    return render_template("_ask_answer.html", answer_html=_answer_html(res["answer"], len(res["listings"])),
+                           listings=res["listings"], plan=res.get("plan") or {}, error=None)
+
+
+@app.route("/settings/ai", methods=["POST"])
+def settings_ai():
+    key = request.form.get("gemini_api_key", "").strip()
+    cfg = load_config_for_edit()
+    ai = cfg.setdefault("ai", {})
+    if request.form.get("remove") == "1":
+        ai["gemini_api_key"] = ""
+    elif key:
+        ai["gemini_api_key"] = key
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="ai"))
+
+
 @app.route("/learning")
 def learning_page():
     from scrapers import learning as L
@@ -1735,6 +1795,7 @@ def settings():
     return render_template(
         "settings.html",
         hide_accessories=load_config_raw().get("hide_accessories", True),
+        ai_key_set=bool(((load_config_raw().get("ai") or {}).get("gemini_api_key") or "").strip()),
         email_cfg=email_cfg,
         schedule_cfg=schedule_cfg,
         keywords_text="\n".join(keywords),

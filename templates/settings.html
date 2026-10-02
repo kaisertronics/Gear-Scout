@@ -10,6 +10,7 @@
       <button type="button" class="settings-tab" data-tab="ebay">eBay</button>
       <button type="button" class="settings-tab" data-tab="notify">Alerts</button>
       <button type="button" class="settings-tab" data-tab="fbposts">FB Posts</button>
+      <button type="button" class="settings-tab" data-tab="ai">AI</button>
     </div>
 
     {% if saved == 'email' %}
@@ -223,6 +224,22 @@
       </form>
     </div>
 
+    <div class="settings-panel" id="tab-ai" style="display:none;">
+      <h3>Ask AI (Google Gemini)</h3>
+      <p class="muted">
+        The <a href="{{ url_for('ask_page') }}">Ask AI</a> page uses Google's Gemini with your own free API key:
+        go to <strong>aistudio.google.com</strong>, sign in with a Google account, click <strong>Get API key → Create API key</strong>,
+        copy it and paste it below. Your questions and the matching listings' titles and prices are sent to Google
+        (on the free tier Google may use them to improve its products); nothing personal is sent.
+      </p>
+      <p>{% if ai_key_set %}<span class="flag flag-deal">✓ Key saved</span>{% else %}<span class="muted">No key yet.</span>{% endif %}</p>
+      <form method="post" action="{{ url_for('settings_ai') }}" class="settings-form">
+        <label>Gemini API key <input type="password" name="gemini_api_key" autocomplete="off" placeholder="{{ 'paste a new key to replace it' if ai_key_set else 'paste your key' }}"></label>
+        <button type="submit" class="btn btn-primary">Save key</button>
+        {% if ai_key_set %}<button type="submit" name="remove" value="1" class="btn">Remove key</button>{% endif %}
+      </form>
+    </div>
+
     <div class="settings-panel" id="tab-fbposts" style="display:none;">
       <h3>Facebook post search — priority list</h3>
       <p class="muted">
@@ -341,6 +358,7 @@
       ebay: document.getElementById('tab-ebay'),
       notify: document.getElementById('tab-notify'),
       fbposts: document.getElementById('tab-fbposts'),
+      ai: document.getElementById('tab-ai'),
     };
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -352,6 +370,8 @@
       });
     });
     if (location.hash === '#ebay') document.querySelector('.settings-tab[data-tab="ebay"]').click();
+    if (location.hash === '#ai') document.querySelector('.settings-tab[data-tab="ai"]').click();
+    {% if saved == 'ai' %}document.querySelector('.settings-tab[data-tab="ai"]').click();{% endif %}
     {% if saved == 'ebay' %}
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% elif saved in ('notifications', 'push_ok', 'push_fail') %}
