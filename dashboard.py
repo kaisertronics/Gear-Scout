@@ -797,6 +797,66 @@ def _data_changed():
     _data_version[0] += 1
 
 
+_verify_state = {"running": False, "last": 0.0}
+
+
+def _verify_top_listings():
+    """Checks the top listings on the Dashboard and Telex right away (not
+    just hourly): first 6 per Telex term, first 12 per Dashboard section,
+    plus New and Auctions. Sold/ended ones are marked and taken off the
+    cached pages. Facebook needs a browser, so it's left to the hourly check.
+    Runs in the background; listings checked in the last hour are skipped."""
+    if _verify_state["running"]:
+        # One check at a time; come back for anything new once it's done.
+        _verify_state["again"] = True
+        return
+    urls = []
+    d = _index_cache.get("data") or {}
+    for _, items in d.get("grouped") or []:
+        urls += [l["url"] for l in items[:12]]
+    urls += [l["url"] for l in (d.get("auctions") or [])[:24]]
+    for _, good, _ in (_telex_cache.get("groups") or []):
+        urls += [r["url"] for r in good[:6]]
+    urls = [u for u in dict.fromkeys(urls) if u and "facebook.com" not in u]
+    if not urls:
+        return
+
+    def run():
+        from concurrent.futures import ThreadPoolExecutor
+        from scrapers.sold_check import _record, check_url
+        from scrapers.store import _conn
+        _verify_state["running"] = True
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            with _conn() as conn:
+                recent = {u for (u,) in conn.execute(
+                    f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(urls))}) AND sold_checked_at >= ?",
+                    (*urls, cutoff))}
+            todo = [u for u in urls if u not in recent]
+
+            def one(u):
+                try:
+                    gone = check_url(u)
+                except Exception:
+                    gone = None
+                _record(u, gone)
+                return u, gone
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                gone = [u for u, g in pool.map(one, todo) if g]
+            if gone:
+                with _conn() as conn:
+                    gids = [g for (g,) in conn.execute(
+                        f"SELECT global_id FROM seen WHERE url IN ({','.join('?' * len(gone))})", gone)]
+                for gid in gids:
+                    _patch_cached(gid, hidden=True)
+                logging.info("Took %d sold/ended listings off the Dashboard/Telex", len(gone))
+        finally:
+            _verify_state.update(running=False, last=time.time())
+            if _verify_state.pop("again", False):
+                _verify_top_listings()
+    threading.Thread(target=run, name="verify-top", daemon=True).start()
+
+
 def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool = False):
     """Applies a star / hide to the cached Dashboard and Telex lists in
     place, so those pages stay instant instead of rebuilding."""
@@ -833,6 +893,7 @@ def telex():
     else:
         groups = _telex_matches(terms)
         _telex_cache.update(key=key, at=time.time(), groups=groups)
+        _verify_top_listings()
     from scrapers.telex import state as telex_state
     return render_template("telex.html", groups=groups, terms=terms,
                            total=sum(len(g) for _, g, _ in groups), sweep=telex_state())
@@ -1140,6 +1201,7 @@ def _index_listings(cfg) -> dict:
         return _index_cache["data"]
     data = _build_index_listings(cfg)
     _index_cache.update(key=key, at=time.time(), data=data)
+    _verify_top_listings()
     return data
 
 
@@ -1998,6 +2060,7 @@ def _keep_caches_warm():
             _mismatched_count(load_config_raw().get("keywords") or [])
             with app.test_request_context("/telex"):
                 telex()  # fills the Telex cache
+            _verify_top_listings()
         except Exception:
             logging.exception("Cache warm-up failed")
         time.sleep(170)
