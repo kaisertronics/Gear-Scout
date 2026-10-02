@@ -424,6 +424,12 @@ def run_watch_cycle():
             check_telex_lowest(cfg)
         except Exception:
             logger.exception("Telex sweep / lowest-price check failed")
+        # New steals (60%+ under used prices): push + email right away.
+        try:
+            from scrapers.steals import alert_new
+            alert_new(cfg)
+        except Exception:
+            logger.exception("Steal alert check failed")
         # Alerts you set up by asking the AI assistant.
         try:
             from scrapers.assistant import check_alerts

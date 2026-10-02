@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_listing_card.html" import listing_card %}
+{% block title %}Gear Scout — Steals{% endblock %}
+{% block content %}
+
+  <section class="panel">
+    <h2>🔥 Steals <span class="muted">— {{ trusted|length }} listing{{ '' if trusted|length == 1 else 's' }} {{ min_pct }}%+ under used prices</span></h2>
+    <p class="muted">
+      Everything Gear Scout has collected for your search terms and Telex List, still for sale, priced
+      at least {{ min_pct }}% under what the gear really goes for used. Biggest dollar savings first.
+      Each listing is checked against two things: its comp (sold prices, Reverb/eBay used, B-stock)
+      <strong>and</strong> what other listings of the same gear ask. The lower of the two counts, so a copy
+      or a cheaper version can't look like a steal. Parts, repair jobs, pedals, plugins, auctions and
+      placeholder prices are left out. New steals also go to your phone and email within the hour.
+      Tap 🤖 on a listing for a quick "is this real?" check.
+    </p>
+    <div class="steal-levels">
+      {% for p in levels %}
+        <a href="{{ url_for('steals', pct=p) }}" class="btn btn-sm{{ ' btn-primary' if p == min_pct else '' }}">{{ p }}%+ off</a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    {% if trusted %}
+      <div class="listing-grid">
+        {% for l in trusted[:48] %}{{ listing_card(l) }}{% endfor %}
+      </div>
+      {% if trusted|length > 48 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(trusted[48:])) }}">
+          <summary>Show all {{ trusted|length }}</summary>
+          <div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">No steals at {{ min_pct }}%+ off right now. Try a lower level above.</p>
+    {% endif %}
+  </section>
+
+  {% if rough %}
+  <section class="panel">
+    <h2>Double-check these <span class="muted">— {{ rough|length }}</span></h2>
+    <p class="muted">Also {{ min_pct }}%+ under, but the comparison is shakier: the comp is only an estimate,
+      it's a clone or "style" copy, or there's no other listing of the same gear to confirm the price.
+      Some are real finds and some are mix-ups, so check before you jump.</p>
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(rough[:150])) }}">
+      <summary>Show {{ [rough|length, 150]|min }}</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endif %}
+{% endblock %}

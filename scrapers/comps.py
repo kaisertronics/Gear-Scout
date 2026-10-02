@@ -128,7 +128,7 @@ def similar_price(sim, title: str, url: Optional[str]) -> Optional[float]:
 
 def evaluate(title: Optional[str], price: Optional[str], description: Optional[str] = None,
              url: Optional[str] = None, market=None, index=None, similar=None) -> Optional[dict]:
-    """{'ref', 'label', 'est', 'pct', 'worth'} for a listing, or None when
+    """{'ref', 'label', 'est', 'pct', 'worth', 'value' (per piece)} for a listing, or None when
     there's nothing to compare it with."""
     from scrapers.enrich import parse_price, price_context
     from scrapers.market import load_market
@@ -146,5 +146,5 @@ def evaluate(title: Optional[str], price: Optional[str], description: Optional[s
         if not comp:
             return None
         ref, label, est = comp
-    return {"ref": ref, "label": label, "est": est, "pct": round((1 - value / ref) * 100),
+    return {"ref": ref, "label": label, "est": est, "pct": round((1 - value / ref) * 100), "value": value,
             "worth": ref * FLOOR_RATIO <= value <= ref * WORTH_RATIO}

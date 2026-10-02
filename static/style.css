@@ -880,3 +880,6 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 .ai-verdict { font-size: 20px; font-weight: 800; margin: 4px 0 8px; }
 .ai-v-great, .ai-v-good { color: #15803d; } .ai-v-fair { color: #a16207; } .ai-v-overpriced, .ai-v-be { color: #b91c1c; }
 .ai-msg { width: 100%; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--border, #e2e8f0); margin: 4px 0 8px; }
+
+.steal-levels { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.steal-levels a { text-decoration: none; }

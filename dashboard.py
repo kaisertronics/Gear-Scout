@@ -821,6 +821,8 @@ def _verify_top_listings():
     urls += [l["url"] for l in (d.get("auctions") or [])[:24]]
     for _, good, _ in (_telex_cache.get("groups") or []):
         urls += [r["url"] for r in good[:6]]
+    st = _steals_cache.get("data") or {}
+    urls += [l["url"] for l in (st.get("trusted") or [])[:40]] + [l["url"] for l in (st.get("rough") or [])[:12]]
     urls = [u for u in dict.fromkeys(urls) if u]
     if not urls:
         return
@@ -888,6 +890,8 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
         for _, good, unpriced in (_telex_cache.get("groups") or []):
             yield good
             yield unpriced
+        for items in (_steals_cache.get("data") or {}).values():
+            yield items
     for items in lists():
         for i in range(len(items) - 1, -1, -1):
             if items[i].get("global_id") == global_id:
@@ -895,6 +899,51 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
                     del items[i]
                 elif favorite is not None:
                     items[i]["favorite"] = 1 if favorite else 0
+
+
+_steals_cache: dict = {"key": None, "at": 0.0, "data": None}
+STEAL_LEVELS = (50, 60, 70, 80)
+
+
+def _steals(min_pct: int) -> dict:
+    """Listings 60%+ (or the chosen level) under used prices — see
+    scrapers/steals.py. Takes ~15-25s over every stored listing, so it's
+    reused for 10 minutes unless something changed, and kept warm."""
+    key = (min_pct, _data_version[0], _last_change_marker())
+    if _steals_cache["key"] == key and time.time() - _steals_cache["at"] < 600:
+        return _steals_cache["data"]
+    from scrapers.steals import find
+    found = find(load_config_raw(), min_pct=min_pct)
+    data = {}
+    for name in ("trusted", "rough"):
+        items = _decorate(found[name])  # display fields; drops your exclude words
+        for l in items:
+            st = l["steal"]
+            under_peers = st.get("peer") and st["peer"] < st["comp"]
+            l["comp"] = {"pct": st["pct"], "ref": f"${st['ref']:,.0f}", "est": st["est"],
+                         "label": "other listings of this gear" if under_peers else st["label"]}
+        data[name] = items
+    if min_pct == 60:
+        try:
+            Path("/data/shown_steals.txt").write_text(
+                "\n".join(dict.fromkeys(l["url"] for l in data["trusted"] + data["rough"][:60])))
+        except OSError:
+            pass
+    _steals_cache.update(key=key, at=time.time(), data=data)
+    return data
+
+
+@app.route("/steals")
+def steals():
+    try:
+        min_pct = int(request.args.get("pct") or 60)
+    except ValueError:
+        min_pct = 60
+    min_pct = min_pct if min_pct in STEAL_LEVELS else 60
+    data = _steals(min_pct)
+    _verify_top_listings()
+    return render_template("steals.html", trusted=data["trusted"], rough=data["rough"],
+                           min_pct=min_pct, levels=STEAL_LEVELS)
 
 
 @app.route("/telex")
@@ -2186,6 +2235,8 @@ def _keep_caches_warm():
             _mismatched_count(load_config_raw().get("keywords") or [])
             with app.test_request_context("/telex"):
                 telex()  # fills the Telex cache
+            with app.test_request_context("/steals"):
+                _steals(60)
             _verify_top_listings()
         except Exception:
             logging.exception("Cache warm-up failed")
