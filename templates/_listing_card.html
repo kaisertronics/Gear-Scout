@@ -23,7 +23,7 @@
           <span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>
           {% if l.price|orig_price %}<span class="listing-was" style="text-decoration:none;">{{ l.price|orig_price }}</span>{% endif %}
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
-          {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid</span>{% endif %}
+          {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
       {% endif %}

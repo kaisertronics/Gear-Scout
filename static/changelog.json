@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-10-02",
+    "title": "Sold listings, pedals, new-first, ShopGoodwill",
+    "items": [
+      "Listings on your Dashboard and Telex are re-checked first (every 4 hours) so sold/ended ones drop off; eBay listings are now checked too (through eBay's API).",
+      "Guitar pedals are left out everywhere except Search (recognized by type and maker, not just the word 'pedal'), unless one of your terms asks for pedals.",
+      "New '🆕 New since your last visit' section at the top of the Dashboard (all sites, newest first) and NEW badges, so you don't see the same top listings every time.",
+      "ShopGoodwill: reads the Musical Instruments and Vintage Electronics categories page by page (about 1,000 newest lots per full run) plus deeper searches.",
+      "New '🔨 Auctions' section: auctions whose current bid is still 10%+ under the comp, ending soonest first."
+    ]
+  },
+  {
     "date": "2026-10-01",
     "title": "Nightly improvements begin",
     "items": [

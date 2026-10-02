@@ -472,12 +472,27 @@ def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
     from scrapers.market import load_market
     market, index, similar = load_market(), _price_index(), similar_index()
     worth, no_comp = [], []
+    _apply_comp_rule.auctions = []
     for l in listings:
         if l.get("favorite"):
             worth.append(l)
             continue
         ctx = l.get("price_ctx") or {}
         value = ctx.get("unit_value") or parse_price(l.get("price"))
+        if l.get("is_auction") and value and not l.get("sold"):
+            # Auctions go in their own section: worth watching while the
+            # current bid is still 10%+ under the comp.
+            comp = (parse_price(ctx["bstock"]), "B-stock", False) if ctx.get("bstock") and not ctx.get("rough") \
+                else best_comp(l, market, index, similar, None, None)
+            if comp and value <= comp[0] * 0.9:
+                l["comp"] = {"pct": round((1 - value / comp[0]) * 100), "ref": f"${comp[0]:,.0f}",
+                             "label": comp[1], "est": comp[2]}
+                m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", l.get("description") or "")
+                l["auction_ends"] = m.group(1) if m else ""
+                _apply_comp_rule.auctions.append(l)
+            elif not comp:
+                no_comp.append(l)
+            continue
         if l.get("is_auction") or l.get("sold") or l.get("pending") or not value:
             no_comp.append(l)
             continue
@@ -1062,6 +1077,7 @@ def index():
         last_refresh=last_refresh,
         no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
         new_items=new_items[:48], new_total=len(new_items), new_since=since,
+        auctions=data.get("auctions", []),
         scraped_at=_last_scraped_by_site(),
         for_you=data["for_you"],
         for_you_ceiling=_for_you_cache.get("ceiling"),
@@ -1151,6 +1167,10 @@ def _build_index_listings(cfg) -> dict:
     # no comp yet sits in one collapsed group at the bottom.
     worth, no_comp = _apply_comp_rule(_decorate(listings))
     grouped = _group_by_source(worth[:300], decorated=True)
+    from zoneinfo import ZoneInfo
+    now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
+    auctions = sorted((a for a in getattr(_apply_comp_rule, "auctions", []) if (a.get("auction_ends") or "9") >= now_s),
+                      key=lambda a: a.get("auction_ends") or "9")
     for_you = _for_you(grouped)
     # Tell the hourly sold/pending checker what's on screen, so it re-checks
     # these first (what you see shouldn't linger after it sells).
@@ -1159,7 +1179,8 @@ def _build_index_listings(cfg) -> dict:
         Path("/data/shown_dashboard.txt").write_text("\n".join(dict.fromkeys(u for u in shown if u)))
     except OSError:
         pass
-    return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you, "deals": _deals_from(grouped)}
+    return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you, "deals": _deals_from(grouped),
+            "auctions": auctions}
 
 
 @app.route("/scrape/start", methods=["POST"])

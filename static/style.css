@@ -863,3 +863,4 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 .new-tag { display: inline-block; font-size: 10px; font-weight: 800; line-height: 1; padding: 3px 6px; border-radius: 4px;
   margin: 0 0 4px 4px; background: #16a34a; color: #fff; letter-spacing: .03em; }
 #new { scroll-margin-top: 64px; }
+#auctions { scroll-margin-top: 64px; }

@@ -16,6 +16,7 @@
   <nav class="source-jump" aria-label="Jump to a site">
     {% if new_total %}<a href="#new" class="source-jump-chip">🆕 New <span class="muted">{{ new_total }}</span></a>{% endif %}
     {% if for_you %}<a href="#for-you" class="source-jump-chip">✨ For you</a>{% endif %}
+    {% if auctions %}<a href="#auctions" class="source-jump-chip">🔨 Auctions <span class="muted">{{ auctions|length }}</span></a>{% endif %}
     {% if deals %}<a href="#deals" class="source-jump-chip">🔥 Deals <span class="muted">{{ deals|length }}</span></a>{% endif %}
     {% for source_name, items in grouped_listings %}
       <a href="#src-{{ loop.index }}" class="source-jump-chip">{{ source_name }} <span class="muted">{{ items|length }}</span></a>
@@ -204,6 +205,21 @@
     {% if new_items|length > 24 %}
       <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new_items[24:])) }}">
         <summary>Show {{ new_items|length - 24 }} more new</summary>
+        <div class="listing-grid"></div>
+      </details>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if auctions %}
+  <section class="panel" id="auctions">
+    <h2>🔨 Auctions <span class="muted">— {{ auctions|length }} where the current bid is still 10%+ under the comp · ending soonest first</span></h2>
+    <div class="listing-grid">
+      {% for l in auctions[:24] %}{{ listing_card(l) }}{% endfor %}
+    </div>
+    {% if auctions|length > 24 %}
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(auctions[24:])) }}">
+        <summary>Show {{ auctions|length - 24 }} more auctions</summary>
         <div class="listing-grid"></div>
       </details>
     {% endif %}

@@ -14,7 +14,7 @@ deal tags and lowest-price tracking).
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
@@ -51,8 +51,25 @@ _NOT_AUDIO_CATEGORY = re.compile(
 )
 
 
-def _search(text: str, page_size: int = 40) -> list[dict]:
-    body = {
+# Categories where audio gear lands, browsed newest-first page by page
+# (the site returns at most 40 per page). (category id, level)
+CATEGORIES = [(13, 1), (431, 2)]   # Musical Instruments; Vintage Electronics
+# Lots are listed in daily batches, so it reads a fixed number of pages:
+# ~160 newest lots per category hourly, ~1,000 on full runs.
+MAX_PAGES_FULL, MAX_PAGES_LIGHT = 25, 4
+
+
+def _browse(cat: int, level: int, page: int) -> list[dict]:
+    body = _body("", page)
+    body.update({"selectedCategoryIds": str(cat), "categoryLevelNo": str(level), "categoryLevel": level,
+                 "categoryId": cat, "catIds": str(cat)})
+    resp = requests.post(API_URL, json=body, headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    return (resp.json().get("searchResults") or {}).get("items") or []
+
+
+def _body(text: str, page: int = 1, page_size: int = 40) -> dict:
+    return {
         "isSize": False, "isWeddingCatagory": "false", "isMultipleCategoryIds": False,
         "isFromHeaderMenuTab": False, "layout": "", "isFromHomePage": False,
         "searchText": text, "selectedGroup": "", "selectedCategoryIds": "", "selectedSellerIds": "",
@@ -62,10 +79,14 @@ def _search(text: str, page_size: int = 40) -> list[dict]:
         "closedAuctionEndingDate": "1/1/2026", "closedAuctionDaysBack": "7",
         "searchCanadaShipping": "false", "searchInternationalShippingOnly": "false",
         # sortColumn 1 descending = most recently listed first (checked live).
-        "sortColumn": "1", "page": "1", "pageSize": str(page_size), "sortDescending": "true",
+        "sortColumn": "1", "page": str(page), "pageSize": str(page_size), "sortDescending": "true",
         "savedSearchId": 0, "useBuyerPrefs": "true", "searchUSOnlyShipping": "false",
         "categoryLevelNo": "1", "categoryLevel": 1, "categoryId": 0, "partNumber": "", "catIds": "",
     }
+
+
+def _search(text: str, page_size: int = 40, page: int = 1) -> list[dict]:
+    body = _body(text, page, page_size)
     resp = requests.post(API_URL, json=body, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     return (resp.json().get("searchResults") or {}).get("items") or []
@@ -88,14 +109,35 @@ def scrape_shopgoodwill(source: dict, keywords: list[str]) -> ScrapeResult:
 
     items: dict[int, dict] = {}
     errors = []
+    pages = 3 if live_term else 2
     for term in terms:
-        try:
-            for it in _search(term):
+        for page in range(1, pages + 1):
+            try:
+                batch = _search(term, page=page)
+            except Exception as e:
+                errors.append(f"{term}: {e}")
+                break
+            for it in batch:
                 items.setdefault(it.get("itemId"), it)
-        except Exception as e:
-            errors.append(f"{term}: {e}")
-        if len(terms) > 1:
-            time.sleep(0.5)
+            if len(batch) < 40:
+                break
+            time.sleep(0.4)
+    if not live_term:
+        # Walk the audio categories newest-first until reaching lots listed
+        # before the lookback window (everything newer than that is covered).
+        light = bool(source.get("_light"))
+        for cat, level in CATEGORIES:
+            for page in range(1, (MAX_PAGES_LIGHT if light else MAX_PAGES_FULL) + 1):
+                try:
+                    batch = _browse(cat, level, page)
+                except Exception as e:
+                    errors.append(f"category {cat}: {e}")
+                    break
+                for it in batch:
+                    items.setdefault(it.get("itemId"), it)
+                if len(batch) < 39:
+                    break
+                time.sleep(0.4)
     if errors and not items:
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False,
