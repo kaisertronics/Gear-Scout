@@ -93,3 +93,108 @@ def _run_sweep(cfg: dict) -> list[dict]:
         except Exception:
             logger.exception("Telex sweep failed for %r", term)
     return out
+
+
+def term_matcher(term: str):
+    """A fast "does this (lower-cased, brand-spelling-fixed) title match the
+    Telex term" test: every word in any order, like the live search. A long,
+    descriptive term ("Warm audio WA-412 API 4 channel pre") rarely has every
+    word in a title, so its brand + model numbers decide."""
+    import re
+    from scrapers.base import _keyword_pattern, _word_matches
+    words = [w for w in term.lower().split() if re.search(r"[a-z0-9]", w)]
+    if len(words) >= 4:
+        key = [words[0]] + [w for w in words[1:] if re.search(r"\d", w) and len(w) >= 2]
+        words = key if len(key) >= 2 else words
+    exact = _keyword_pattern(term.lower())
+    plain = max((w for w in words if w.isalpha() and len(w) >= 3), key=len, default=None)
+    return lambda t: (plain is None or plain in t) and (
+        bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
+
+
+# ---------------------------------------------------------------------------
+# New-lowest-price alerts for every Telex term
+# ---------------------------------------------------------------------------
+
+def check_telex_lowest(cfg: dict) -> int:
+    """For each Telex term: the lowest price currently listed anywhere (the
+    real item — no parts, pedals/plugins unless the term asks, accessories,
+    placeholders). When a listing comes in below the previous lowest, sends
+    a phone push + email. The first check of a term only records its lowest.
+    Uses listings already collected — no extra searching. Returns alerts sent."""
+    import sqlite3
+    from scrapers.base import fix_brand_spelling
+    from scrapers.comps import evaluate, price_index, similar_index
+    from scrapers.enrich import (exclude_match, is_accessory_only, is_not_audio, is_partial, item_form,
+                                 needs_repair, parse_price, quantity)
+    from scrapers.lowest import notify_new_lowest
+    from scrapers.market import load_market
+
+    term_list = terms(cfg)
+    if not term_list:
+        return 0
+    exclude = cfg.get("exclude_words") or []
+    with _conn() as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS telex_lowest (
+            term TEXT PRIMARY KEY, lowest REAL, url TEXT, checked_at TEXT)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS telex_lowest_alerted (
+            term TEXT, url TEXT, price REAL, PRIMARY KEY (term, url))""")
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            """SELECT title, price, url, source_name, image_url, location, description FROM seen
+               WHERE url IS NOT NULL AND hidden = 0 AND duplicate = 0 AND COALESCE(sold, 0) = 0
+               AND COALESCE(pending, 0) = 0 AND price IS NOT NULL""")]
+        state_rows = {r["term"]: dict(r) for r in conn.execute("SELECT * FROM telex_lowest")}
+        alerted = {(r["term"], r["url"]): r["price"] for r in conn.execute("SELECT * FROM telex_lowest_alerted")}
+    texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
+    market, index, similar = load_market(), price_index(), similar_index()
+    now = datetime.now(timezone.utc).isoformat()
+    sent = 0
+    for term in term_list:
+        match, form_wanted = term_matcher(term), item_form(term)
+        best = None
+        for r, text in zip(rows, texts):
+            if not match(text):
+                continue
+            title = r["title"] or ""
+            form = item_form(title)
+            if (form in ("pedal", "plugin") and form != form_wanted) or is_partial(title) \
+                    or is_accessory_only(title) or is_not_audio(title) or exclude_match(title, exclude) \
+                    or (r.get("description") or "").startswith("Auction"):
+                continue
+            value = parse_price(r["price"])
+            if not value or value < 20:
+                continue
+            if quantity(title) > 1:
+                value = value / quantity(title)
+            if best is not None and value >= best[0]:
+                continue
+            # Not a real price for the item: under a fifth of its comp.
+            c = evaluate(title, r["price"], r.get("description"), r["url"], market, index, similar)
+            if c and value < c["ref"] * 0.2:
+                continue
+            best = (value, r)
+        if not best:
+            continue
+        value, r = best
+        prev = state_rows.get(term)
+        if prev and prev["lowest"] and value < prev["lowest"] - 0.5 and r["url"] != prev["url"]:
+            key = (term, r["url"])
+            if key not in alerted or value < (alerted[key] or 1e12) - 0.5:
+                alert = {"title": r["title"], "price": r["price"], "url": r["url"], "source_name": r["source_name"],
+                         "image_url": r.get("image_url"), "location": (r.get("location") or "").split(" @")[0] or None,
+                         "needs_repair": needs_repair(r["title"], r.get("description")), "is_clone": False}
+                try:
+                    notify_new_lowest(cfg, term, alert, prev["lowest"], from_telex=True)
+                    sent += 1
+                except Exception:
+                    logger.exception("Telex lowest-price alert failed for %r", term)
+                with _conn() as conn:
+                    conn.execute("INSERT OR REPLACE INTO telex_lowest_alerted VALUES (?, ?, ?)", (term, r["url"], value))
+                    conn.commit()
+        with _conn() as conn:
+            conn.execute("INSERT OR REPLACE INTO telex_lowest VALUES (?, ?, ?, ?)", (term, value, r["url"], now))
+            conn.commit()
+    if sent:
+        logger.info("Telex: %d new-lowest-price alerts sent", sent)
+    return sent

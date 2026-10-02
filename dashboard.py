@@ -610,18 +610,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
     from scrapers.base import _keyword_pattern, _word_matches, fix_brand_spelling
     texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
 
-    def matcher(term: str):
-        words = [w for w in term.lower().split() if re.search(r"[a-z0-9]", w)]
-        # A long, descriptive term ("Warm audio WA-412 API 4 channel pre")
-        # rarely has every word in a title: its brand + model numbers decide.
-        if len(words) >= 4:
-            key = [words[0]] + [w for w in words[1:] if re.search(r"\d", w) and len(w) >= 2]
-            words = key if len(key) >= 2 else words
-        exact = _keyword_pattern(term.lower())
-        # Quick substring check on the longest plain word before the full match.
-        plain = max((w for w in words if w.isalpha() and len(w) >= 3), key=len, default=None)
-        return lambda t: (plain is None or plain in t) and (
-            bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
+    from scrapers.telex import term_matcher as matcher
 
     from scrapers.enrich import is_accessory_only, is_partial, item_form
     out = []

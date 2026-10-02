@@ -247,7 +247,8 @@ def forget(query: str):
         conn.commit()
 
 
-def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optional[float]):
+def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optional[float],
+                      from_telex: bool = False):
     from scrapers.notify import push_enabled, send_push
 
     was = f"${previous_lowest:,.0f}" if previous_lowest is not None else "?"
@@ -273,7 +274,7 @@ def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optio
                 <div style="margin-top:6px;"><span style="color:#166534;font-weight:700;font-size:18px;">{alert['price']}</span>
                 <span style="color:#94a3b8;">&nbsp;previous lowest {was}</span></div>
                 <div style="color:#64748b;font-size:13px;margin-top:4px;">{alert['source_name']}{' · ' + alert['location'] if alert.get('location') else ''}{repair}</div>
-                <p style="margin-top:12px;font-size:13px;"><a href="{dashboard_url}/lowest?q={quote_plus(query)}">See the 10 lowest for “{query}” →</a></p>
+                <p style="margin-top:12px;font-size:13px;">{f'<a href="{dashboard_url}/telex">See “{query}” on your Telex List →</a>' if from_telex else f'<a href="{dashboard_url}/lowest?q={quote_plus(query)}">See the 10 lowest for “{query}” →</a>'}</p>
               </div>
             </div>
           </div></body></html>"""

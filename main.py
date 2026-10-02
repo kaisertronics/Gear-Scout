@@ -198,6 +198,11 @@ def run_refresh_cycle(cfg: dict):
 def run_scrape_cycle():
     with _run_lock:
         _run_scrape_cycle()
+        try:
+            from scrapers.telex import check_telex_lowest
+            check_telex_lowest(load_config())
+        except Exception:
+            logger.exception("Telex lowest-price check failed")
     # Recorded only once a run finishes, so a run cut short by a restart is
     # caught up on the next start (see _catch_up_missed_run).
     try:
@@ -409,12 +414,14 @@ def run_watch_cycle():
                 run_refresh_cycle(cfg)
             except Exception:
                 logger.exception("Background refresh failed")
-        # Actively search the next few Telex List terms on search-based sites.
+        # Actively search the next few Telex List terms on search-based sites,
+        # then alert on any listing below the lowest price for its term.
         try:
-            from scrapers.telex import run_sweep
+            from scrapers.telex import check_telex_lowest, run_sweep
             run_sweep(cfg)
+            check_telex_lowest(cfg)
         except Exception:
-            logger.exception("Telex sweep failed")
+            logger.exception("Telex sweep / lowest-price check failed")
         if any(w["enabled"] for w in get_watches(cfg)):
             notify_watch_hits(cfg, run_watches(cfg))
         # Lowest-price trackers share the same timer (and lock).
