@@ -295,7 +295,9 @@ def _run_scrape_cycle():
         logger.exception("Market price lookup for new listings failed")
     new_listings, no_comp_count = _worth_only(new_listings)
 
-    failed_sources = [r for r in results if not r.success]
+    # Sites known to block automated access (shown as "check manually") and
+    # eBay pausing for its daily limit are expected, not errors.
+    failed_sources = [r for r in results if not r.success and not getattr(r, "blocked", False)]
     has_failures = bool(failed_sources)
     has_new = bool(new_listings)
 

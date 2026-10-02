@@ -161,7 +161,15 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
                             gone = None
                             try:
                                 page.goto(url, wait_until="domcontentloaded", timeout=40000)
-                                page.wait_for_timeout(2000)
+                                # Wait only until the item (its title) or a "gone" notice shows,
+                                # instead of a fixed 2 seconds.
+                                try:
+                                    page.wait_for_function(
+                                        "() => document.querySelector('h1') || /no longer available|isn't available|this listing/i"
+                                        ".test(document.body.innerText.slice(0, 3000))", timeout=3500, polling=200)
+                                except Exception:
+                                    pass
+                                page.wait_for_timeout(300)
                                 text = page.inner_text("body")[:5000]
                                 gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
                                             or "/marketplace/item/" not in page.url)
@@ -173,7 +181,7 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
                             _record(url, gone)
                             checked += 1
                             sold += bool(gone)
-                            time.sleep(1.5)
+                            time.sleep(1.0)
             except Exception:
                 logger.exception("Facebook sold check skipped")
 

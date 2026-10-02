@@ -128,7 +128,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
     paused = ebay_paused_until()
     if paused:
         return ScrapeResult(
-            source_name=name, source_url=manual_url, success=False,
+            source_name=name, source_url=manual_url, success=False, blocked=True,
             error="eBay's daily request limit is used up for today.",
             fix_hint="Resumes on its own after midnight (Pacific). Nothing to fix.",
             duration_seconds=time.time() - start,

@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-01",
+    "title": "Nightly improvements begin",
+    "items": [
+      "Gear Scout now gets a nightly improvement session (about 1:40 AM): it reviews the day's logs and results, fixes what it finds, adds improvements, and notes them here.",
+      "Emails no longer say '⚠️ N source errors' for sites that always block automated access (Guitar Center, Sweetwater, Gearspace) or for eBay pausing at its daily limit — only real failures are flagged.",
+      "Facebook sold/pending checks wait only as long as each page needs instead of a fixed 2 seconds, so the hourly check finishes sooner."
+    ]
+  },
+  {
+    "date": "2026-10-01",
     "title": "B-stock value and 'Worth it only'",
     "items": [
       "Each model now gets a B-stock value: what a dealer B-stock / open-box unit goes for (Reverb B-stock listings, or 85% of the new price). Cards show 'B-stock ~$X'.",
