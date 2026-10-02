@@ -82,7 +82,11 @@ def _lazy_context():
         css_v = int(Path(app.static_folder, "style.css").stat().st_mtime)
     except OSError:
         css_v = 0
-    return {"lazy_token": lazy_token, "css_version": css_v}
+    try:
+        ai_on = bool(((load_config_raw().get("ai") or {}).get("gemini_api_key") or "").strip())
+    except Exception:
+        ai_on = False
+    return {"lazy_token": lazy_token, "css_version": css_v, "ai_enabled": ai_on}
 
 
 @app.after_request
@@ -804,7 +808,7 @@ def _verify_top_listings():
     """Checks the top listings on the Dashboard and Telex right away (not
     just hourly): first 6 per Telex term, first 12 per Dashboard section,
     plus New and Auctions. Sold/ended ones are marked and taken off the
-    cached pages. Facebook needs a browser, so it's left to the hourly check.
+    cached pages. Facebook listings are opened in a browser (every 4 hours).
     Runs in the background; listings checked in the last hour are skipped."""
     if _verify_state["running"]:
         # One check at a time; come back for anything new once it's done.
@@ -817,13 +821,13 @@ def _verify_top_listings():
     urls += [l["url"] for l in (d.get("auctions") or [])[:24]]
     for _, good, _ in (_telex_cache.get("groups") or []):
         urls += [r["url"] for r in good[:6]]
-    urls = [u for u in dict.fromkeys(urls) if u and "facebook.com" not in u]
+    urls = [u for u in dict.fromkeys(urls) if u]
     if not urls:
         return
 
     def run():
         from concurrent.futures import ThreadPoolExecutor
-        from scrapers.sold_check import _record, check_url
+        from scrapers.sold_check import _record, check_fb, check_url
         from scrapers.store import _conn
         _verify_state["running"] = True
         try:
@@ -832,7 +836,16 @@ def _verify_top_listings():
                 recent = {u for (u,) in conn.execute(
                     f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(urls))}) AND sold_checked_at >= ?",
                     (*urls, cutoff))}
-            todo = [u for u in urls if u not in recent]
+            todo = [u for u in urls if u not in recent and "facebook.com" not in u]
+            # Facebook needs a (slower) browser: re-check those every 4 hours, up to 25 at a time.
+            fb_cutoff = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
+            fb = [u for u in urls if "facebook.com/marketplace/item" in u]
+            if fb:
+                with _conn() as conn:
+                    fresh = {u for (u,) in conn.execute(
+                        f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(fb))}) AND sold_checked_at >= ?",
+                        (*fb, fb_cutoff))}
+                fb = [u for u in fb if u not in fresh][:25]
 
             def one(u):
                 try:
@@ -843,6 +856,10 @@ def _verify_top_listings():
                 return u, gone
             with ThreadPoolExecutor(max_workers=4) as pool:
                 gone = [u for u, g in pool.map(one, todo) if g]
+            for u, g in check_fb(fb):
+                _record(u, g)
+                if g:
+                    gone.append(u)
             if gone:
                 with _conn() as conn:
                     gids = [g for (g,) in conn.execute(
@@ -1043,7 +1060,9 @@ def whats_new():
 @app.route("/ask")
 def ask_page():
     cfg = load_config_raw()
-    return render_template("ask.html", has_key=bool(((cfg.get("ai") or {}).get("gemini_api_key") or "").strip()))
+    from scrapers.assistant import list_alerts
+    return render_template("ask.html", has_key=bool(((cfg.get("ai") or {}).get("gemini_api_key") or "").strip()),
+                           alerts=list_alerts())
 
 
 def _answer_html(text: str, n: int) -> str:
@@ -1052,7 +1071,8 @@ def _answer_html(text: str, n: int) -> str:
     from html import escape
     t = escape(text or "")
     t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
-    t = re.sub(r"\[#(\d+)\]", lambda m: f'<a href="#ask-{m.group(1)}">[#{m.group(1)}]</a>'
+    turn = request.form.get("turn", "0")
+    t = re.sub(r"\[#(\d+)\]", lambda m: f'<a href="#ask-{turn}-{m.group(1)}">[#{m.group(1)}]</a>'
                if 1 <= int(m.group(1)) <= n else m.group(0), t)
     lines, html, in_list = t.split("\n"), [], False
     for line in lines:
@@ -1073,18 +1093,63 @@ def _answer_html(text: str, n: int) -> str:
     return "".join(html)
 
 
+def _assistant_add_telex(term: str):
+    cfg = load_config_for_edit()
+    terms = list(cfg.get("telex_list") or [])
+    if term.lower() not in (str(t).lower() for t in terms):
+        cfg["telex_list"] = terms + [term]
+        save_config_raw(cfg)
+        _data_changed()
+
+
+def _assistant_live_search(term: str):
+    global _live_search_thread
+    if _live_search_thread is None or not _live_search_thread.is_alive():
+        _write_live_search_status({"state": "running", "query": term, "done": 0, "total": 0, "current_source": None})
+        _live_search_thread = threading.Thread(target=_run_live_search_job, args=(term,), daemon=True)
+        _live_search_thread.start()
+
+
+@app.route("/ai/verdict", methods=["POST"])
+def ai_verdict():
+    from scrapers.assistant import verdict
+    try:
+        return jsonify({"ok": True, **verdict(request.form.get("global_id", ""), load_config_raw())})
+    except (PermissionError, RuntimeError) as e:
+        return jsonify({"ok": False, "message": str(e)})
+    except Exception:
+        logging.exception("AI verdict failed")
+        return jsonify({"ok": False, "message": "Something went wrong talking to Gemini — try again."})
+
+
+@app.route("/ask/alerts/remove", methods=["POST"])
+def ask_alert_remove():
+    from scrapers.assistant import remove_alert
+    remove_alert(request.form.get("term", ""))
+    return redirect(url_for("ask_page"))
+
+
 @app.route("/ask/query", methods=["POST"])
 def ask_query():
-    from scrapers.assistant import ask
+    import scrapers.assistant as A
+    A.add_telex_term, A.start_live_search = _assistant_add_telex, _assistant_live_search
     try:
-        res = ask(request.form.get("q", ""), load_config_raw())
+        history = json.loads(request.form.get("history") or "[]")
+        prev_ids = json.loads(request.form.get("prev_ids") or "[]")
+    except ValueError:
+        history, prev_ids = [], []
+    try:
+        res = A.ask(request.form.get("q", ""), load_config_raw(), history=history, previous_ids=prev_ids)
     except Exception as e:
         logging.exception("Ask AI failed")
         return render_template("_ask_answer.html", error=str(e) if isinstance(e, (PermissionError, RuntimeError))
                                else "Something went wrong talking to Gemini — try again.")
-    listings = _decorate(res["listings"])
+    _decorate(res["listings"])  # adds display fields in place
     return render_template("_ask_answer.html", answer_html=_answer_html(res["answer"], len(res["listings"])),
-                           listings=res["listings"], plan=res.get("plan") or {}, error=None)
+                           listings=res["listings"], plan=res.get("plan") or {}, error=None,
+                           question=request.form.get("q", ""), answer_text=res["answer"],
+                           ids=[l.get("global_id") for l in res["listings"]],
+                           turn=request.form.get("turn", "0"))
 
 
 @app.route("/settings/ai", methods=["POST"])

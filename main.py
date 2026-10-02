@@ -424,6 +424,12 @@ def run_watch_cycle():
             check_telex_lowest(cfg)
         except Exception:
             logger.exception("Telex sweep / lowest-price check failed")
+        # Alerts you set up by asking the AI assistant.
+        try:
+            from scrapers.assistant import check_alerts
+            check_alerts(cfg)
+        except Exception:
+            logger.exception("AI alert check failed")
         if any(w["enabled"] for w in get_watches(cfg)):
             notify_watch_hits(cfg, run_watches(cfg))
         # Lowest-price trackers share the same timer (and lock).
@@ -445,6 +451,22 @@ def run_fb_posts_batch():
         run_batch(load_config())
     except Exception:
         logger.exception("Background Facebook post search failed")
+
+
+def run_ai_briefing():
+    try:
+        from scrapers.ai_reports import daily_briefing
+        daily_briefing(load_config())
+    except Exception:
+        logger.exception("AI daily briefing failed")
+
+
+def run_ai_weekly():
+    try:
+        from scrapers.ai_reports import weekly_notes
+        weekly_notes(load_config())
+    except Exception:
+        logger.exception("AI weekly notes failed")
 
 
 def run_fb_posts_roundup():
@@ -510,6 +532,11 @@ def run_schedule():
                       name="gear_scout_fb_posts", max_instances=1, coalesce=True, misfire_grace_time=300)
     scheduler.add_job(run_fb_posts_roundup, CronTrigger(minute=0, timezone=tz_name),
                       name="gear_scout_fb_roundup", misfire_grace_time=1800)
+    # AI emails (only when a Gemini key is set): daily briefing and weekly notes.
+    scheduler.add_job(run_ai_briefing, CronTrigger(hour=8, minute=0, timezone=tz_name),
+                      name="gear_scout_ai_briefing", misfire_grace_time=3600)
+    scheduler.add_job(run_ai_weekly, CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=tz_name),
+                      name="gear_scout_ai_weekly", misfire_grace_time=3600)
 
     logger.info("Scheduler started. Cron: '%s' (%s); background refresh + saved searches every %d min",
                 cron_expr, tz_name, interval)

@@ -154,12 +154,14 @@ def _shown_first(limit: int, include_fb: bool) -> list[str]:
         _ensure(conn)
         for i in range(0, len(shown), 400):
             chunk = shown[i:i + 400]
-            due += [u for (u,) in conn.execute(
-                f"SELECT DISTINCT url FROM seen WHERE url IN ({','.join('?' * len(chunk))}) AND sold = 0"
-                " AND url NOT LIKE '%shopgoodwill.com%'"
-                " AND (sold_checked_at IS NULL OR sold_checked_at < ?)", (*chunk, cutoff))]
+            due += conn.execute(
+                f"SELECT url, MAX(COALESCE(sold_checked_at, '')) FROM seen WHERE url IN ({','.join('?' * len(chunk))})"
+                " AND sold = 0 AND url NOT LIKE '%shopgoodwill.com%'"
+                " AND (sold_checked_at IS NULL OR sold_checked_at < ?) GROUP BY url", (*chunk, cutoff)).fetchall()
+    # Never-checked first, then the longest since a check — so nothing far
+    # down the page waits forever behind the top listings.
     order = {u: i for i, u in enumerate(shown)}
-    return sorted(set(due), key=lambda u: order.get(u, 0))[:limit]
+    return [u for u, _ in sorted(set(due), key=lambda r: (r[1], order.get(r[0], 0)))][:limit]
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
@@ -196,7 +198,46 @@ def _record(url: str, gone: Optional[bool]) -> None:
         mark_sold(url)
 
 
-def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
+def check_fb(urls: list[str]):
+    """Opens each Facebook listing in one paced browser and yields
+    (url, gone) — gone is None when the page couldn't be read. Also notes
+    "pending" sales."""
+    if not urls:
+        return
+    try:
+        from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
+        if not SESSION_FILE.exists():
+            return
+        with _browser() as browser:
+            page = _new_context(browser).new_page()
+            for url in urls:
+                gone = None
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=40000)
+                    # Wait only until the item (its title) or a "gone" notice shows,
+                    # instead of a fixed 2 seconds.
+                    try:
+                        page.wait_for_function(
+                            "() => document.querySelector('h1') || /no longer available|isn't available|this listing/i"
+                            ".test(document.body.innerText.slice(0, 3000))", timeout=3500, polling=200)
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(300)
+                    text = page.inner_text("body")[:5000]
+                    gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
+                                or "/marketplace/item/" not in page.url)
+                    if not gone:
+                        from scrapers.store import set_pending
+                        set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
+                except Exception as e:
+                    logger.debug("FB sold check failed for %s: %s", url, e)
+                yield url, gone
+                time.sleep(1.0)
+    except Exception:
+        logger.exception("Facebook sold check skipped")
+
+
+def run_sold_check(max_http: int = 120, max_fb: int = 100) -> dict:
     """Website checks run 4 at a time while the Facebook checks (one
     browser, paced) run alongside them."""
     import threading
@@ -228,39 +269,10 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
         fb = list(dict.fromkeys(_shown_first(max_fb, include_fb=True)
                             + [u for u, _ in _candidates(max_fb * 4, include_fb=True)
                                if "facebook.com/marketplace/item" in u]))[:max_fb]
-        if fb:
-            try:
-                from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
-                if SESSION_FILE.exists():
-                    with _browser() as browser:
-                        page = _new_context(browser).new_page()
-                        for url in fb:
-                            gone = None
-                            try:
-                                page.goto(url, wait_until="domcontentloaded", timeout=40000)
-                                # Wait only until the item (its title) or a "gone" notice shows,
-                                # instead of a fixed 2 seconds.
-                                try:
-                                    page.wait_for_function(
-                                        "() => document.querySelector('h1') || /no longer available|isn't available|this listing/i"
-                                        ".test(document.body.innerText.slice(0, 3000))", timeout=3500, polling=200)
-                                except Exception:
-                                    pass
-                                page.wait_for_timeout(300)
-                                text = page.inner_text("body")[:5000]
-                                gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
-                                            or "/marketplace/item/" not in page.url)
-                                if not gone:
-                                    from scrapers.store import set_pending
-                                    set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
-                            except Exception as e:
-                                logger.debug("FB sold check failed for %s: %s", url, e)
-                            _record(url, gone)
-                            checked += 1
-                            sold += bool(gone)
-                            time.sleep(1.0)
-            except Exception:
-                logger.exception("Facebook sold check skipped")
+        for url, gone in check_fb(fb):
+            _record(url, gone)
+            checked += 1
+            sold += bool(gone)
 
     fb_thread = threading.Thread(target=fb_checks, name="sold-check-fb", daemon=True)
     fb_thread.start()

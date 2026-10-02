@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-10-02",
+    "title": "AI assistant: deal checks, alerts, briefings",
+    "items": [
+      "Ask AI remembers the conversation — ask follow-ups like “only the ones under $1,000” or “tell me more about #2”.",
+      "🤖 button on every listing: the AI reads the full ad, looks at the photo, compares the price with the comp, and gives a verdict, red flags, a fair offer and a ready-to-send message to the seller.",
+      "Ask AI can do things for you: add a term to your Telex List, star a listing, run a live search, or set an alert (“tell me when a U47 clone under $800 shows up within 100 miles”). Alerts are checked hourly and sent by push + email.",
+      "Daily briefing email at 8 AM: the 5 best finds of the last 24 hours and why.",
+      "Weekly market notes on Sundays at 9 AM: what's selling fast, price moves on your Telex gear, and models worth watching.",
+      "All of these use your own free Gemini key (Settings → AI); without a key they simply stay off."
+    ]
+  },
+  {
+    "date": "2026-10-02",
     "title": "Sold listings, pedals, new-first, ShopGoodwill",
     "items": [
       "Listings on your Dashboard and Telex are re-checked first (every 4 hours) so sold/ended ones drop off; eBay listings are now checked too (through eBay's API).",

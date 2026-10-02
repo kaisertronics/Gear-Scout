@@ -867,3 +867,16 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 
 .ask-answer { line-height: 1.6; } .ask-answer p { margin: 0 0 10px; } .ask-answer ul { margin: 0 0 10px; padding-left: 20px; }
 .ask-card-wrap { position: relative; } .ask-num { position: absolute; z-index: 3; bottom: 8px; right: 10px; font-weight: 800; font-size: 12px; color: var(--muted); }
+.ask-q { font-weight: 600; margin: 0 0 8px; }
+
+.ai-verdict-btn { position: absolute; top: 74px; right: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.9);
+  width: 28px; height: 28px; border-radius: 50%; font-size: 14px; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.15); padding: 0; z-index: 2; }
+.ai-modal { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center;
+  z-index: 60; padding: 16px; }
+.ai-modal[hidden] { display: none; }
+.ai-modal-box { background: var(--panel, #fff); color: inherit; border-radius: 14px; max-width: 520px; width: 100%; max-height: 85vh;
+  overflow: auto; padding: 18px 20px; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+.ai-modal-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 18px; cursor: pointer; color: inherit; }
+.ai-verdict { font-size: 20px; font-weight: 800; margin: 4px 0 8px; }
+.ai-v-great, .ai-v-good { color: #15803d; } .ai-v-fair { color: #a16207; } .ai-v-overpriced, .ai-v-be { color: #b91c1c; }
+.ai-msg { width: 100%; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--border, #e2e8f0); margin: 4px 0 8px; }

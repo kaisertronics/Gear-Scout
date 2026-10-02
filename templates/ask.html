@@ -14,21 +14,53 @@
       <button type="submit" id="ask-btn" {{ '' if has_key else 'disabled' }}>Ask</button>
     </form>
     <div id="ask-status" class="live-status-banner" style="display:none;"></div>
+    <p class="muted" style="margin-top:8px;">You can follow up (“cheaper ones?”, “which is closest?”), and ask it to do things:
+      “track U47 clones”, “alert me when a Distressor under $900 shows up within 200 miles”, “star #2”,
+      “search every site for a Neve 1073 now”. <a href="#" id="ask-new">Start a new conversation</a></p>
   </section>
+  {% if alerts %}
+  <section class="panel">
+    <h2>🔔 Your AI alerts <span class="muted">— push + email when a match is listed</span></h2>
+    {% for al in alerts %}
+      <form method="post" action="{{ url_for('ask_alert_remove') }}" class="telex-chip" style="display:inline-flex;">
+        <input type="hidden" name="term" value="{{ al.term }}">
+        <span>{{ al.term }}{% if al.max_price %} · under ${{ '{:,.0f}'.format(al.max_price) }}{% endif %}{% if al.max_miles %} · within {{ al.max_miles|int }} mi{% endif %}</span>
+        <button type="submit" class="hide-btn" title="Remove alert">✕</button>
+      </form>
+    {% endfor %}
+  </section>
+  {% endif %}
   <div id="ask-result"></div>
 
   <script>
     const form = document.getElementById('ask-form'), status = document.getElementById('ask-status');
     const out = document.getElementById('ask-result'), btn = document.getElementById('ask-btn');
+    let history = [], prevIds = [], turn = 0;
+    document.getElementById('ask-new').addEventListener('click', (e) => {
+      e.preventDefault(); history = []; prevIds = []; out.innerHTML = '';
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true;
       gsProgress(status, 'Thinking — searching your listings and asking Gemini…', {started: Date.now() / 1000});
-      out.innerHTML = '';
+      const data = new FormData(form);
+      turn += 1;
+      data.append('history', JSON.stringify(history));
+      data.append('prev_ids', JSON.stringify(prevIds));
+      data.append('turn', String(turn));
       try {
-        const resp = await fetch("{{ url_for('ask_query') }}", {method: 'POST', body: new FormData(form)});
-        out.innerHTML = await resp.text();
+        const resp = await fetch("{{ url_for('ask_query') }}", {method: 'POST', body: data});
+        const holder = document.createElement('div');
+        holder.innerHTML = await resp.text();
+        out.prepend(holder);
+        const meta = holder.querySelector('.ask-meta');
+        if (meta) {
+          const m = JSON.parse(meta.textContent);
+          history.push({q: m.q, a: m.a});
+          if (m.ids && m.ids.length) prevIds = m.ids;
+        }
         status.style.display = 'none';
+        document.getElementById('ask-q').value = '';
       } catch (err) {
         gsProgressText(status, '⚠️ Something went wrong — try again.');
       }

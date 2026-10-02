@@ -2,14 +2,16 @@
 {% if error %}
   <section class="panel"><p class="flag flag-repair" style="display:inline-block;">{{ error }}</p></section>
 {% else %}
-  <section class="panel">
+  <section class="panel ask-turn">
+    <p class="ask-q">🗨️ {{ question }}</p>
     <h2>Answer <span class="muted">— searched for {{ plan.get('terms', [])|join(', ') }}{% if plan.get('max_price') %} · under ${{ '{:,.0f}'.format(plan.max_price|float) }}{% endif %}{% if plan.get('deals_only') %} · deals only{% endif %}</span></h2>
     <div class="ask-answer">{{ answer_html|safe }}</div>
   </section>
   {% if listings %}
   <section class="panel">
     <h2>Listings it looked at <span class="muted">— {{ listings|length }}, best deals first</span></h2>
-    <div class="listing-grid">{% for l in listings %}<div id="ask-{{ loop.index }}" class="ask-card-wrap"><span class="ask-num">#{{ loop.index }}</span>{{ listing_card(l) }}</div>{% endfor %}</div>
+    <div class="listing-grid">{% for l in listings %}<div id="ask-{{ turn }}-{{ loop.index }}" class="ask-card-wrap"><span class="ask-num">#{{ loop.index }}</span>{{ listing_card(l) }}</div>{% endfor %}</div>
   </section>
   {% endif %}
 {% endif %}
+{% if not error %}<script type="application/json" class="ask-meta">{{ {"q": question, "a": answer_text, "ids": ids}|tojson }}</script>{% endif %}

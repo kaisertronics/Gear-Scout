@@ -137,6 +137,47 @@
     }
   </script>
 <div id="gs-toast" class="gs-toast" role="status" aria-live="polite"></div>
+<div id="ai-modal" class="ai-modal" hidden>
+  <div class="ai-modal-box" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
+    <button type="button" class="ai-modal-close" aria-label="Close">✕</button>
+    <h3 id="ai-modal-title">🤖 Is this a good deal?</h3>
+    <div id="ai-modal-body"></div>
+  </div>
+</div>
+<script>
+  (function () {
+    const modal = document.getElementById('ai-modal'), body = document.getElementById('ai-modal-body');
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    modal.addEventListener('click', (e) => { if (e.target === modal || e.target.classList.contains('ai-modal-close')) modal.hidden = true; });
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.ai-verdict-btn');
+      if (!btn) return;
+      e.preventDefault();
+      modal.hidden = false;
+      body.innerHTML = '<p class="muted">Reading the full ad, looking at the photo and comparing prices…</p>';
+      const fd = new FormData(); fd.append('global_id', btn.dataset.gid);
+      try {
+        const d = await (await fetch("{{ url_for('ai_verdict') }}", {method: 'POST', body: fd})).json();
+        if (!d.ok) { body.innerHTML = `<p>${esc(d.message)}</p>`; return; }
+        const flags = (d.red_flags || []).map(f => `<li>${esc(f)}</li>`).join('');
+        body.innerHTML = `<p class="ai-verdict ai-v-${esc((d.verdict||'').split(' ')[0].toLowerCase())}">${esc(d.verdict)}</p>
+          <p>${esc(d.summary)}</p>
+          ${flags ? `<p><strong>Watch out for:</strong></p><ul>${flags}</ul>` : ''}
+          <p class="muted">Comp: ${esc(d.comp)}${d.looked_at_photo ? ' · looked at the photo' : ''}</p>
+          ${d.fair_offer ? `<p><strong>Fair offer:</strong> $${Number(d.fair_offer).toLocaleString()}</p>` : ''}
+          ${d.seller_message ? `<p><strong>Message to the seller</strong> (copy and send it yourself):</p>
+            <textarea class="ai-msg" rows="4" readonly>${esc(d.seller_message)}</textarea>
+            <button type="button" class="btn btn-sm ai-copy">Copy message</button>` : ''}`;
+        const copy = body.querySelector('.ai-copy');
+        if (copy) copy.addEventListener('click', () => {
+          const ta = body.querySelector('.ai-msg'); ta.select();
+          (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(
+            () => gsToast('Message copied'), () => { document.execCommand('copy'); gsToast('Message copied'); });
+        });
+      } catch (err) { body.innerHTML = '<p>Something went wrong — try again.</p>'; }
+    });
+  })();
+</script>
 <script>
   // Collapsed sections load their listings when first opened.
   document.addEventListener('toggle', async (e) => {

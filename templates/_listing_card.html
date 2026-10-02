@@ -74,6 +74,10 @@
     <button type="submit" class="telex-add-btn" title="Add this to your Telex List" aria-label="Add this to your Telex List">📋</button>
   </form>
 
+  {% if ai_enabled %}
+  <button type="button" class="ai-verdict-btn" data-gid="{{ l.global_id }}" title="Is this a good deal? (AI)" aria-label="Is this a good deal? Ask AI">🤖</button>
+  {% endif %}
+
   <form method="post" action="{{ url_for('listing_hide') }}" class="listing-hide-form">
     <input type="hidden" name="global_id" value="{{ l.global_id }}">
     <input type="hidden" name="next" value="{{ request.full_path }}">
