@@ -5,7 +5,8 @@
     "items": [
       "Gear Scout now gets a nightly improvement session (about 1:40 AM): it reviews the day's logs and results, fixes what it finds, adds improvements, and notes them here.",
       "Emails no longer say '⚠️ N source errors' for sites that always block automated access (Guitar Center, Sweetwater, Gearspace) or for eBay pausing at its daily limit — only real failures are flagged.",
-      "Facebook sold/pending checks wait only as long as each page needs instead of a fixed 2 seconds, so the hourly check finishes sooner."
+      "Facebook sold/pending checks wait only as long as each page needs instead of a fixed 2 seconds, so the hourly check finishes sooner.",
+      "Much faster pages: pages are compressed (Dashboard 1.4 MB → ~40 KB), collapsed sections (Show all, No comp yet) load only when you open them, the Dashboard and Telex are kept ready in the background, and starring/hiding no longer forces a rebuild. Dashboard ~0.2s instead of ~5s."
     ]
   },
   {

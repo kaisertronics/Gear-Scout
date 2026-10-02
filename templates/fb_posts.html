@@ -78,9 +78,9 @@
   {% endfor %}
   {% if no_comp %}
   <section class="panel">
-    <details class="more-listings">
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(no_comp)) }}">
       <summary class="muted">{{ no_comp|length }} more post{{ '' if no_comp|length == 1 else 's' }} with no price or nothing to compare against — tap to look</summary>
-      <div class="listing-grid">{% for l in no_comp %}{{ listing_card(l) }}{% endfor %}</div>
+      <div class="listing-grid"></div>
     </details>
   </section>
   {% endif %}

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Gear Scout{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ css_version }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <meta name="theme-color" content="#1e3a5f">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
@@ -137,6 +137,17 @@
   </script>
 <div id="gs-toast" class="gs-toast" role="status" aria-live="polite"></div>
 <script>
+  // Collapsed sections load their listings when first opened.
+  document.addEventListener('toggle', async (e) => {
+    const d = e.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.open || !d.dataset.lazy || d.dataset.loaded) return;
+    d.dataset.loaded = '1';
+    const grid = d.querySelector('.listing-grid');
+    grid.innerHTML = '<p class="muted">Loading…</p>';
+    try { grid.innerHTML = await (await fetch(d.dataset.lazy)).text(); }
+    catch (err) { grid.innerHTML = '<p class="muted">Couldn’t load — reload the page.</p>'; delete d.dataset.loaded; }
+  }, true);
+
   function gsToast(text) {
     const t = document.getElementById('gs-toast');
     t.textContent = text;

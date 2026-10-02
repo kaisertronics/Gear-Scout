@@ -55,22 +55,18 @@
         {% for l in items[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
       {% if items|length > 24 %}
-        <details class="more-listings">
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(items[24:])) }}">
           <summary>Show all {{ items|length }} (cheapest first)</summary>
-          <div class="listing-grid">
-            {% for l in items[24:] %}{{ listing_card(l) }}{% endfor %}
-          </div>
+          <div class="listing-grid"></div>
         </details>
       {% endif %}
     {% else %}
       <p class="muted">Nothing 10%+ under its comp right now.</p>
     {% endif %}
     {% if unpriced %}
-      <details class="more-listings">
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(unpriced)) }}">
         <summary class="muted">{{ unpriced|length }} more with nothing to compare against yet</summary>
-        <div class="listing-grid">
-          {% for l in unpriced %}{{ listing_card(l) }}{% endfor %}
-        </div>
+        <div class="listing-grid"></div>
       </details>
     {% endif %}
   </section>

@@ -51,6 +51,59 @@ app = Flask(__name__)
 # A fresh secret each container start is fine — it just invalidates existing
 # login sessions on restart, which simply means logging in again.
 app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
+
+
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # static files cached a day (links carry a version)
+
+# Listing cards for collapsed sections ("Show all", "No comp yet"…) aren't
+# sent with the page; they're kept here briefly and fetched when opened.
+_lazy_lists: "dict[str, list]" = {}
+
+
+def lazy_token(items: list) -> str:
+    token = secrets.token_hex(8)
+    _lazy_lists[token] = items
+    while len(_lazy_lists) > 200:
+        _lazy_lists.pop(next(iter(_lazy_lists)))
+    return token
+
+
+@app.route("/lazy/<token>")
+def lazy_cards(token):
+    items = _lazy_lists.get(token)
+    if items is None:
+        return '<p class="muted">This list expired — reload the page.</p>'
+    return render_template("_lazy_cards.html", items=items)
+
+
+@app.context_processor
+def _lazy_context():
+    try:
+        css_v = int(Path(app.static_folder, "style.css").stat().st_mtime)
+    except OSError:
+        css_v = 0
+    return {"lazy_token": lazy_token, "css_version": css_v}
+
+
+@app.after_request
+def _compress(resp):
+    """Gzip pages, JSON, CSS and JS — listing pages shrink about 10x, which
+    is most of the load time over the internet / on a phone."""
+    import gzip
+    if (resp.status_code != 200 or resp.direct_passthrough or "gzip" not in request.headers.get("Accept-Encoding", "")
+            or resp.headers.get("Content-Encoding")):
+        return resp
+    ctype = resp.headers.get("Content-Type", "")
+    if not ctype.startswith(("text/", "application/json", "application/javascript", "image/svg")):
+        return resp
+    data = resp.get_data()
+    if len(data) < 1024:
+        return resp
+    resp.set_data(gzip.compress(data, compresslevel=5))
+    resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Content-Length"] = str(len(resp.get_data()))
+    resp.headers["Vary"] = "Accept-Encoding"
+    return resp
 sock = Sock(app)
 
 NOVNC_STATIC_DIR = "/usr/share/novnc"
@@ -719,6 +772,29 @@ def _data_changed():
     _data_version[0] += 1
 
 
+def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool = False):
+    """Applies a star / hide to the cached Dashboard and Telex lists in
+    place, so those pages stay instant instead of rebuilding."""
+    def lists():
+        d = _index_cache.get("data")
+        if d:
+            yield d["no_comp"]
+            yield d["for_you"]
+            yield d["deals"]
+            for _, items in d["grouped"]:
+                yield items
+        for _, good, unpriced in (_telex_cache.get("groups") or []):
+            yield good
+            yield unpriced
+    for items in lists():
+        for i in range(len(items) - 1, -1, -1):
+            if items[i].get("global_id") == global_id:
+                if hidden:
+                    del items[i]
+                elif favorite is not None:
+                    items[i]["favorite"] = 1 if favorite else 0
+
+
 @app.route("/telex")
 def telex():
     cfg = load_config_raw()
@@ -955,19 +1031,7 @@ def learning_dismiss():
 @app.route("/")
 def index():
     cfg = load_config_raw()
-    status = load_run_status()
-    listings = recent_listings(limit=3000)
-    # Same relevance check the scrapes now use, so listings stored before it
-    # (found only through a broad word like "mic") don't crowd the page.
-    if cfg.get("relevance_check", True):
-        from scrapers.enrich import is_relevant
-        from scrapers.learning import keywords_with_learned
-        terms = tuple(keywords_with_learned(cfg))
-        listings = [l for l in listings if l.get("favorite") or is_relevant(l.get("title"), l.get("price"), terms)]
-    # Only what's worth your time: 10%+ under its comp. The rest of what has
-    # no comp yet sits in one collapsed group at the bottom.
-    worth, no_comp = _apply_comp_rule(_decorate(listings))
-    grouped_listings = _group_by_source(worth[:300], decorated=True)
+    data = _index_listings(cfg)
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
     last_refresh = None
     try:
@@ -979,13 +1043,13 @@ def index():
     return render_template(
         "index.html",
         last_refresh=last_refresh,
-        no_comp=no_comp[:150], no_comp_total=len(no_comp),
+        no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
         scraped_at=_last_scraped_by_site(),
-        for_you=_for_you(grouped_listings),
+        for_you=data["for_you"],
         for_you_ceiling=_for_you_cache.get("ceiling"),
-        deals=_deals_from(grouped_listings),
-        status=status,
-        grouped_listings=grouped_listings,
+        deals=data["deals"],
+        status=load_run_status(),
+        grouped_listings=data["grouped"],
         db_stats=db_stats(),
         next_run=next_run_time(cfg),
         fb_session=fb_session_status(),
@@ -993,6 +1057,58 @@ def index():
         fbm_regions=fbm_regions,
         watches=_watch_rows(cfg),
     )
+
+
+_index_cache: dict = {"key": None, "at": 0.0, "data": None}
+_mismatch_cache: dict = {"key": None, "at": 0.0, "n": 0}
+
+
+def _mismatched_count(keywords) -> int:
+    """Settings → Data statistic (checks every stored listing against every
+    term — ~1.5s); reused for 10 minutes."""
+    key = len(keywords)
+    if _mismatch_cache["key"] != key or time.time() - _mismatch_cache["at"] > 600:
+        _mismatch_cache.update(key=key, at=time.time(), n=count_mismatched(keywords))
+    return _mismatch_cache["n"]
+
+
+def _index_listings(cfg) -> dict:
+    """The Dashboard's listings (the slow part: comps for ~3,000 listings),
+    reused for 3 minutes unless something changed (hide, favorite, settings,
+    a finished scrape). The cache warmer keeps the default view ready."""
+    key = (request.query_string, _last_change_marker())
+    if _index_cache["key"] == key and time.time() - _index_cache["at"] < 180:
+        return _index_cache["data"]
+    data = _build_index_listings(cfg)
+    _index_cache.update(key=key, at=time.time(), data=data)
+    return data
+
+
+def _last_change_marker() -> str:
+    """Changes when a scrape finishes or settings are saved."""
+    marker = ""
+    for p in (Path("/data/last_run.json"), Path("/data/last_refresh.json"), Path("/data/manual_scrape_status.json")):
+        try:
+            marker += str(int(p.stat().st_mtime))
+        except OSError:
+            pass
+    return marker
+
+
+def _build_index_listings(cfg) -> dict:
+    listings = recent_listings(limit=3000)
+    # Same relevance check the scrapes now use, so listings stored before it
+    # (found only through a broad word like "mic") don't crowd the page.
+    if cfg.get("relevance_check", True):
+        from scrapers.enrich import is_relevant
+        from scrapers.learning import keywords_with_learned
+        terms = tuple(keywords_with_learned(cfg))
+        listings = [l for l in listings if l.get("favorite") or is_relevant(l.get("title"), l.get("price"), terms)]
+    # Only what's worth your time: 10%+ under its comp. The rest of what has
+    # no comp yet sits in one collapsed group at the bottom.
+    worth, no_comp = _apply_comp_rule(_decorate(listings))
+    grouped = _group_by_source(worth[:300], decorated=True)
+    return {"grouped": grouped, "no_comp": no_comp, "for_you": _for_you(grouped), "deals": _deals_from(grouped)}
 
 
 @app.route("/scrape/start", methods=["POST"])
@@ -1060,11 +1176,11 @@ def favorites():
 
 @app.route("/listing/favorite", methods=["POST"])
 def listing_favorite():
-    _data_changed()
     global_id = request.form.get("global_id", "")
     favorite = request.form.get("favorite") == "1"
     if global_id:
         set_favorite(global_id, favorite)
+        _patch_cached(global_id, favorite=favorite)
     return redirect(request.form.get("next") or url_for("index"))
 
 
@@ -1401,7 +1517,7 @@ def settings_fb_posts():
 
 @app.route("/listing/hide", methods=["POST"])
 def listing_hide():
-    _data_changed()
+    _patch_cached(request.form.get("global_id", ""), hidden=request.form.get("hidden", "1") == "1")
     # Hiding something Gear Scout called a deal / worth it = its comp was
     # probably wrong; Gear Scout re-checks comps you dispute.
     try:
@@ -1490,7 +1606,7 @@ def settings():
         keywords_text="\n".join(keywords),
         keyword_count=len(keywords),
         db_stats=db_stats(),
-        mismatched_count=count_mismatched(keywords),
+        mismatched_count=_mismatched_count(keywords),
         notif_cfg=cfg.get("notifications") or {},
         home_zip=cfg.get("home_zip") or "",
         suggested_topic="gearscout-" + secrets.token_hex(8),
@@ -1804,9 +1920,15 @@ def _keep_caches_warm():
             sale_stats(max_age_seconds=0)
             from scrapers.market import load_market
             load_market()
+            # The Dashboard's default view, ready before anyone asks.
+            with app.test_request_context("/"):
+                _index_listings(load_config_raw())
+            _mismatched_count(load_config_raw().get("keywords") or [])
+            with app.test_request_context("/telex"):
+                telex()  # fills the Telex cache
         except Exception:
             logging.exception("Cache warm-up failed")
-        time.sleep(240)
+        time.sleep(170)
 
 
 if __name__ == "__main__":
