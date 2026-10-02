@@ -21,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
@@ -375,6 +375,10 @@ def _decorate(listings: list[dict]) -> list[dict]:
     cfg = load_config_raw()
     exclude_words = cfg.get("exclude_words") or []
     hide_acc = cfg.get("hide_accessories", True)
+    from scrapers.enrich import item_form, wants_pedals
+    # Search shows what you asked for; everywhere else pedals are left out
+    # unless one of your terms asks for them.
+    hide_pedals = request.endpoint not in ("search",) and not wants_pedals(cfg)
     home_zip = str(cfg.get("home_zip") or "")
     try:
         within = int(request.args.get("within") or 0)
@@ -396,7 +400,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
     out = []
     for l in listings:
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title"))
-                or (hide_acc and is_accessory_only(l.get("title")))):
+                or (hide_acc and is_accessory_only(l.get("title")))
+                or (hide_pedals and item_form(l.get("title")) == "pedal")):
             continue
         # Learned from listings that sold: how fast this model goes, and at what price.
         sale = sales.get(model_key(l.get("title")) or "")
@@ -754,6 +759,11 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
             else:
                 unpriced.append(r)
         out_groups.append((term, good[:per_term], unpriced[:per_term]))
+    try:
+        Path("/data/shown_telex.txt").write_text(
+            "\n".join(dict.fromkeys(r["url"] for _, good, _ in out_groups for r in good if r.get("url"))))
+    except OSError:
+        pass
     # Tell the hourly refresh which Telex listings still have no comp, so it
     # looks those up first (Reverb, and eBay when its daily allowance allows).
     try:
@@ -1032,6 +1042,13 @@ def learning_dismiss():
 def index():
     cfg = load_config_raw()
     data = _index_listings(cfg)
+    # "New since your last visit": everything (all sites, newest first) found
+    # after your previous visit; a visit within 30 minutes counts as the same.
+    since = _visit_marker()
+    every = [l for _, items in data["grouped"] for l in items]
+    for l in every:
+        l["is_new"] = bool(since and (l.get("first_seen") or "") > since)
+    new_items = sorted((l for l in every if l["is_new"]), key=lambda l: l.get("first_seen") or "", reverse=True)
     fbm_regions = [{"name": name, "location_id": location_id} for name, location_id in FACEBOOK_MARKETPLACE_REGIONS]
     last_refresh = None
     try:
@@ -1044,6 +1061,7 @@ def index():
         "index.html",
         last_refresh=last_refresh,
         no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
+        new_items=new_items[:48], new_total=len(new_items), new_since=since,
         scraped_at=_last_scraped_by_site(),
         for_you=data["for_you"],
         for_you_ceiling=_for_you_cache.get("ceiling"),
@@ -1060,6 +1078,31 @@ def index():
 
 
 _index_cache: dict = {"key": None, "at": 0.0, "data": None}
+VISIT_FILE = Path("/data/last_visit.json")
+
+
+def _visit_marker() -> Optional[str]:
+    """The time of your previous Dashboard visit (UTC ISO). A new visit
+    starts when you come back after 30+ minutes away; refreshing or
+    clicking around in between keeps the same "new since" point."""
+    now = datetime.now(timezone.utc)
+    try:
+        v = json.loads(VISIT_FILE.read_text())
+    except Exception:
+        v = {}
+    if request.headers.get("X-GearScout-Test"):  # maintenance checks aren't visits
+        return v.get("previous")
+    current = v.get("current")
+    if not current or now - datetime.fromisoformat(current) > timedelta(minutes=30):
+        v["previous"] = current
+    v["current"] = now.isoformat()
+    try:
+        VISIT_FILE.write_text(json.dumps(v))
+    except OSError:
+        pass
+    return v.get("previous")
+
+
 _mismatch_cache: dict = {"key": None, "at": 0.0, "n": 0}
 
 
@@ -1108,7 +1151,15 @@ def _build_index_listings(cfg) -> dict:
     # no comp yet sits in one collapsed group at the bottom.
     worth, no_comp = _apply_comp_rule(_decorate(listings))
     grouped = _group_by_source(worth[:300], decorated=True)
-    return {"grouped": grouped, "no_comp": no_comp, "for_you": _for_you(grouped), "deals": _deals_from(grouped)}
+    for_you = _for_you(grouped)
+    # Tell the hourly sold/pending checker what's on screen, so it re-checks
+    # these first (what you see shouldn't linger after it sells).
+    try:
+        shown = [l["url"] for l in for_you] + [l["url"] for _, items in grouped for l in items]
+        Path("/data/shown_dashboard.txt").write_text("\n".join(dict.fromkeys(u for u in shown if u)))
+    except OSError:
+        pass
+    return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you, "deals": _deals_from(grouped)}
 
 
 @app.route("/scrape/start", methods=["POST"])

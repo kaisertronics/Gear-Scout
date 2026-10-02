@@ -49,8 +49,44 @@ def _ensure(conn):
         conn.execute("ALTER TABLE seen ADD COLUMN sold_checked_at TEXT")
 
 
+def _ebay_gone(url: str) -> Optional[bool]:
+    """eBay through its official API (eBay blocks reading its pages)."""
+    import yaml
+    from scrapers.ebay_api import SEARCH_URL, _check_response, _get_token, ebay_paused_until
+    m = re.search(r"/itm/(?:[^/]+/)?(\d{9,})", url)
+    if not m or ebay_paused_until():
+        return None
+    try:
+        api = (yaml.safe_load(open("/config/config.yaml")) or {}).get("ebay_api") or {}
+    except Exception:
+        return None
+    if not (api.get("client_id") and api.get("client_secret")):
+        return None
+    token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
+    r = requests.get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"),
+                     params={"legacy_item_id": m.group(1)},
+                     headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
+    _check_response(r)
+    if r.status_code in (404, 410):
+        return True
+    if r.status_code != 200:
+        return None
+    item = r.json()
+    end = item.get("itemEndDate")
+    if end:
+        try:
+            if datetime.fromisoformat(end.replace("Z", "+00:00")) < datetime.now(timezone.utc):
+                return True
+        except ValueError:
+            pass
+    avail = [(a.get("estimatedAvailabilityStatus") or "") for a in (item.get("estimatedAvailabilities") or [])]
+    return bool(avail) and all(a == "OUT_OF_STOCK" for a in avail)
+
+
 def check_url(url: str) -> Optional[bool]:
     """True = sold/gone, False = still listed, None = couldn't tell."""
+    if "ebay.com/itm" in url:
+        return _ebay_gone(url)
     if "reverb.com/item/" in url:
         m = re.search(r"/item/(\d+)", url)
         if not m:
@@ -90,6 +126,40 @@ def check_url(url: str) -> Optional[bool]:
         m = re.search(r"/GearHunter/(\d+)", url)
         return bool(m and m.group(1) not in r.url)  # redirected away from the item
     return bool(_GONE_TEXT.search(html))
+
+
+SHOWN_FILES = ("/data/shown_dashboard.txt", "/data/shown_telex.txt")
+SHOWN_RECHECK_HOURS = 4
+
+
+def _shown_first(limit: int, include_fb: bool) -> list[str]:
+    """Listings currently on your Dashboard / Telex (the dashboard notes
+    them) that haven't been checked in the last few hours — checked first,
+    so what you see doesn't linger after it sells."""
+    shown = []
+    for path in SHOWN_FILES:
+        try:
+            shown += [u for u in open(path).read().split("\n") if u.startswith("http")]
+        except OSError:
+            pass
+    if not include_fb:
+        shown = [u for u in shown if "facebook.com" not in u]
+    else:
+        shown = [u for u in shown if "facebook.com/marketplace/item" in u]
+    if not shown:
+        return []
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=SHOWN_RECHECK_HOURS)).isoformat()
+    due = []
+    with _conn() as conn:
+        _ensure(conn)
+        for i in range(0, len(shown), 400):
+            chunk = shown[i:i + 400]
+            due += [u for (u,) in conn.execute(
+                f"SELECT DISTINCT url FROM seen WHERE url IN ({','.join('?' * len(chunk))}) AND sold = 0"
+                " AND url NOT LIKE '%shopgoodwill.com%'"
+                " AND (sold_checked_at IS NULL OR sold_checked_at < ?)", (*chunk, cutoff))]
+    order = {u: i for i, u in enumerate(shown)}
+    return sorted(set(due), key=lambda u: order.get(u, 0))[:limit]
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
@@ -134,7 +204,12 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     start = time.time()
     checked = sold = 0
     lock = threading.Lock()
-    http = [u for u, _ in _candidates(max_http * 2, include_fb=False)][:max_http]
+    shown = _shown_first(max_http, include_fb=False)
+    http = list(dict.fromkeys(shown + [u for u, _ in _candidates(max_http * 2, include_fb=False)]))
+    # eBay is checked through its API, which counts against the daily
+    # allowance: at most 40 per hour, the ones you can see first.
+    ebay = [u for u in http if "ebay.com/itm" in u][:40]
+    http = [u for u in http if "ebay.com/itm" not in u][:max_http] + ebay
 
     def check_one(url):
         nonlocal checked, sold
@@ -150,7 +225,9 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
 
     def fb_checks():
         nonlocal checked, sold
-        fb = [u for u, _ in _candidates(max_fb * 4, include_fb=True) if "facebook.com/marketplace/item" in u][:max_fb]
+        fb = list(dict.fromkeys(_shown_first(max_fb, include_fb=True)
+                            + [u for u, _ in _candidates(max_fb * 4, include_fb=True)
+                               if "facebook.com/marketplace/item" in u]))[:max_fb]
         if fb:
             try:
                 from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context

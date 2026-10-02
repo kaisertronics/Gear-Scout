@@ -14,6 +14,7 @@
 
   {% if grouped_listings %}
   <nav class="source-jump" aria-label="Jump to a site">
+    {% if new_total %}<a href="#new" class="source-jump-chip">🆕 New <span class="muted">{{ new_total }}</span></a>{% endif %}
     {% if for_you %}<a href="#for-you" class="source-jump-chip">✨ For you</a>{% endif %}
     {% if deals %}<a href="#deals" class="source-jump-chip">🔥 Deals <span class="muted">{{ deals|length }}</span></a>{% endif %}
     {% for source_name, items in grouped_listings %}
@@ -193,6 +194,21 @@
   </section>
   {% endif %}
 
+
+  {% if new_items %}
+  <section class="panel" id="new">
+    <h2>🆕 New since your last visit <span class="muted">— {{ new_total }} · all sites, newest first{% if new_since %} · since {{ new_since|local }}{% endif %}</span></h2>
+    <div class="listing-grid">
+      {% for l in new_items[:24] %}{{ listing_card(l) }}{% endfor %}
+    </div>
+    {% if new_items|length > 24 %}
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new_items[24:])) }}">
+        <summary>Show {{ new_items|length - 24 }} more new</summary>
+        <div class="listing-grid"></div>
+      </details>
+    {% endif %}
+  </section>
+  {% endif %}
 
   {% for source_name, items in grouped_listings %}
   <section class="panel" id="src-{{ loop.index }}">

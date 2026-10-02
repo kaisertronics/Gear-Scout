@@ -415,6 +415,12 @@ def is_relevant(title: Optional[str], price: Optional[str], terms: tuple) -> boo
     return bool(_VINTAGE_SIGNS.search(t))
 
 
+def wants_pedals(cfg: dict) -> bool:
+    """Pedals are left out unless one of your search / Telex terms asks for them."""
+    terms = list(cfg.get("keywords") or []) + list(cfg.get("telex_list") or [])
+    return any("pedal" in str(t).lower() for t in terms)
+
+
 def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> list:
     """Drops non-audio items, accessory-only listings (setting), exclude
     words — and, when the run's search terms are given (scheduled/hourly/
@@ -423,7 +429,9 @@ def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> li
     words = cfg.get("exclude_words") or []
     hide_acc = cfg.get("hide_accessories", True)
     term_key = tuple(terms) if terms and len(terms) > 1 and cfg.get("relevance_check", True) else None
+    hide_pedals = not wants_pedals(cfg)
     return [l for l in listings if not is_not_audio(l.title)
+            and not (hide_pedals and item_form(l.title) == "pedal")
             and not (hide_acc and is_accessory_only(l.title))
             and not (words and exclude_match(l.title, words))
             and not (term_key and not is_relevant(l.title, l.price, term_key))]
@@ -441,7 +449,13 @@ _FORMS = (
     ("pedal", re.compile(
         r"\b(?:pedal|stomp ?box|uafx|(?:la-?2a|1176|teletronix)\b.{0,30}\bstudio compressor|"
         r"golden reverberator|starlight echo|galaxy '?74|astra modulation|max preamp|"
-        r"(?:lion|ruby|dream|woodrow|enigmatic|anti|evermore|knuckles)\s*'?\d{2}|orange \w+ amp emulat\w*)", re.I)),
+        r"(?:lion|ruby|dream|woodrow|enigmatic|anti|evermore|knuckles)\s*'?\d{2}|orange \w+ amp emulat\w*|"
+        # Guitar/bass effects, named by type or by a pedal maker.
+        r"overdrive|fuzz|distortion|wah|chorus|flanger|phaser|looper|tremolo|octaver|tube ?screamer|"
+        r"whammy|bass (?:compressor|preamp|di pedal|overdrive)|guitar (?:compressor|effects?)|"
+        r"mxr|electro-?harmonix|ehx|jhs|keeley|walrus audio|strymon|earthquaker|wampler|fulltone|"
+        r"chase bliss|meris|source audio|xotic|catalinbread|dunlop|zvex|jackson audio|"
+        r"boss\s+(?!br|dr|sp|mc|tr|ad|rc-?505|gt-?1000)[a-z]{2,3}-?\d{1,3}[a-z]*)\b", re.I)),
     ("plugin", re.compile(r"\b(?:plug-?ins?|software|licen[sc]e|vst|aax|download code|"
                           r"uad-?2 (?:plug|powered plug))\b|\(download\)|\bdigital download\b", re.I)),
     ("kit", re.compile(r"\b(?:diy|pcb|bare boards?|unbuilt|unassembled|(?:partial|build|clone|diy|project) kit|kit (?:build|form|only))\b", re.I)),
