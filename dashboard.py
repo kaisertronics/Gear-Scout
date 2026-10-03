@@ -907,12 +907,30 @@ _steals_cache: dict = {"key": None, "at": 0.0, "data": None}
 STEAL_LEVELS = (50, 60, 70, 80)
 
 
-def _steals(min_pct: int) -> dict:
+_steals_state = {"running": False}
+
+
+def _steals(min_pct: int, background: bool = False) -> dict:
     """Listings 60%+ (or the chosen level) under used prices — see
     scrapers/steals.py. Takes ~15-25s over every stored listing, so it's
     reused for 10 minutes unless something changed, and kept warm."""
     key = (min_pct, _data_version[0], _last_change_marker())
     if _steals_cache["key"] == key and time.time() - _steals_cache["at"] < 600:
+        return _steals_cache["data"]
+    # Something changed (a scrape running, a hide): show the list we have
+    # right away and rebuild it in the background, instead of a blank page.
+    if _steals_cache["data"] is not None and _steals_cache["key"][0] == min_pct and not background:
+        if not _steals_state["running"]:
+            def rebuild():
+                _steals_state["running"] = True
+                try:
+                    with app.test_request_context("/steals"):
+                        _steals(min_pct, background=True)
+                except Exception:
+                    logging.exception("Steals rebuild failed")
+                finally:
+                    _steals_state["running"] = False
+            threading.Thread(target=rebuild, name="steals-rebuild", daemon=True).start()
         return _steals_cache["data"]
     from scrapers.steals import find
     found = find(load_config_raw(), min_pct=min_pct)
@@ -933,6 +951,18 @@ def _steals(min_pct: int) -> dict:
             pass
     _steals_cache.update(key=key, at=time.time(), data=data)
     return data
+
+
+@app.route("/steals/status")
+def steals_status():
+    """Whether the Steals list is up to date (kicks off a rebuild if not)."""
+    try:
+        min_pct = int(request.args.get("pct") or 60)
+    except ValueError:
+        min_pct = 60
+    if _steals_cache["data"] is not None:
+        _steals(min_pct if min_pct in STEAL_LEVELS else 60)
+    return {"rebuilding": _steals_state["running"]}
 
 
 @app.route("/steals")
@@ -2239,7 +2269,7 @@ def _keep_caches_warm():
             with app.test_request_context("/telex"):
                 telex()  # fills the Telex cache
             with app.test_request_context("/steals"):
-                _steals(60)
+                _steals(60, background=True)
             _verify_top_listings()
         except Exception:
             logging.exception("Cache warm-up failed")
