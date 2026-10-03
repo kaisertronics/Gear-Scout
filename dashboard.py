@@ -1071,7 +1071,12 @@ def steals():
     min_pct = min_pct if min_pct in STEAL_LEVELS else 60
     data = _steals(min_pct)
     _verify_top_listings()
-    return render_template("steals.html", trusted=data["trusted"], rough=data["rough"],
+    # Newest posts first; ads up 30+ days get their own section at the bottom.
+    age = lambda l: l.get("age_days") if l.get("age_days") is not None else 999
+    fresh = sorted((l for l in data["trusted"] if age(l) <= 30), key=age)
+    old = sorted((l for l in data["trusted"] if age(l) > 30), key=lambda l: -l["comp"]["pct"])
+    rough = sorted(data["rough"], key=age)
+    return render_template("steals.html", trusted=fresh, old=old, rough=rough,
                            min_pct=min_pct, levels=STEAL_LEVELS)
 
 

@@ -287,10 +287,11 @@ _JUNK = re.compile(
 # A listing that is only an accessory: cables, stands, cases, pop filters…
 # ("Neumann U87 with case" is the mic; "Microphone stand and pop filter" isn't).
 _ACCESSORY_ONLY = re.compile(
-    r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|pop filters?|windscreens?|wind ?shields?|"
+    r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|arms?|pop filters?|windscreens?|wind ?shields?|"
     r"blimp|dead ?cat|shock ?mounts?|clips?|cases?|road case|flight case|gig bag|bags?|covers?|"
     r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
     r"rack rails|rack shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
+    r"suspensions?|desktop enclosure|(?:usb|adat|dante|madi|option|expansion)(?:\s*/\s*\w+)?\s+cards?|"
     r"(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
 _MAIN_GEAR = re.compile(
     r"\b(?:microphones?|mics?|preamps?|pre-amps?|compressors?|limiters?|interfaces?|mixers?|consoles?|"
@@ -302,6 +303,10 @@ _MAIN_GEAR = re.compile(
 def is_accessory_only(title: Optional[str]) -> bool:
     t = title or ""
     # "RCA BK-6B Clamp Part No 210221": a numbered spare part, whatever it fits.
+    # "C414 Original Case Shock Mount Windscreen Accessory": says so itself.
+    if re.search(r"\baccessor(?:y|ies)\b", t, re.I) and _ACCESSORY_ONLY.search(t) \
+            and not re.search(r"\bwith\b|\bw/|\bincl|\bplus\b|&|,", t, re.I):
+        return True
     if re.search(r"\bpart\s*(?:no\.?|number|#)\s*\d|\b(?:clamp|yoke|bracket|grille?|knob|switch)\s+(?:part|assembly)\b", t, re.I):
         return True
     m = _ACCESSORY_ONLY.search(t)
@@ -311,10 +316,17 @@ def is_accessory_only(title: Optional[str]) -> bool:
     joiner = r"(?:\bwith\b|\bw/|\bw\b|\bincl\w*|\bcomes with\b|\bplus\b|\+|&)"
     # "Shure QLXD24 system w/ handheld mic, case", "Revox A77 recorder w/stand":
     # the accessory is extra, the listing is the gear.
-    if re.search(joiner, before, re.I):
+    # Also a list of gear: "Apollo Twin X, Shure SM7B, M50x, Mic Arm",
+    # "Blue microphone and Blue boom arm", "SM7B / Rode PSA1 arm".
+    if re.search(joiner, before, re.I) or (re.search(r",|\band\b|\s/\s|\||–", before)
+                                          and (_MAIN_GEAR.search(before) or _model_tokens(before))):
         return False
     # "Gator rack case with Lexicon PCM 70": gear comes with it.
-    if re.search(joiner, after, re.I) and (_MAIN_GEAR.search(after) or _model_tokens(after)
+    # (but "Boom Arm with Pop Filter - Mic Arm": "mic" there describes an accessory)
+    gear_after = _MAIN_GEAR.search(after)
+    if gear_after and _ACCESSORY_ONLY.match(after[gear_after.end():].lstrip()):
+        gear_after = None
+    if re.search(joiner, after, re.I) and (gear_after or _model_tokens(after)
                                            or canonical_brand(after)):
         return False
     # "Pop filter for mic", "Case for Neumann U87": made for the gear.
@@ -657,8 +669,9 @@ def model_key(title: Optional[str]) -> Optional[str]:
     # UA's modern reissues are often titled "Teletronix LA-2A ... Universal
     # Audio"; those aren't the 1960s originals (half the price).
     reissue = False
-    if brand == "teletronix" and re.search(r"universal audio|\bua\b|reissue|\b(?:19[89]\d|20[0-3]\d)s?\b", title or "", re.I) \
-            and not re.search(r"\b(?:19[56]\d'?s?|original|vintage)\b", title or "", re.I):
+    # A plain "Teletronix LA-2A" is almost always a reissue too: only one
+    # that says vintage / original / 1960s is valued as an original.
+    if brand == "teletronix" and not re.search(r"\b(?:19[56]\d'?s?|original|vintage|orig)\b", title or "", re.I):
         brand, reissue = "universal-audio", True
     model = _canonical_model(brand, model)
     variant = _model_variant(title, found[1])

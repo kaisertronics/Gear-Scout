@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-03",
+    "title": "Steals: fresh first, scams out",
+    "items": [
+      "Steals now shows newest posts first; ads up 30+ days moved to a section at the bottom.",
+      "Scam pattern filtered: several identical ads for the same gear at an impossible price posted within a few days (e.g. four “Genuine Neumann TLM 103” at ~$100) are left out. Anything 80%+ off goes to “Double-check these”.",
+      "Plain “Teletronix LA-2A” listings are valued as UA reissues unless they say vintage / original / 1960s.",
+      "More parts and accessories caught (option/ADAT cards, shock mount “suspensions”, mic arms, guitar pickups, connectors, “accessory” sets), while gear bundles like “Apollo Twin X, SM7B, M50x, mic arm” are kept."
+    ]
+  },
+  {
+    "date": "2026-10-03",
     "title": "💸 Deals tab",
     "items": [
       "New Deals tab: every listing still for sale that's 10%+ under used prices, newest posts first, with filters for Today / 3 days / This week / This month / Any age.",

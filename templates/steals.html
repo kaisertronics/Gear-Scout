@@ -7,11 +7,12 @@
     <h2>🔥 Steals <span class="muted">— {{ trusted|length }} listing{{ '' if trusted|length == 1 else 's' }} {{ min_pct }}%+ under used prices</span></h2>
     <p class="muted">
       Everything Gear Scout has collected for your search terms and Telex List, still for sale, priced
-      at least {{ min_pct }}% under what the gear really goes for used. Biggest dollar savings first.
+      at least {{ min_pct }}% under what the gear really goes for used. Newest posts first.
       Each listing is checked against two things: its comp (sold prices, Reverb/eBay used, B-stock)
       <strong>and</strong> what other listings of the same gear ask. The lower of the two counts, so a copy
       or a cheaper version can't look like a steal. Parts, repair jobs, pedals, plugins, auctions and
-      placeholder prices are left out. New steals also go to your phone and email within the hour.
+      placeholder prices are left out, and so are scam patterns (several identical ads for the same gear at an
+      impossible price, posted the same few days). New steals also go to your phone and email within the hour.
       Tap 🤖 on a listing for a quick "is this real?" check.
     </p>
     <div class="scrape-now-row">
@@ -45,11 +46,24 @@
     {% endif %}
   </section>
 
+  {% if old %}
+  <section class="panel">
+    <h2>Listed 30+ days ago <span class="muted">— {{ old|length }}</span></h2>
+    <p class="muted">Still for sale and {{ min_pct }}%+ under, but posted over a month ago. A real steal rarely sits
+      that long, so the comparison may be off (or the seller is open to an offer).</p>
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old)) }}">
+      <summary>Show {{ old|length }}</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endif %}
+
   {% if rough %}
   <section class="panel">
     <h2>Double-check these <span class="muted">— {{ rough|length }}</span></h2>
     <p class="muted">Also {{ min_pct }}%+ under, but the comparison is shakier: the comp is only an estimate,
-      it's a clone or "style" copy, or there's no other listing of the same gear to confirm the price.
+      it's a clone or "style" copy, it's 80%+ off (too good to be true?), or there's no other listing of the same
+      gear to confirm the price.
       Some are real finds and some are mix-ups, so check before you jump.</p>
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(rough[:150])) }}">
       <summary>Show {{ [rough|length, 150]|min }}</summary>

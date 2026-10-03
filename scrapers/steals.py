@@ -10,6 +10,7 @@ real one (sold prices, Reverb/eBay used, B-stock, your local history) — not
 an estimate from "similar" listings.
 """
 import logging
+import math
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -28,7 +29,7 @@ MAX_PCT = 92       # beyond this it's almost always the wrong comp
 _PARTS = re.compile(
     r"\b(?:head\s?(?:set\s)?block|headstack|assembly|electronics|internals?|pcb|circuit board|boards?|"
     r"option card|expansion card|card for|case(?: only)?\s+(?:w/|with|for)|foam|insert|faceplate|front panel|"
-    r"capsule only|socket|connection base|power suppl(?:y|ies) only|psu only|cable only|shock ?mount only|manual|"
+    r"capsule only|socket|connection base|connectors?|pickups?|humbuckers?|power suppl(?:y|ies) only|psu only|cable only|shock ?mount only|manual|"
     r"(?:stand|mount|clip|cable|case|bag|cover|adapter|holder|cradle|grille)s?\s+for)\b", re.I)
 # Clones / "style" copies get compared with the real thing far too easily.
 _CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type)\b", re.I)
@@ -109,6 +110,28 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         # Estimated comps, clones and anything with no second opinion go in
         # the "double-check" list.
         (rough if c["est"] or r["steal"]["clone"] or not peer else trusted).append(r)
+    # Scam pattern: several separate ads for the same model at the same
+    # impossible price, posted within a couple of days ("Genuine Neumann TLM
+    # 103" at ~$100, four times). Those are left out; anything else 80%+ off
+    # goes to "double-check".
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for r in trusted + rough:
+        k = model_key(r["title"]) or r["title"].lower()[:40]
+        groups[(k, round(math.log(max(r["steal"]["unit"] or 1, 1)) / 0.15))].append(r)
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    scam = {id(r) for g in groups.values()
+            if len({x["url"] for x in g}) >= 2 and min(x["steal"]["pct"] for x in g) >= 70
+            and all((x.get("first_seen") or "") >= recent for x in g) for r in g}
+    if scam:
+        logger.info("Steals: left out %d likely scam listings", len(scam))
+    trusted = [r for r in trusted if id(r) not in scam]
+    rough = [r for r in rough if id(r) not in scam]
+    too_good = [r for r in trusted if r["steal"]["pct"] >= 80]
+    trusted = [r for r in trusted if r["steal"]["pct"] < 80]
+    for r in too_good:
+        r["steal"]["too_good"] = True
+    rough += too_good
     key = lambda r: -r["steal"]["saved"]
     return {"trusted": sorted(trusted, key=key), "rough": sorted(rough, key=key)}
 
