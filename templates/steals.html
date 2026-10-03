@@ -48,8 +48,8 @@
 
   {% if old %}
   <section class="panel">
-    <h2>Listed 30+ days ago <span class="muted">— {{ old|length }}</span></h2>
-    <p class="muted">Still for sale and {{ min_pct }}%+ under, but posted over a month ago. A real steal rarely sits
+    <h2>Posted more than a week ago <span class="muted">— {{ old|length }}</span></h2>
+    <p class="muted">Still for sale and {{ min_pct }}%+ under, but posted more than a week ago. A real steal rarely sits
       that long, so the comparison may be off (or the seller is open to an offer).</p>
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old)) }}">
       <summary>Show {{ old|length }}</summary>

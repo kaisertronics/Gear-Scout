@@ -1,6 +1,19 @@
 [
   {
     "date": "2026-10-03",
+    "title": "Fresh ads, your budget, Facebook & Craigslist first",
+    "items": [
+      "Facebook Marketplace and Craigslist never say when an ad was posted in their search results — so old ads looked brand new. Gear Scout now reads the real posting date from each ad's own page when it checks whether it sold (no extra requests).",
+      "Every listing card shows its age (green = last 2 days, grey = over a week). A “~” means the site doesn't say, so it's when Gear Scout found it.",
+      "Fresh means the last week: on the Dashboard, Deals, Steals and every Telex term, ads posted more than a week ago go to a collapsed “older” section.",
+      "Facebook Marketplace and Craigslist come first: their sections lead the Dashboard, and on Deals they're first within each day.",
+      "Deals opens on the last 3 days and your $500–$2,000 range (one tap for under $500, $2,000+ or any price). “Picked for you” uses the same range and only this week's ads.",
+      "Facebook Telex/live searches now ask for the newest ads from the last 30 days; OfferUp term searches are newest-first.",
+      "Pages open instantly after an update (Dashboard ~4s, Deals/Steals/Telex under 1.5s instead of 30–80s): the last results are kept on disk and refreshed in the background."
+    ]
+  },
+  {
+    "date": "2026-10-03",
     "title": "Steals: fresh first, scams out",
     "items": [
       "Steals now shows newest posts first; ads up 30+ days moved to a section at the bottom.",

@@ -65,7 +65,7 @@
       <div class="listing-grid">
         {% for l in fresh[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
-      {% else %}<p class="muted">Nothing posted in the last 30 days that's 10%+ under its comp.</p>{% endif %}
+      {% else %}<p class="muted">Nothing posted in the last week that's 10%+ under its comp.</p>{% endif %}
       {% if fresh|length > 24 %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(fresh[24:])) }}">
           <summary>Show all {{ fresh|length }} (cheapest first)</summary>
@@ -74,7 +74,7 @@
       {% endif %}
       {% if old %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old)) }}">
-          <summary class="muted">{{ old|length }} posted 30+ days ago (still for sale)</summary>
+          <summary class="muted">{{ old|length }} posted more than a week ago (still for sale)</summary>
           <div class="listing-grid"></div>
         </details>
       {% endif %}

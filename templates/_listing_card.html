@@ -16,7 +16,7 @@
     {% endif %}
     <div class="listing-body">
       {% set tag = l.source_name|source_tag %}
-      <span class="source-tag source-tag-{{ tag[1] }}" title="{{ l.source_name }}">{{ tag[0] }}</span>{% if l.is_new %}<span class="new-tag">NEW</span>{% endif %}{% if l.age_days is not none %}{% set d = l.age_days %}<span class="age-tag{{ ' age-old' if d > 30 else (' age-fresh' if d <= 2 else '') }}" title="{{ 'Posted by the seller' if l.age_known else 'Found by Gear Scout (the site doesn’t say when it was posted)' }}">{{ '' if l.age_known else '~' }}{% if d < 1 %}today{% elif d < 60 %}{{ d|int }}d{% else %}{{ (d / 30)|int }}mo{% endif %}</span>{% endif %}
+      <span class="source-tag source-tag-{{ tag[1] }}" title="{{ l.source_name }}">{{ tag[0] }}</span>{% if l.is_new %}<span class="new-tag">NEW</span>{% endif %}{% if l.age_days is not none %}{% set d = l.age_days %}<span class="age-tag{{ ' age-old' if d > 7 else (' age-fresh' if d <= 2 else '') }}" title="{{ 'Posted by the seller' if l.age_known else 'Found by Gear Scout (the site doesn’t say when it was posted)' }}">{{ '' if l.age_known else '~' }}{% if d < 1 %}today{% elif d < 60 %}{{ d|int }}d{% else %}{{ (d / 30)|int }}mo{% endif %}</span>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">

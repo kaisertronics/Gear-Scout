@@ -573,7 +573,11 @@ def _group_by_source(listings: list[dict], decorated: bool = False) -> list[tupl
         groups.setdefault(family, []).append(listing)
     # `listings` arrives newest-first, so the first listing seen for a given
     # source is already that source's most recent one.
-    return sorted(groups.items(), key=lambda kv: kv[1][0]["first_seen"], reverse=True)
+    # Facebook Marketplace and Craigslist first (the owner's priority), then
+    # the rest by whichever site has the most recent listing.
+    order = sorted(groups.items(), key=lambda kv: kv[1][0]["first_seen"], reverse=True)
+    lead = ("Facebook Marketplace", "Craigslist")
+    return [kv for name in lead for kv in order if kv[0] == name] + [kv for kv in order if kv[0] not in lead]
 
 
 _for_you_cache: dict = {"at": 0.0, "items": None, "ceiling": None}
@@ -608,7 +612,8 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
         t = taste()
         if not t.ready:
             return []
-        ceiling = _favorite_price_ceiling()
+        # Your stated budget ($500–$2,000), with a little room either side.
+        floor, ceiling = BUDGET[0] * 0.8, BUDGET[1] * 1.1
         cfg = load_config_raw()
         terms = tuple(keywords_with_learned(cfg))
         with _conn() as conn:
@@ -626,7 +631,8 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
             unit = ctx.get("unit_value")
             pct = ctx.get("pct_under")
             if (l.get("url") in seen_urls or l.get("is_auction") or not unit or pct is None
-                    or not ctx.get("typical") or ctx.get("rough") or (ceiling and unit > ceiling)
+                    or not ctx.get("typical") or ctx.get("rough") or not (floor <= unit <= ceiling)
+                    or (l.get("age_days") or 0) > FRESH_DAYS
                     or is_partial(l.get("title")) or is_bundle(l.get("title"))):
                 continue
             # 20%+ under a solid comp; more than 75% under is almost always a
@@ -639,7 +645,10 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
             seen_urls.add(l.get("url"))
             seen_urls.add(same_ad)
             match = min(t.score(l.get("title") or ""), 6.0)
-            scored.append((pct * (1 + match / 3), l))
+            # Newer is better: a 2-day-old ad counts a bit less than today's.
+            fresh = 1 - min(l.get("age_days") or 0, FRESH_DAYS) / (FRESH_DAYS * 2)
+            local = 1.15 if (l.get("source_name") or "").startswith(_LOCAL_FIRST) else 1.0
+            scored.append((pct * (1 + match / 3) * fresh * local, l))
         items = [l for _, l in sorted(scored, key=lambda x: -x[0])[:n]]
         _for_you_cache.update(at=time.time(), items=items, ceiling=ceiling)
         return items
@@ -818,7 +827,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
                 unpriced.append(r)
         # Cheapest first, but ads posted 30+ days ago go after the fresh ones.
         for r in good:
-            r["is_old"] = (r.get("age_days") or 0) > 30
+            r["is_old"] = (r.get("age_days") or 0) > FRESH_DAYS
         good.sort(key=lambda r: r["is_old"])  # stable: keeps cheapest-first within each
         out_groups.append((term, good[:per_term], unpriced[:per_term]))
     if not note:
@@ -839,6 +848,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
 
 
 _telex_cache: dict = {"key": None, "at": 0.0, "groups": None}
+_telex_state = {"running": False}
 _data_version = [0]  # bumped whenever you hide/favorite/change terms or a search finishes
 
 
@@ -956,11 +966,51 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
                     items[i]["favorite"] = 1 if favorite else 0
 
 
+def _snapshot_save(name: str, data) -> None:
+    """Keeps the last result of a slow page build on disk, so right after a
+    restart (every update) the page shows it instantly instead of making you
+    wait 30-80s while everything is recalculated."""
+    import pickle
+    try:
+        tmp = Path(f"/data/.snap_{name}.tmp")
+        tmp.write_bytes(pickle.dumps(data))
+        tmp.replace(Path(f"/data/.snap_{name}.pkl"))
+    except Exception:
+        logging.exception("Couldn't save the %s snapshot", name)
+
+
+def _snapshot_load(name: str, max_age: float = 3 * 3600):
+    import pickle
+    p = Path(f"/data/.snap_{name}.pkl")
+    try:
+        if time.time() - p.stat().st_mtime < max_age:
+            return pickle.loads(p.read_bytes())
+    except Exception:
+        pass
+    return None
+
+
 _deals_cache: dict = {"key": None, "at": 0.0, "data": None}
 _deals_state = {"running": False}
 STEAL_LEVELS = (50, 60, 70, 80)
 DEAL_AGES = (("1", "Today"), ("3", "3 days"), ("7", "This week"), ("30", "This month"), ("all", "Any age"),
-             ("old", "Listed 30+ days"))
+             ("old", "Older than a week"))
+DEAL_PRICES = (("500-2000", "$500–$2,000"), ("0-500", "Under $500"), ("2000-", "$2,000+"), ("any", "Any price"))
+# The owner wants fresh ads (last few days): anything posted more than a
+# week ago goes to a collapsed "older" section on every page.
+FRESH_DAYS = 7
+BUDGET = (500, 2000)  # what the owner usually spends
+# Facebook Marketplace and Craigslist come first: local sellers price
+# lowest, and many ship these days.
+_LOCAL_FIRST = ("FB Marketplace", "Craigslist", "OfferUp", "Kijiji", "FB —", "seattle group")
+
+
+def _fresh_order(l: dict):
+    """Newest day first; within a day, Facebook / Craigslist ads first."""
+    a = l.get("age_days")
+    a = 999 if a is None else a
+    local = (l.get("source_name") or "").startswith(_LOCAL_FIRST)
+    return (int(a), not local, a)
 
 
 def _age_days(l: dict) -> Optional[float]:
@@ -986,6 +1036,10 @@ def _all_deals(background: bool = False) -> dict:
     key = (_data_version[0], _last_change_marker())
     if _deals_cache["key"] == key and time.time() - _deals_cache["at"] < 600:
         return _deals_cache["data"]
+    if _deals_cache["data"] is None and not background:
+        snap = _snapshot_load("deals")
+        if snap is not None:
+            _deals_cache.update(key=None, at=0.0, data=snap)
     # Something changed (a scrape running, a hide): show what we have right
     # away and rebuild in the background, instead of a blank page.
     if _deals_cache["data"] is not None and not background:
@@ -1021,6 +1075,7 @@ def _all_deals(background: bool = False) -> dict:
     except OSError:
         pass
     _deals_cache.update(key=key, at=time.time(), data=data)
+    _snapshot_save("deals", data)
     return data
 
 
@@ -1032,28 +1087,38 @@ def _steals(min_pct: int, background: bool = False) -> dict:
 
 @app.route("/deals")
 def deals():
-    age = request.args.get("age") or "7"
-    age = age if age in dict(DEAL_AGES) else "7"
+    age = request.args.get("age") or "3"
+    age = age if age in dict(DEAL_AGES) else "3"
+    price = request.args.get("price") or "500-2000"
+    price = price if price in dict(DEAL_PRICES) else "500-2000"
     sort = request.args.get("sort") or "new"
     d = _all_deals()
+    lo, _, hi = price.partition("-")
+    lo = 0 if price == "any" else float(lo or 0)
+    hi = float(hi) if hi and price != "any" else 1e12
+
+    def in_price(l):
+        v = l["steal"].get("unit") or 0
+        return lo <= v <= hi
 
     def keep(l):
         a = l.get("age_days")
         a = 0 if a is None else a
-        return a > 30 if age == "old" else (age == "all" or a <= float(age))
+        return in_price(l) and (a > FRESH_DAYS if age == "old" else (age == "all" or a <= float(age)))
     trusted = [l for l in d["trusted"] if keep(l)]
     rough = [l for l in d["rough"] if keep(l)]
-    order = {"new": lambda l: l.get("age_days") if l.get("age_days") is not None else 999,
+    order = {"new": _fresh_order,
              "discount": lambda l: -l["comp"]["pct"],
              "savings": lambda l: -l["steal"]["saved"],
              "cheap": lambda l: l["steal"].get("unit") or 0}
     trusted.sort(key=order.get(sort, order["new"]))
     rough.sort(key=order.get(sort, order["new"]))
-    counts = {k: sum(1 for l in d["trusted"] if (lambda a: a > 30 if k == "old" else (k == "all" or a <= float(k)))(
-        l.get("age_days") or 0)) for k, _ in DEAL_AGES}
+    counts = {k: sum(1 for l in d["trusted"] if in_price(l) and (
+        lambda a: a > FRESH_DAYS if k == "old" else (k == "all" or a <= float(k)))(l.get("age_days") or 0))
+        for k, _ in DEAL_AGES}
     _verify_top_listings()
     return render_template("deals.html", trusted=trusted, rough=rough, age=age, sort=sort, ages=DEAL_AGES,
-                           counts=counts, rebuilding=_deals_state["running"])
+                           price=price, prices=DEAL_PRICES, counts=counts, rebuilding=_deals_state["running"])
 
 
 @app.route("/steals/status")
@@ -1079,8 +1144,8 @@ def steals():
     _verify_top_listings()
     # Newest posts first; ads up 30+ days get their own section at the bottom.
     age = lambda l: l.get("age_days") if l.get("age_days") is not None else 999
-    fresh = sorted((l for l in data["trusted"] if age(l) <= 30), key=age)
-    old = sorted((l for l in data["trusted"] if age(l) > 30), key=lambda l: -l["comp"]["pct"])
+    fresh = sorted((l for l in data["trusted"] if age(l) <= FRESH_DAYS), key=_fresh_order)
+    old = sorted((l for l in data["trusted"] if age(l) > FRESH_DAYS), key=lambda l: -l["comp"]["pct"])
     rough = sorted(data["rough"], key=age)
     return render_template("steals.html", trusted=fresh, old=old, rough=rough,
                            min_pct=min_pct, levels=STEAL_LEVELS)
@@ -1159,11 +1224,33 @@ def telex():
     # (much longer while a scrape runs); reuse it for 3 minutes unless
     # something changed.
     key = (tuple(terms), request.query_string, _data_version[0])
-    if _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180:
+    if _telex_cache["groups"] is None and not request.query_string:
+        snap = _snapshot_load("telex")
+        if snap is not None and [t for t, _, _ in snap] == terms:
+            _telex_cache.update(key=None, at=0.0, groups=snap)
+    fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180
+    if fresh:
         groups = _telex_cache["groups"]
+    elif (_telex_cache["groups"] is not None and not request.query_string
+          and [t for t, _, _ in _telex_cache["groups"]] == terms and not request.headers.get("X-Warm")):
+        # Show the last list right away and refresh it in the background.
+        groups = _telex_cache["groups"]
+        if not _telex_state["running"]:
+            def rebuild():
+                _telex_state["running"] = True
+                try:
+                    with app.test_request_context("/telex", headers={"X-Warm": "1"}):
+                        telex()
+                except Exception:
+                    logging.exception("Telex rebuild failed")
+                finally:
+                    _telex_state["running"] = False
+            threading.Thread(target=rebuild, name="telex-rebuild", daemon=True).start()
     else:
         groups = _telex_matches(terms)
         _telex_cache.update(key=key, at=time.time(), groups=groups)
+        if not request.query_string:
+            _snapshot_save("telex", groups)
         _verify_top_listings()
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
@@ -1581,8 +1668,17 @@ def _index_listings(cfg) -> dict:
     key = (request.query_string, _last_change_marker())
     if _index_cache["key"] == key and time.time() - _index_cache["at"] < 180:
         return _index_cache["data"]
+    # Right after a restart: show the last Dashboard saved on disk at once
+    # and rebuild in the background (the cache warmer does it).
+    if _index_cache["data"] is None and not request.query_string:
+        snap = _snapshot_load("index")
+        if snap is not None:
+            _index_cache.update(key=None, at=0.0, data=snap)
+            return snap
     data = _build_index_listings(cfg)
     _index_cache.update(key=key, at=time.time(), data=data)
+    if not request.query_string:
+        _snapshot_save("index", data)
     _verify_top_listings()
     return data
 
@@ -1614,7 +1710,7 @@ def _build_index_listings(cfg) -> dict:
     # Reverb/eBay) go to their own section at the bottom; favorites stay put.
     for l in worth:
         l["age_days"] = _age_days(l)
-    old = sorted((l for l in worth if not l.get("favorite") and (l.get("age_days") or 0) > 30),
+    old = sorted((l for l in worth if not l.get("favorite") and (l.get("age_days") or 0) > FRESH_DAYS),
                  key=lambda l: -(l.get("comp") or {}).get("pct", 0))
     old_ids = {id(l) for l in old}
     worth = [l for l in worth if id(l) not in old_ids]
@@ -2476,9 +2572,15 @@ def _keep_caches_warm():
             load_market()
             # The Dashboard's default view, ready before anyone asks.
             with app.test_request_context("/"):
-                _index_listings(load_config_raw())
+                if _index_cache["key"] is None and _index_cache["data"] is not None:
+                    # Showing the saved copy from before the restart: rebuild for real now.
+                    data = _build_index_listings(load_config_raw())
+                    _index_cache.update(key=(b"", _last_change_marker()), at=time.time(), data=data)
+                    _snapshot_save("index", data)
+                else:
+                    _index_listings(load_config_raw())
             _mismatched_count(load_config_raw().get("keywords") or [])
-            with app.test_request_context("/telex"):
+            with app.test_request_context("/telex", headers={"X-Warm": "1"}):
                 telex()  # fills the Telex cache
             with app.test_request_context("/deals"):
                 _all_deals(background=True)

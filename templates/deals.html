@@ -8,20 +8,24 @@
     <p class="muted">
       Every listing Gear Scout has collected for your search terms and Telex List that's still for sale and at least
       10% under what the gear goes for used. The price is checked against its comp <strong>and</strong> against what
-      other listings of the same gear ask, and the lower of the two counts. Ages are from when the seller posted the
-      ad, not when Gear Scout found it. Gear Scout reads deep into Reverb and eBay, so many ads it finds today have
-      been up for months. Ads that have been up 30+ days usually have a seller open to an offer, so they're kept
-      under their own filter.
+      other listings of the same gear ask, and the lower of the two counts. Newest first, Facebook Marketplace and Craigslist ahead of the rest on the same day. Ages are from when the
+      seller posted the ad (a "~" means the site doesn't say, so it's when Gear Scout found it). Gear Scout reads deep into Reverb and eBay, so many ads it finds today have
+      been up for months. Ads up more than a week are kept under their own filter.
     </p>
     <div class="steal-levels">
+      {% for key, label in prices %}
+        <a href="{{ url_for('deals', age=age, sort=sort, price=key) }}" class="btn btn-sm{{ ' btn-primary' if key == price else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="steal-levels">
       {% for key, label in ages %}
-        <a href="{{ url_for('deals', age=key, sort=sort) }}" class="btn btn-sm{{ ' btn-primary' if key == age else '' }}">{{ label }} <span class="muted">{{ counts[key] }}</span></a>
+        <a href="{{ url_for('deals', age=key, sort=sort, price=price) }}" class="btn btn-sm{{ ' btn-primary' if key == age else '' }}">{{ label }} <span class="muted">{{ counts[key] }}</span></a>
       {% endfor %}
     </div>
     <div class="steal-levels">
       <span class="muted">Sort:</span>
       {% for key, label in (("new", "Newest posts"), ("discount", "Biggest % off"), ("savings", "Most $ saved"), ("cheap", "Cheapest")) %}
-        <a href="{{ url_for('deals', age=age, sort=key) }}" class="btn btn-sm{{ ' btn-primary' if key == sort else '' }}">{{ label }}</a>
+        <a href="{{ url_for('deals', age=age, sort=key, price=price) }}" class="btn btn-sm{{ ' btn-primary' if key == sort else '' }}">{{ label }}</a>
       {% endfor %}
     </div>
     {% if rebuilding %}<p class="muted">Updating with the latest listings in the background — refresh in a minute.</p>{% endif %}
