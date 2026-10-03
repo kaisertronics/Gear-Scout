@@ -860,9 +860,13 @@ def _verify_top_listings():
     urls += [l["url"] for l in (d.get("auctions") or [])[:24]]
     for _, good, _ in (_telex_cache.get("groups") or []):
         urls += [r["url"] for r in good[:6]]
-    st = _steals_cache.get("data") or {}
-    # Steals sell within hours: every one is checked, Facebook ones hourly.
-    steal_urls = {l["url"] for l in (st.get("trusted") or []) + (st.get("rough") or [])[:60]}
+    st = _deals_cache.get("data") or {}
+    # Steals sell within hours: every one is checked, Facebook ones hourly;
+    # so are this week's newest deals.
+    steal_urls = ({l["url"] for l in (st.get("trusted") or []) if l["comp"]["pct"] >= 60}
+                  | {l["url"] for l in (st.get("rough") or []) if l["comp"]["pct"] >= 60}
+                  | {l["url"] for l in sorted((l for l in (st.get("trusted") or []) if l.get("age_days") is not None),
+                                              key=lambda l: l["age_days"])[:40]})
     urls = list(steal_urls) + urls
     urls = [u for u in dict.fromkeys(urls) if u]
     if not urls:
@@ -931,7 +935,7 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
         for _, good, unpriced in (_telex_cache.get("groups") or []):
             yield good
             yield unpriced
-        for items in (_steals_cache.get("data") or {}).values():
+        for items in (_deals_cache.get("data") or {}).values():
             yield items
         for g in _group_cache.get("data") or []:
             yield g["good"]
@@ -945,37 +949,53 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
                     items[i]["favorite"] = 1 if favorite else 0
 
 
-_steals_cache: dict = {"key": None, "at": 0.0, "data": None}
+_deals_cache: dict = {"key": None, "at": 0.0, "data": None}
+_deals_state = {"running": False}
 STEAL_LEVELS = (50, 60, 70, 80)
+DEAL_AGES = (("1", "Today"), ("3", "3 days"), ("7", "This week"), ("30", "This month"), ("all", "Any age"),
+             ("old", "Listed 30+ days"))
 
 
-_steals_state = {"running": False}
+def _age_days(l: dict) -> Optional[float]:
+    """How long the ad has been up: the seller's posting date when the site
+    gives one, else when Gear Scout first saw it."""
+    for field in ("posted_at", "first_seen"):
+        try:
+            d = datetime.fromisoformat(l.get(field) or "")
+        except (TypeError, ValueError):
+            continue
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - d).total_seconds() / 86400)
+    return None
 
 
-def _steals(min_pct: int, background: bool = False) -> dict:
-    """Listings 60%+ (or the chosen level) under used prices — see
-    scrapers/steals.py. Takes ~15-25s over every stored listing, so it's
-    reused for 10 minutes unless something changed, and kept warm."""
-    key = (min_pct, _data_version[0], _last_change_marker())
-    if _steals_cache["key"] == key and time.time() - _steals_cache["at"] < 600:
-        return _steals_cache["data"]
-    # Something changed (a scrape running, a hide): show the list we have
-    # right away and rebuild it in the background, instead of a blank page.
-    if _steals_cache["data"] is not None and _steals_cache["key"][0] == min_pct and not background:
-        if not _steals_state["running"]:
+def _all_deals(background: bool = False) -> dict:
+    """Every stored listing still for sale that's 10%+ under its comp,
+    double-checked against what other listings of the same gear ask (see
+    scrapers/steals.py) — shared by the Deals and Steals pages. Takes ~20s
+    over everything stored, so it's reused for 10 minutes unless something
+    changed, rebuilt in the background, and kept warm."""
+    key = (_data_version[0], _last_change_marker())
+    if _deals_cache["key"] == key and time.time() - _deals_cache["at"] < 600:
+        return _deals_cache["data"]
+    # Something changed (a scrape running, a hide): show what we have right
+    # away and rebuild in the background, instead of a blank page.
+    if _deals_cache["data"] is not None and not background:
+        if not _deals_state["running"]:
             def rebuild():
-                _steals_state["running"] = True
+                _deals_state["running"] = True
                 try:
-                    with app.test_request_context("/steals"):
-                        _steals(min_pct, background=True)
+                    with app.test_request_context("/deals"):
+                        _all_deals(background=True)
                 except Exception:
-                    logging.exception("Steals rebuild failed")
+                    logging.exception("Deals rebuild failed")
                 finally:
-                    _steals_state["running"] = False
-            threading.Thread(target=rebuild, name="steals-rebuild", daemon=True).start()
-        return _steals_cache["data"]
+                    _deals_state["running"] = False
+            threading.Thread(target=rebuild, name="deals-rebuild", daemon=True).start()
+        return _deals_cache["data"]
     from scrapers.steals import find
-    found = find(load_config_raw(), min_pct=min_pct)
+    found = find(load_config_raw(), min_pct=10)
     data = {}
     for name in ("trusted", "rough"):
         items = _decorate(found[name])  # display fields; drops your exclude words
@@ -984,15 +1004,49 @@ def _steals(min_pct: int, background: bool = False) -> dict:
             under_peers = st.get("peer") and st["peer"] < st["comp"]
             l["comp"] = {"pct": st["pct"], "ref": f"${st['ref']:,.0f}", "est": st["est"],
                          "label": "other listings of this gear" if under_peers else st["label"]}
+            l["age_days"] = _age_days(l)
         data[name] = items
-    if min_pct == 60:
-        try:
-            Path("/data/shown_steals.txt").write_text(
-                "\n".join(dict.fromkeys(l["url"] for l in data["trusted"] + data["rough"][:60])))
-        except OSError:
-            pass
-    _steals_cache.update(key=key, at=time.time(), data=data)
+    try:
+        Path("/data/shown_steals.txt").write_text("\n".join(dict.fromkeys(
+            [l["url"] for l in data["trusted"] if l["comp"]["pct"] >= 60]
+            + [l["url"] for l in data["rough"] if l["comp"]["pct"] >= 60][:60]
+            + [l["url"] for l in data["trusted"] if (l["age_days"] or 99) <= 7][:150])))
+    except OSError:
+        pass
+    _deals_cache.update(key=key, at=time.time(), data=data)
     return data
+
+
+def _steals(min_pct: int, background: bool = False) -> dict:
+    """Listings 60%+ (or the chosen level) under used prices."""
+    d = _all_deals(background)
+    return {name: [l for l in d[name] if l["comp"]["pct"] >= min_pct] for name in ("trusted", "rough")}
+
+
+@app.route("/deals")
+def deals():
+    age = request.args.get("age") or "7"
+    age = age if age in dict(DEAL_AGES) else "7"
+    sort = request.args.get("sort") or "new"
+    d = _all_deals()
+
+    def keep(l):
+        a = l.get("age_days")
+        a = 0 if a is None else a
+        return a > 30 if age == "old" else (age == "all" or a <= float(age))
+    trusted = [l for l in d["trusted"] if keep(l)]
+    rough = [l for l in d["rough"] if keep(l)]
+    order = {"new": lambda l: l.get("age_days") if l.get("age_days") is not None else 999,
+             "discount": lambda l: -l["comp"]["pct"],
+             "savings": lambda l: -l["steal"]["saved"],
+             "cheap": lambda l: l["steal"].get("unit") or 0}
+    trusted.sort(key=order.get(sort, order["new"]))
+    rough.sort(key=order.get(sort, order["new"]))
+    counts = {k: sum(1 for l in d["trusted"] if (lambda a: a > 30 if k == "old" else (k == "all" or a <= float(k)))(
+        l.get("age_days") or 0)) for k, _ in DEAL_AGES}
+    _verify_top_listings()
+    return render_template("deals.html", trusted=trusted, rough=rough, age=age, sort=sort, ages=DEAL_AGES,
+                           counts=counts, rebuilding=_deals_state["running"])
 
 
 @app.route("/steals/status")
@@ -1002,9 +1056,9 @@ def steals_status():
         min_pct = int(request.args.get("pct") or 60)
     except ValueError:
         min_pct = 60
-    if _steals_cache["data"] is not None:
-        _steals(min_pct if min_pct in STEAL_LEVELS else 60)
-    return {"rebuilding": _steals_state["running"]}
+    if _deals_cache["data"] is not None:
+        _all_deals()
+    return {"rebuilding": _deals_state["running"]}
 
 
 @app.route("/steals")
@@ -2377,8 +2431,8 @@ def _keep_caches_warm():
             _mismatched_count(load_config_raw().get("keywords") or [])
             with app.test_request_context("/telex"):
                 telex()  # fills the Telex cache
-            with app.test_request_context("/steals"):
-                _steals(60, background=True)
+            with app.test_request_context("/deals"):
+                _all_deals(background=True)
             _verify_top_listings()
         except Exception:
             logging.exception("Cache warm-up failed")

@@ -24,6 +24,7 @@
       </form>
       <nav>
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Dashboard</a>
+        <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>
         <a href="{{ url_for('steals') }}" class="{{ 'active' if request.endpoint == 'steals' else '' }}">🔥 Steals</a>
         <a href="{{ url_for('favorites') }}" class="{{ 'active' if request.endpoint == 'favorites' else '' }}">Favorites</a>
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Lowest Price</a>

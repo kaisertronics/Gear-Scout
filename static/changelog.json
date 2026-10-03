@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-03",
+    "title": "💸 Deals tab",
+    "items": [
+      "New Deals tab: every listing still for sale that's 10%+ under used prices, newest posts first, with filters for Today / 3 days / This week / This month / Any age.",
+      "Ages now come from when the seller posted the ad, not when Gear Scout found it — Gear Scout reads deep into Reverb and eBay, so half of what it finds has been listed 90+ days. Those long-listed ads have their own “Listed 30+ days” filter (good for making offers).",
+      "Sort by newest, biggest % off, most dollars saved, or cheapest.",
+      "Deals and Steals now share one calculation in the background, so both pages open instantly and the Mac does half the work; this week's newest deals are checked for sold first."
+    ]
+  },
+  {
+    "date": "2026-10-03",
     "title": "Auction alerts + search-it-yourself links",
     "items": [
       "Auction alerts: every hour Gear Scout checks eBay's pro-audio auctions ending soonest (plus ShopGoodwill). During the day you get a push + email about an hour before a good one ends (current bid 40%+ under the comp).",

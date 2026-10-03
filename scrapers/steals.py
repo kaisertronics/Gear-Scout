@@ -104,7 +104,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         seen_urls.add(r["url"])
         seen_ads.add(ad)
         r["steal"] = {"pct": pct, "ref": ref, "comp": c["ref"], "label": c["label"], "est": c["est"],
-                      "saved": ref - unit, "peer": peer,
+                      "saved": ref - unit, "peer": peer, "unit": unit,
                       "clone": bool(_CLONE.search(title))}
         # Estimated comps, clones and anything with no second opinion go in
         # the "double-check" list.
