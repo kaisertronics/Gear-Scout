@@ -424,6 +424,14 @@ def run_watch_cycle():
             check_telex_lowest(cfg)
         except Exception:
             logger.exception("Telex sweep / lowest-price check failed")
+        # Auctions: eBay's ending-soonest pro-audio auctions, then daytime
+        # "ending soon" alerts and the 9 PM overnight-auctions list.
+        try:
+            from scrapers import auctions
+            auctions.fetch_ebay_ending(cfg)
+            auctions.check(cfg)
+        except Exception:
+            logger.exception("Auction check failed")
         # New steals (60%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new

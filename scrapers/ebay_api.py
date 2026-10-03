@@ -174,6 +174,13 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
                 posted_at = datetime.fromisoformat(item["itemCreationDate"].replace("Z", "+00:00"))
             except ValueError:
                 pass
+        # Auctions: the price is the current bid and the end time matters.
+        from scrapers.auctions import ebay_auction_listing
+        auction = ebay_auction_listing(item, name)
+        if auction:
+            auction.posted_at = posted_at
+            listings.append(auction)
+            continue
         condition = item.get("condition")
         listings.append(Listing(
             source_name=name,

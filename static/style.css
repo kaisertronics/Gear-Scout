@@ -883,3 +883,5 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 
 .steal-levels { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .steal-levels a { text-decoration: none; }
+.search-yourself { margin: -4px 0 10px; font-size: 13px; line-height: 1.7; }
+.search-yourself a { white-space: nowrap; }

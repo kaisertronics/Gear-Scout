@@ -57,6 +57,8 @@
         <input type="hidden" name="term" value="{{ term }}">
         <button type="submit" class="btn btn-sm" title="Search this term on every site including all Facebook regions (about 2–3 minutes)">🔍 Search everywhere</button>
       </form></h2>
+    <p class="search-yourself muted">Search it yourself:
+      {% for label, url in search_links(term) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
     {% if items %}
       <div class="listing-grid">
         {% for l in items[:24] %}{{ listing_card(l) }}{% endfor %}

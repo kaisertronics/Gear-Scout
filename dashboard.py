@@ -86,7 +86,8 @@ def _lazy_context():
         ai_on = bool(((load_config_raw().get("ai") or {}).get("gemini_api_key") or "").strip())
     except Exception:
         ai_on = False
-    return {"lazy_token": lazy_token, "css_version": css_v, "ai_enabled": ai_on}
+    from scrapers.telex import search_links
+    return {"lazy_token": lazy_token, "css_version": css_v, "ai_enabled": ai_on, "search_links": search_links}
 
 
 @app.after_request

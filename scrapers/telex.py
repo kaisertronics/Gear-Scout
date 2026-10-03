@@ -94,6 +94,48 @@ def typo_queries() -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def misspellings(term: str, n: int = 2) -> list[str]:
+    """The term with its brand misspelled the way sellers do ("Neumann U47"
+    -> "Nueman U47", "Neuman U47")."""
+    import re
+    from scrapers.base import _BRAND_FIXES
+    low = term.lower()
+    out = []
+    for pattern, right in _BRAND_FIXES:
+        right = right.replace("-", " ")
+        if right not in low.replace("-", " "):
+            continue
+        group = re.search(r"\(\?:([^()]*)\)", pattern.pattern)
+        for alt in (group.group(1).split("|") if group else []):
+            alt = alt.replace("+", "")
+            if re.fullmatch(r"[a-z ]{4,}", alt) and alt != right:
+                out.append(re.sub(re.escape(right), alt, low.replace("-", " "), count=1))
+    return out[:n]
+
+
+def search_links(term: str) -> list[tuple[str, str]]:
+    """One-tap links to search a term yourself on sites Gear Scout reads only
+    partly or can't read: Facebook Marketplace, eBay (sold prices and
+    auctions ending soon), Reverb, HiBid / LiveAuctioneers / GovDeals, plus
+    the misspelled versions on eBay and Marketplace."""
+    from urllib.parse import quote_plus
+    q = quote_plus(term)
+    links = [("Marketplace", f"https://www.facebook.com/marketplace/search/?query={q}&sortBy=creation_time_descend"),
+             ("eBay sold", f"https://www.ebay.com/sch/i.html?_nkw={q}&LH_Sold=1&LH_Complete=1&_sop=13"),
+             ("eBay auctions ending", f"https://www.ebay.com/sch/i.html?_nkw={q}&LH_Auction=1&_sop=1"),
+             ("Reverb used", f"https://reverb.com/marketplace?query={q}&condition=used&sort=published_at%7Cdesc"),
+             # Auction houses, estate and government-surplus sales: they don't
+             # allow automated searching, so these open in your own browser.
+             ("HiBid", f"https://hibid.com/lots?q={q}"),
+             ("LiveAuctioneers", f"https://www.liveauctioneers.com/search/?keyword={q}&status=online"),
+             ("GovDeals", f"https://www.govdeals.com/en/search?kWord={q}")]
+    for typo in misspellings(term):
+        tq = quote_plus(typo)
+        links.append((f"“{typo}” eBay", f"https://www.ebay.com/sch/i.html?_nkw={tq}&_sop=10"))
+        links.append((f"“{typo}” Marketplace", f"https://www.facebook.com/marketplace/search/?query={tq}"))
+    return links
+
+
 TYPO_PER_HOUR = 3
 
 

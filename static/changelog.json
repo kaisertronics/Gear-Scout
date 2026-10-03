@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-10-03",
+    "title": "Auction alerts + search-it-yourself links",
+    "items": [
+      "Auction alerts: every hour Gear Scout checks eBay's pro-audio auctions ending soonest (plus ShopGoodwill). During the day you get a push + email about an hour before a good one ends (current bid 40%+ under the comp).",
+      "At 9:30 PM: “Tonight's overnight auctions” — auctions ending between 11 PM and 7 AM with bids 30%+ under value. Fewer people are awake to bid, so set your max bid before bed. Bidding is always up to you.",
+      "eBay auctions now show the current bid and end time (they're in the Auctions section on the Dashboard).",
+      "Each Telex term now has one-tap “Search it yourself” links: Facebook Marketplace (newest first), eBay sold prices, eBay auctions ending soonest, Reverb, HiBid, LiveAuctioneers, GovDeals, and common misspellings (e.g. “Nueman U47”) on eBay and Marketplace.",
+      "Checked auction houses and estate-sale sites for automatic searching: HiBid blocks it, and LiveAuctioneers, AuctionZip and EstateSales.net don't allow it — so they're one-tap links instead."
+    ]
+  },
+  {
+    "date": "2026-10-03",
     "title": "Accuracy check + misspelling search",
     "items": [
       "Checked 70 listings from your pages by hand: 81% were real gear before today's fixes; all 13 junk ones in the sample are now filtered (mic pouches, electric guitars, loose speaker woofers, rack trays, spare parts, hi-fi phono cartridges).",
