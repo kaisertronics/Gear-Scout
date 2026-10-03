@@ -39,6 +39,13 @@
         {% endfor %}
       </div>
     {% endif %}
+    {% if model_groups %}
+      <div class="telex-terms">
+        {% for g in model_groups %}
+          <span class="telex-chip"><a href="#group-{{ loop.index }}">🎙 {{ g.name }} <span class="muted">{{ g.good|length }}</span></a></span>
+        {% endfor %}
+      </div>
+    {% endif %}
   </section>
 
   {% for term, items, unpriced in groups %}
@@ -71,6 +78,47 @@
     {% endif %}
   </section>
   {% endfor %}
+
+  {% if has_groups %}
+    {% if model_groups is none %}
+      <section class="panel"><h2>Model groups</h2>
+        <p class="muted">Matching your imported model lists against every listing — this takes about half a minute. Refresh in a moment.</p></section>
+    {% endif %}
+    {% for g in model_groups or [] %}
+    <section class="panel" id="group-{{ loop.index }}">
+      <h2>{{ g.name }} <span class="muted">— {{ g.good|length }} listing{{ '' if g.good|length == 1 else 's' }} 10%+ under comp · {{ g.hit_terms }} of {{ g.terms|length }} models found</span>
+        <form method="post" action="{{ url_for('telex_group_remove') }}" class="telex-term-search"
+              onsubmit="return confirm('Remove the whole &quot;{{ g.name }}&quot; group ({{ g.terms|length }} models) from the Telex List?');">
+          <input type="hidden" name="name" value="{{ g.name }}">
+          <button type="submit" class="btn btn-sm">Remove group</button>
+        </form></h2>
+      <p class="muted">Every listing matching one of these {{ g.terms|length }} models (brand + exact model number), cheapest first.
+        These models are searched about 10 an hour on eBay, Reverb, OfferUp, Craigslist, Kijiji, ShopGoodwill and Long &amp; McQuade,
+        so the whole group comes around every couple of days. They aren't added to every scrape, to keep scrapes fast.</p>
+      <details class="more-listings"><summary class="muted">See all {{ g.terms|length }} models</summary>
+        <p class="muted">{{ g.terms|join(' · ') }}</p></details>
+      {% if g.good %}
+        <div class="listing-grid">
+          {% for l in g.good[:24] %}{{ listing_card(l) }}{% endfor %}
+        </div>
+        {% if g.good|length > 24 %}
+          <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(g.good[24:])) }}">
+            <summary>Show all {{ g.good|length }} (cheapest first)</summary>
+            <div class="listing-grid"></div>
+          </details>
+        {% endif %}
+      {% else %}
+        <p class="muted">Nothing 10%+ under its comp right now.</p>
+      {% endif %}
+      {% if g.unpriced %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(g.unpriced)) }}">
+          <summary class="muted">{{ g.unpriced|length }} more with nothing to compare against yet</summary>
+          <div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    </section>
+    {% endfor %}
+  {% endif %}
 
 <script>
   (function () {

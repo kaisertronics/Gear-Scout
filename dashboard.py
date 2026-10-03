@@ -673,7 +673,8 @@ def _telex_terms(cfg) -> list[str]:
     return [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
 
 
-def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, list[dict]]]:
+def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
+                   note: bool = True) -> list[tuple[str, list[dict]]]:
     """Every stored listing still for sale (from scrapes, live searches and
     Telex searches) matching each Telex term — every word, any order, like
     the live search. All of them, cheapest first."""
@@ -687,7 +688,8 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
     from scrapers.base import _keyword_pattern, _word_matches, fix_brand_spelling
     texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
 
-    from scrapers.telex import term_matcher as matcher
+    from scrapers.telex import model_matcher, term_matcher
+    matcher = model_matcher if strict else term_matcher
 
     from scrapers.enrich import is_accessory_only, is_partial, item_form
     out = []
@@ -778,6 +780,8 @@ def _telex_matches(terms: list[str], per_term: int = 1000) -> list[tuple[str, li
             else:
                 unpriced.append(r)
         out_groups.append((term, good[:per_term], unpriced[:per_term]))
+    if not note:
+        return out_groups
     try:
         Path("/data/shown_telex.txt").write_text(
             "\n".join(dict.fromkeys(r["url"] for _, good, _ in out_groups for r in good if r.get("url"))))
@@ -894,6 +898,9 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
             yield unpriced
         for items in (_steals_cache.get("data") or {}).values():
             yield items
+        for g in _group_cache.get("data") or []:
+            yield g["good"]
+            yield g["unpriced"]
     for items in lists():
         for i in range(len(items) - 1, -1, -1):
             if items[i].get("global_id") == global_id:
@@ -978,6 +985,71 @@ def steals():
                            min_pct=min_pct, levels=STEAL_LEVELS)
 
 
+_group_cache: dict = {"key": None, "at": 0.0, "data": None, "running": False}
+
+
+def _telex_group_lists(cfg) -> Optional[list]:
+    """Imported model groups on the Telex List, each as one combined list
+    (cheapest first, 10%+ under comp). Hundreds of models take ~30s to
+    match, so this is rebuilt in the background every 15 minutes (or when
+    the group changes) and the page shows the last result meanwhile.
+    None = not ready yet."""
+    from scrapers.telex import groups as telex_groups
+    gs = telex_groups(cfg)
+    key = tuple((n, tuple(ts)) for n, ts in gs)
+    fresh = _group_cache["key"] == key and time.time() - _group_cache["at"] < 900
+    if not fresh and not _group_cache["running"]:
+        def build():
+            _group_cache["running"] = True
+            try:
+                out = []
+                with app.test_request_context("/telex"):
+                    for name, ts in gs:
+                        good, unpriced, seen_g, seen_u = [], [], set(), set()
+                        for term, g, u in _telex_matches(ts, strict=True, note=False):
+                            for r in g:
+                                if r["url"] not in seen_g:
+                                    seen_g.add(r["url"])
+                                    r["telex_term"] = term
+                                    good.append(r)
+                            for r in u:
+                                if r["url"] not in seen_u:
+                                    seen_u.add(r["url"])
+                                    unpriced.append(r)
+                        from scrapers.enrich import parse_price
+                        good.sort(key=lambda r: parse_price(r.get("price")) or 0)
+                        hit_terms = {r["telex_term"] for r in good}
+                        out.append({"name": name, "terms": ts, "good": good,
+                                    "unpriced": [r for r in unpriced if r["url"] not in seen_g],
+                                    "hit_terms": len(hit_terms)})
+                _group_cache.update(key=key, at=time.time(), data=out)
+                try:
+                    Path("/data/shown_telex_groups.txt").write_text(
+                        "\n".join(dict.fromkeys(r["url"] for g in out for r in g["good"][:60])))
+                except OSError:
+                    pass
+            except Exception:
+                logging.exception("Telex group matching failed")
+            finally:
+                _group_cache["running"] = False
+        threading.Thread(target=build, name="telex-groups", daemon=True).start()
+    if _group_cache["data"] is None:
+        return None
+    # Groups removed since the last build drop off right away.
+    names = {n for n, _ in gs}
+    return [g for g in _group_cache["data"] if g["name"] in names]
+
+
+@app.route("/telex/group/remove", methods=["POST"])
+def telex_group_remove():
+    name = request.form.get("name", "")
+    cfg = load_config_for_edit()
+    cfg["telex_groups"] = [g for g in (cfg.get("telex_groups") or []) if g.get("name") != name]
+    save_config_raw(cfg)
+    _data_changed()
+    return redirect(url_for("telex"))
+
+
 @app.route("/telex")
 def telex():
     cfg = load_config_raw()
@@ -993,8 +1065,10 @@ def telex():
         _telex_cache.update(key=key, at=time.time(), groups=groups)
         _verify_top_listings()
     from scrapers.telex import state as telex_state
+    from scrapers.telex import groups as telex_groups
     return render_template("telex.html", groups=groups, terms=terms,
-                           total=sum(len(g) for _, g, _ in groups), sweep=telex_state())
+                           total=sum(len(g) for _, g, _ in groups), sweep=telex_state(),
+                           model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 
 
 TELEX_STATUS_PATH = Path("/data/telex_status.json")

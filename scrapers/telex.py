@@ -78,7 +78,10 @@ def run_sweep(cfg: dict) -> list[dict]:
         refresh_telex_term_values(terms(cfg))
     except Exception:
         logger.exception("Telex term price lookup failed")
-    return _run_sweep(cfg)
+    out = _run_sweep(cfg)
+    if groups(cfg):
+        out += run_group_sweep(cfg)
+    return out
 
 
 def _run_sweep(cfg: dict) -> list[dict]:
@@ -110,6 +113,73 @@ def term_matcher(term: str):
     plain = max((w for w in words if w.isalpha() and len(w) >= 3), key=len, default=None)
     return lambda t: (plain is None or plain in t) and (
         bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
+
+
+def model_matcher(term: str):
+    """Stricter matcher for imported model lists (Telex groups): the brand
+    (any of its spellings — "EV" for Electro-Voice) plus the exact model
+    number as its own token. "Shure 300" doesn't match "$300" or "VA 300-C";
+    "RCA 77-D" doesn't match a 77-DX; "RE-20" matches "RE20" and "RE 20"."""
+    import re
+    from scrapers.base import fix_brand_spelling
+    from scrapers.enrich import _ALIAS_TO_BRAND, canonical_brand
+    t = fix_brand_spelling(term.lower())
+    words = t.split()
+    model_i = next((i for i, w in enumerate(words) if re.search(r"\d", w)), None)
+    if model_i is None:
+        return term_matcher(term)  # no model number ("Reslo RB"): every word
+    model = re.sub(r"/\d+$", "", words[model_i])
+    extra = [w for w in words[model_i + 1:] if w.isalpha() and len(w) >= 3]  # "Turner 77 ribbon"
+    runs = re.findall(r"[a-z]+|\d+", model)
+    pat = re.compile(r"(?<![\w$])" + r"[- ]?".join(map(re.escape, runs)) + r"(?![\w]|-\w)")
+    brand = canonical_brand(t)
+    if brand:
+        aliases = [a for a, c in _ALIAS_TO_BRAND.items() if c == brand]
+    else:
+        head = " ".join(words[:model_i]) or words[0]
+        aliases = [head]
+        if head in ("bang and olufsen", "bang & olufsen"):
+            aliases += ["bang & olufsen", "b&o", "b & o", "bang olufsen"]
+    brand_pat = re.compile(r"(?<![a-z0-9])(?:" + "|".join(re.escape(a) for a in aliases) + r")(?![a-z0-9])")
+    digits = max(re.findall(r"\d+", model), key=len)
+    return lambda x: (digits in x and bool(pat.search(x)) and bool(brand_pat.search(x))
+                      and all(w in x for w in extra))
+
+
+def groups(cfg: dict) -> list[tuple[str, list[str]]]:
+    """Imported model lists on the Telex List ("Vintage mics (Cole Picks
+    sold)"): matched against everything collected and swept a few at a time,
+    but not added to every scrape (hundreds of terms would slow every scrape
+    and use up eBay's daily allowance)."""
+    out = []
+    for g in cfg.get("telex_groups") or []:
+        name = str(g.get("name") or "").strip()
+        ts = [str(t).strip() for t in g.get("terms") or [] if str(t).strip()]
+        if name and ts:
+            out.append((name, ts))
+    return out
+
+
+GROUP_PER_HOUR = 10
+
+
+def run_group_sweep(cfg: dict) -> list[dict]:
+    """Searches the next few group models (never-searched first) on the
+    fast sites — about 10 an hour, so a 400-model group comes around every
+    couple of days."""
+    st = state()
+    pool = [t for _, ts in groups(cfg) for t in ts]
+    per_hour = int((cfg.get("telex_sweep") or {}).get("group_per_hour", GROUP_PER_HOUR) or GROUP_PER_HOUR)
+    out = []
+    for term in sorted(dict.fromkeys(pool), key=lambda t: st.get(t, {}).get("searched_at") or "")[:per_hour]:
+        start = time.time()
+        try:
+            res = search_term(term, cfg, fast_only=True)
+            out.append(res)
+            logger.info("Telex group sweep %r: %d matches, %d new (%.0fs)", term, res["found"], res["new"], time.time() - start)
+        except Exception:
+            logger.exception("Telex group sweep failed for %r", term)
+    return out
 
 
 # ---------------------------------------------------------------------------

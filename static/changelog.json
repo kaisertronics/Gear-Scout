@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-10-02",
+    "title": "Vintage mics group on the Telex List",
+    "items": [
+      "Added every microphone model Cole Picks Vintage has sold (414 models) to your Telex List as one group, “Vintage mics (Cole Picks sold)”, shown as a single cheapest-first list.",
+      "Group models match on brand + exact model number (an RCA 77-DX isn't a 77-D; “Shure 300” doesn't match a $300 price).",
+      "Group models are searched about 10 an hour on the fast sites (all covered every couple of days) instead of being added to every scrape, so scrapes stay fast and eBay's daily allowance lasts.",
+      "Comps for clones now use the clone itself, not the gear it copies.",
+      "The Steals page has a Scrape now button with a progress bar."
+    ]
+  },
+  {
+    "date": "2026-10-02",
     "title": "🔥 Steals page",
     "items": [
       "New Steals page (top menu): everything collected for your terms and Telex List that's 60%+ under used prices (switch to 50/70/80%), biggest dollar savings first.",
