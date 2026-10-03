@@ -6,7 +6,9 @@
       "New Deals tab: every listing still for sale that's 10%+ under used prices, newest posts first, with filters for Today / 3 days / This week / This month / Any age.",
       "Ages now come from when the seller posted the ad, not when Gear Scout found it — Gear Scout reads deep into Reverb and eBay, so half of what it finds has been listed 90+ days. Those long-listed ads have their own “Listed 30+ days” filter (good for making offers).",
       "Sort by newest, biggest % off, most dollars saved, or cheapest.",
-      "Deals and Steals now share one calculation in the background, so both pages open instantly and the Mac does half the work; this week's newest deals are checked for sold first."
+      "Deals and Steals now share one calculation in the background, so both pages open instantly and the Mac does half the work; this week's newest deals are checked for sold first.",
+      "Dashboard: ads the seller posted 30+ days ago moved to their own “Listed 30+ days ago” section at the bottom (biggest discount first), so the top shows fresh finds.",
+      "Every manual scrape and search keeps running when you switch pages — and now a small progress bar follows you to every page until it's done (tap it to go back to the results)."
     ]
   },
   {

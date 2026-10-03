@@ -18,6 +18,7 @@
     {% if for_you %}<a href="#for-you" class="source-jump-chip">✨ For you</a>{% endif %}
     {% if auctions %}<a href="#auctions" class="source-jump-chip">🔨 Auctions <span class="muted">{{ auctions|length }}</span></a>{% endif %}
     {% if deals %}<a href="#deals" class="source-jump-chip">🔥 Deals <span class="muted">{{ deals|length }}</span></a>{% endif %}
+    {% if old_items %}<a href="#older" class="source-jump-chip">🕰 Listed 30+ days <span class="muted">{{ old_items|length }}</span></a>{% endif %}
     {% for source_name, items in grouped_listings %}
       <a href="#src-{{ loop.index }}" class="source-jump-chip">{{ source_name }} <span class="muted">{{ items|length }}</span></a>
     {% endfor %}
@@ -250,6 +251,18 @@
       listings. Anything priced above that is left out. Search still shows everything.
     </p>
   </section>
+  {% if old_items %}
+  <section class="panel" id="older">
+    <h2>Listed 30+ days ago <span class="muted">— {{ old_items|length }}, biggest discount first</span></h2>
+    <p class="muted">Still for sale and 10%+ under value, but the seller posted them over a month ago (Gear Scout finds
+      many of these deep in Reverb and eBay). Long-listed ads usually have a seller open to an offer.</p>
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old_items[:300])) }}">
+      <summary>Show {{ [old_items|length, 300]|min }}</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endif %}
+
   {% if no_comp_total %}
   <section class="panel">
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(no_comp)) }}">

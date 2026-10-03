@@ -41,7 +41,8 @@
       </nav>
     </div>
   </header>
-  <main class="container">
+    <div id="gs-jobs" class="gs-jobs" style="display:none;"></div>
+<main class="container">
     {% block content %}{% endblock %}
   </main>
 
@@ -238,6 +239,33 @@
     if (data && data.current_source) parts.push(`now: ${data.current_source}`);
     meta.textContent = parts.join(' · ');
   };
+  // Manual scrapes and searches run on the server and keep going when you
+  // switch pages; this bar shows them on every page (except where the page
+  // already has its own progress bar for that job).
+  (function () {
+    const bar = document.getElementById('gs-jobs');
+    if (!bar) return;
+    const own = {scrape: 'scrape-status-banner', telex: 'telex-status', live: 'live-status-banner',
+                 lowest: 'lowest-status', fbposts: 'fbposts-status'};
+    let active = false;
+    async function poll() {
+      let data;
+      try { data = await (await fetch('/jobs/active', {headers: {'X-GearScout-Test': '1'}})).json(); } catch (e) { return setTimeout(poll, 5000); }
+      const jobs = (data.jobs || []).filter(j => !document.getElementById(own[j.kind]));
+      if (jobs.length) {
+        active = true;
+        bar.style.display = '';
+        bar.innerHTML = jobs.map((j, i) => `<a class="gs-job" href="${j.url}" id="gs-job-${i}"></a>`).join('');
+        jobs.forEach((j, i) => gsProgress(document.getElementById(`gs-job-${i}`), `${j.label} — still running in the background`, j));
+        setTimeout(poll, 2000);
+      } else {
+        if (active) { bar.innerHTML = '<div class="gs-job">✓ Finished — refresh to see the new listings.</div>'; setTimeout(() => { bar.style.display = 'none'; }, 8000); }
+        active = false;
+        setTimeout(poll, 20000);
+      }
+    }
+    poll();
+  })();
   window.gsProgressText = function (el, text) {
     el.style.display = '';
     el.textContent = text;

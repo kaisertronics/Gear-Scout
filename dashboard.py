@@ -928,6 +928,7 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
         d = _index_cache.get("data")
         if d:
             yield d["no_comp"]
+            yield d.get("old", [])
             yield d["for_you"]
             yield d["deals"]
             for _, items in d["grouped"]:
@@ -1506,6 +1507,7 @@ def index():
         "index.html",
         last_refresh=last_refresh,
         no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
+        old_items=data.get("old", []),
         new_items=new_items[:48], new_total=len(new_items), new_since=since,
         auctions=data.get("auctions", []),
         scraped_at=_last_scraped_by_site(),
@@ -1597,6 +1599,14 @@ def _build_index_listings(cfg) -> dict:
     # Only what's worth your time: 10%+ under its comp. The rest of what has
     # no comp yet sits in one collapsed group at the bottom.
     worth, no_comp = _apply_comp_rule(_decorate(listings))
+    # Ads the seller posted 30+ days ago (Gear Scout often finds those deep in
+    # Reverb/eBay) go to their own section at the bottom; favorites stay put.
+    for l in worth:
+        l["age_days"] = _age_days(l)
+    old = sorted((l for l in worth if not l.get("favorite") and (l.get("age_days") or 0) > 30),
+                 key=lambda l: -(l.get("comp") or {}).get("pct", 0))
+    old_ids = {id(l) for l in old}
+    worth = [l for l in worth if id(l) not in old_ids]
     grouped = _group_by_source(worth[:300], decorated=True)
     from zoneinfo import ZoneInfo
     now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
@@ -1611,7 +1621,7 @@ def _build_index_listings(cfg) -> dict:
     except OSError:
         pass
     return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you, "deals": _deals_from(grouped),
-            "auctions": auctions}
+            "auctions": auctions, "old": old}
 
 
 @app.route("/scrape/start", methods=["POST"])
@@ -1664,6 +1674,34 @@ def search_live_start():
 @app.route("/search/live/status")
 def search_live_status():
     return jsonify(_load_live_search_status())
+
+
+@app.route("/jobs/active")
+def jobs_active():
+    """Manual scrapes/searches running in the background (they keep going
+    when you switch pages) — shown in a small bar on every page."""
+    jobs = [
+        ("scrape", MANUAL_SCRAPE_STATUS_PATH, lambda: _manual_scrape_thread, "Scraping every source", "index"),
+        ("telex", TELEX_STATUS_PATH, lambda: _telex_thread, "Telex search", "telex"),
+        ("live", LIVE_SEARCH_STATUS_PATH, lambda: _live_search_thread, "Live search", "search"),
+        ("lowest", LOWEST_STATUS_PATH, lambda: _lowest_thread, "Lowest-price search", "lowest"),
+        ("fbposts", FBPOSTS_STATUS_PATH, lambda: _fbposts_thread, "Facebook post search", "fb_posts_page"),
+    ]
+    out = []
+    for kind, path, thread, label, page in jobs:
+        try:
+            st = json.loads(path.read_text())
+        except Exception:
+            continue
+        t = thread()
+        if st.get("state") != "running" or t is None or not t.is_alive():
+            continue
+        q = st.get("query") or ""
+        out.append({"kind": kind, "label": label + (f" “{q}”" if q else ""), "done": st.get("done", 0),
+                    "total": st.get("total", 0), "started": st.get("started"),
+                    "current_source": st.get("current_source"),
+                    "url": url_for(page, q=q) if kind in ("live", "lowest") and q else url_for(page)})
+    return jsonify(jobs=out)
 
 
 @app.route("/favorites")
