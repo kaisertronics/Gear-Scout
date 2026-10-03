@@ -14,6 +14,7 @@ from scrapers.comps import best_comp, similar_index
 import logging
 import os
 import re
+from collections import OrderedDict
 import secrets
 import signal
 import socket
@@ -57,22 +58,55 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # static files cached a day (li
 
 # Listing cards for collapsed sections ("Show all", "No comp yet"…) aren't
 # sent with the page; they're kept here briefly and fetched when opened.
-_lazy_lists: "dict[str, list]" = {}
+_lazy_lists: "OrderedDict[str, list]" = OrderedDict()
+
+
+LAZY_DIR = Path("/data/lazy")
 
 
 def lazy_token(items: list) -> str:
-    token = secrets.token_hex(8)
+    """A collapsed "Show more" list, fetched when you open it. The token is
+    named after what's in the list, so re-rendering the same list (the
+    background warm-up does it every few minutes) reuses it instead of
+    pushing older ones out; lists are also saved to disk so they survive a
+    restart. Kept 2 days."""
+    import hashlib
+    import pickle
+    sig = "|".join(f"{l.get('global_id') or l.get('url')}:{(l.get('comp') or {}).get('pct')}" for l in items)
+    token = hashlib.sha1(sig.encode()).hexdigest()[:20]
+    if token in _lazy_lists:
+        _lazy_lists.move_to_end(token)
+        return token
     _lazy_lists[token] = items
-    while len(_lazy_lists) > 200:
-        _lazy_lists.pop(next(iter(_lazy_lists)))
+    while len(_lazy_lists) > 3000:
+        _lazy_lists.popitem(last=False)
+    try:
+        LAZY_DIR.mkdir(exist_ok=True)
+        path = LAZY_DIR / f"{token}.pkl"
+        if not path.exists():
+            path.write_bytes(pickle.dumps(items))
+            if secrets.randbelow(50) == 0:  # now and then, clear out old lists
+                cutoff = time.time() - 2 * 86400
+                for old in LAZY_DIR.glob("*.pkl"):
+                    if old.stat().st_mtime < cutoff:
+                        old.unlink(missing_ok=True)
+    except Exception:
+        logging.exception("Couldn't save a Show-more list")
     return token
 
 
 @app.route("/lazy/<token>")
 def lazy_cards(token):
     items = _lazy_lists.get(token)
+    if items is None and re.fullmatch(r"[0-9a-f]{20}", token):
+        import pickle
+        try:
+            items = pickle.loads((LAZY_DIR / f"{token}.pkl").read_bytes())
+            _lazy_lists[token] = items
+        except Exception:
+            items = None
     if items is None:
-        return '<p class="muted">This list expired — reload the page.</p>'
+        return '<p class="muted">This list has changed since the page loaded — reload the page to see the latest.</p>'
     return render_template("_lazy_cards.html", items=items)
 
 
