@@ -106,7 +106,8 @@ def similar_price(sim, title: str, url: Optional[str]) -> Optional[float]:
     (rarest first): 3 words, else 2, needing 4+ listings with consistent
     prices."""
     import statistics
-    words = sim_words(title)
+    from scrapers.enrich import strip_clone_reference
+    words = sim_words(strip_clone_reference(title))
     ws = [w for w in words if w in sim["words"] and len(sim["words"][w]) >= 2]
     # A model number ("WA-19B") with too few other listings to go on: the
     # remaining words ("warm", "style", "dynamic") would mix in other models.

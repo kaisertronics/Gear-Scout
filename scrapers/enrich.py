@@ -270,6 +270,8 @@ _JUNK = re.compile(
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
     r"gift wrap|scrapbook|sewing|craft ribbon|"
+    # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
+    r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"
     # air / HVAC compressors
     r"r-?22|r-?410a?|\d+(?:\.\d+)?[\s-]?tons?|\d+(?:\.\d+)?\s?(?:hp|horse ?power)|head pump|pump head|"
     r"trane|carrier|lennox|goodman|copeland|rheem|bryant|hausf[ie]+ld|champion compressor|sears compressor|"
@@ -288,7 +290,8 @@ _ACCESSORY_ONLY = re.compile(
     r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|pop filters?|windscreens?|wind ?shields?|"
     r"blimp|dead ?cat|shock ?mounts?|clips?|cases?|road case|flight case|gig bag|bags?|covers?|"
     r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
-    r"rack rails|rack shelf|shelf|patch cables?|batteries|battery)\b", re.I)
+    r"rack rails|rack shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
+    r"(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
 _MAIN_GEAR = re.compile(
     r"\b(?:microphones?|mics?|preamps?|pre-amps?|compressors?|limiters?|interfaces?|mixers?|consoles?|"
     r"monitors?|speakers?|recorders?|decks?|equalizers?|eqs?|amps?|amplifiers?|receivers?|transmitters?|"
@@ -298,11 +301,14 @@ _MAIN_GEAR = re.compile(
 @functools.lru_cache(maxsize=100_000)
 def is_accessory_only(title: Optional[str]) -> bool:
     t = title or ""
+    # "RCA BK-6B Clamp Part No 210221": a numbered spare part, whatever it fits.
+    if re.search(r"\bpart\s*(?:no\.?|number|#)\s*\d|\b(?:clamp|yoke|bracket|grille?|knob|switch)\s+(?:part|assembly)\b", t, re.I):
+        return True
     m = _ACCESSORY_ONLY.search(t)
     if not m:
         return False
     before, after = t[:m.start()], t[m.end():]
-    joiner = r"(?:\bwith\b|\bw/|\bincl\w*|\bcomes with\b|\bplus\b|\+|&)"
+    joiner = r"(?:\bwith\b|\bw/|\bw\b|\bincl\w*|\bcomes with\b|\bplus\b|\+|&)"
     # "Shure QLXD24 system w/ handheld mic, case", "Revox A77 recorder w/stand":
     # the accessory is extra, the listing is the gear.
     if re.search(joiner, before, re.I):
@@ -328,6 +334,11 @@ def is_not_audio(title: Optional[str]) -> bool:
         return True
     # "Viair compressors", "aAir Compressor": "air compressor" even inside a word.
     if _NOT_AUDIO.search(t) or re.search(r"air[\s-]?compressor|air tank|viair", t, re.I):
+        return True
+    # Guitars themselves ("Vintage V72 Reissued Electric Guitar") — but not a
+    # mic or preamp that mentions recording guitar.
+    if (re.search(r"\b(?:electric|acoustic|bass|semi-hollow|hollow ?body|lh|left[\s-]handed) guitars?\b|\bguitar (?:body|neck)\b", t, re.I)
+            and not re.search(r"\b(?:mic|mics|microphones?|preamps?|pre-amps?|di|d\.i\.|amps?|amplifiers?|cabs?|cabinets?|pedals?|interfaces?|recording|tracking)\b", t, re.I)):
         return True
     # A bare "Compressor" / "Mixer" / "Monitor" with nothing else to go on
     # (typical of air compressors on OfferUp and Marketplace).
@@ -643,8 +654,16 @@ def model_key(title: Optional[str]) -> Optional[str]:
         # "Sennheiser 421" came back as brand "sennheiser" + model "421";
         # a known brand as the "model's letters" means the same thing.
         brand = known
+    # UA's modern reissues are often titled "Teletronix LA-2A ... Universal
+    # Audio"; those aren't the 1960s originals (half the price).
+    reissue = False
+    if brand == "teletronix" and re.search(r"universal audio|\bua\b|reissue|\b(?:19[89]\d|20[0-3]\d)s?\b", title or "", re.I) \
+            and not re.search(r"\b(?:19[56]\d'?s?|original|vintage)\b", title or "", re.I):
+        brand, reissue = "universal-audio", True
     model = _canonical_model(brand, model)
     variant = _model_variant(title, found[1])
+    if reissue and variant == "reissue":
+        variant = None
     if variant:
         model = f"{model}{variant}"
     key = f"{brand}:{model}" if brand else model

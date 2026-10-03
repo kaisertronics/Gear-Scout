@@ -72,6 +72,50 @@ def search_term(term: str, cfg: dict, on_progress=None, fast_only: bool = False)
     return {"term": term, "found": found, "new": new}
 
 
+# Correct spellings, and budget brands where a misspelled ad saves little.
+_TYPO_SKIP = {"teletronix", "electrovoice", "behringher", "beringer", "behringner", "bheringer",
+              "focusright", "presounus", "presonous"}
+
+
+def typo_queries() -> list[str]:
+    """Misspelled brand names sellers actually type ("nueman", "sennhieser",
+    "telefunkin", "pulltec"), taken from the spelling fixes Gear Scout
+    already applies when reading titles. Ads spelled like this rarely show up
+    in buyers' searches, so they sit longer and sell cheaper."""
+    import re
+    from scrapers.base import _BRAND_FIXES
+    out = []
+    for pattern, _right in _BRAND_FIXES:
+        group = re.search(r"\(\?:([^()]*)\)", pattern.pattern)
+        for alt in (group.group(1).split("|") if group else []):
+            alt = alt.replace("+", "")
+            if re.fullmatch(r"[a-z]{5,}", alt) and alt not in _TYPO_SKIP:  # plain words, no "a.k.g."
+                out.append(alt)
+    return list(dict.fromkeys(out))
+
+
+TYPO_PER_HOUR = 3
+
+
+def run_typo_sweep(cfg: dict) -> list[dict]:
+    """Searches a few misspelled brand names an hour on the fast sites
+    (never Facebook), oldest first — every misspelling comes around about
+    twice a day. Finds land in the normal listings, where titles are read as
+    if spelled right, so they show on the Telex List, Steals and Dashboard."""
+    if (cfg.get("telex_sweep") or {}).get("typos", True) is False:
+        return []
+    st = state()
+    out = []
+    for q in sorted(typo_queries(), key=lambda t: st.get(t, {}).get("searched_at") or "")[:TYPO_PER_HOUR]:
+        try:
+            res = search_term(q, cfg, fast_only=True)
+            out.append(res)
+            logger.info("Misspelling search %r: %d matches, %d new", q, res["found"], res["new"])
+        except Exception:
+            logger.exception("Misspelling search failed for %r", q)
+    return out
+
+
 def run_sweep(cfg: dict) -> list[dict]:
     try:
         from scrapers.market import refresh_telex_term_values
@@ -81,6 +125,7 @@ def run_sweep(cfg: dict) -> list[dict]:
     out = _run_sweep(cfg)
     if groups(cfg):
         out += run_group_sweep(cfg)
+    out += run_typo_sweep(cfg)
     return out
 
 
