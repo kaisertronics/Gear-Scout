@@ -338,7 +338,9 @@ def check_telex_lowest(cfg: dict) -> int:
         if prev and prev["lowest"] and value < prev["lowest"] - 0.5 and r["url"] != prev["url"]:
             key = (term, r["url"])
             if key not in alerted or value < (alerted[key] or 1e12) - 0.5:
-                alert = {"title": r["title"], "price": r["price"], "url": r["url"], "source_name": r["source_name"],
+                n = quantity(r["title"] or "")
+                shown = f"{r['price']} ({n} × ${value:,.0f} each)" if n > 1 else r["price"]
+                alert = {"title": r["title"], "price": shown, "url": r["url"], "source_name": r["source_name"],
                          "image_url": r.get("image_url"), "location": (r.get("location") or "").split(" @")[0] or None,
                          "needs_repair": needs_repair(r["title"], r.get("description")), "is_clone": False}
                 try:

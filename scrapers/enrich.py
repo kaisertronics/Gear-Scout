@@ -902,8 +902,14 @@ def quantity(title: Optional[str], description: Optional[str] = None) -> int:
         r"\bselling (?:all )?([2-9]|1\d)\b",
     )
     for pat in title_pats:
-        m = re.search(pat, t)
-        if m:
+        for m in re.finditer(pat, t):
+            # "WA-412 preamp, (4) Ernie Ball XLR cables": a count after
+            # "with" / "&" / a comma, or right before an accessory, counts the
+            # extras thrown in, not the gear for sale.
+            before, after = t[:m.start()], t[m.end():m.end() + 40]
+            if (_model_tokens(before) and re.search(r",|\bw/|\bwith\b|\+|&|\band\b|\bplus\b|\bincl", before)) \
+                    or _ACCESSORY_ONLY.search(" ".join(re.split(r"\s(?:with|w/|\+|&|and|plus)\s", " " + after.lstrip(" )x×"))[0].split()[:3])):
+                continue
             return int(m.group(1))
     m = re.search(r"^\W*(two|three|four|five|six|eight|ten)\s+(?!channel|track|band|way)[a-z]", t)
     if m:
