@@ -649,6 +649,15 @@ def model_query(title: Optional[str]) -> Optional[str]:
     return f"{query} {'500 series' if form == '500' else form}" if form else query
 
 
+def is_ordinal(digits: str, suffix: str) -> bool:
+    """"10th", "2nd", "4th" ("10th Anniversary", "4th Gen") — not a model number."""
+    if not digits.isdigit() or suffix not in ("st", "nd", "rd", "th"):
+        return False
+    n = int(digits)
+    want = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return suffix == want
+
+
 def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
     found = _model_match_inner(title)
     if found:
@@ -662,7 +671,9 @@ def _model_match(title: Optional[str]) -> Optional[tuple[str, str]]:
             tok = m.group(1)
             # Years and decades ("1968", "2010s" — Reverb adds them to titles)
             # aren't model numbers.
-            if re.fullmatch(r"(?:19|20)\d\d'?s?", tok) or _COUNT_WORD_AFTER.match(text[m.end():]):
+            num = re.match(r"\d+", tok).group(0)
+            if (re.fullmatch(r"(?:19|20)\d\d'?s?", tok) or _COUNT_WORD_AFTER.match(text[m.end():])
+                    or is_ordinal(num, tok[len(num):])):
                 continue
             return f"{brand}:{tok}", f"{brand.replace('-', ' ')} {title[m.start():m.end()]}"
     return None
@@ -683,6 +694,8 @@ def _model_match_inner(title: Optional[str]) -> Optional[tuple[str, str]]:
         letters, sep, digits, suffix = m.groups()
         if letters in _NOT_MODEL_WORDS or letters in _NOT_BRAND_WORDS:
             continue
+        if sep == " " and is_ordinal(digits, suffix):
+            continue  # "Active 10th Anniversary", "Scarlett 4th Gen"
         # "LA-2A"/"LA2A" is a model; "model 7" or "channel 8" is not — a
         # word followed by a spaced number needs at least 2 digits.
         if sep == " " and len(digits) < 2:

@@ -45,7 +45,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
     'steal' dict {pct, ref, label, est, saved}, biggest dollar savings first.
     `rough` holds the ones whose comp is only an estimate (double-check)."""
     from scrapers.comps import evaluate, price_index, similar_index
-    from scrapers.enrich import (exclude_match, is_accessory_only, is_not_audio, is_partial, is_relevant,
+    from scrapers.enrich import (exclude_match, is_accessory_only, is_bundle, is_not_audio, is_partial, is_relevant,
                                  item_form, needs_repair, parse_price, wants_pedals)
     from scrapers.market import load_market
     from scrapers.store import _conn
@@ -74,7 +74,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         if (r.get("description") or "").startswith("Auction"):
             continue  # a current bid isn't a price
         if (exclude_match(title, exclude_words) or is_not_audio(title) or is_accessory_only(title)
-                or is_partial(title) or _PARTS.search(title) or needs_repair(title, r.get("description"))):
+                or is_partial(title) or is_bundle(title) or _PARTS.search(title) or needs_repair(title, r.get("description"))):
             continue
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):

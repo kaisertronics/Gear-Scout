@@ -72,7 +72,7 @@ _SIM_SKIP = {"vintage", "used", "new", "mint", "excellent", "great", "good", "co
 
 def sim_words(title: str) -> list[str]:
     return [w for w in dict.fromkeys(re.findall(r"[a-z0-9][a-z0-9-]*[a-z0-9]", (title or "").lower()))
-            if len(w) >= 3 and w not in _SIM_SKIP and not re.fullmatch(r"(?:19|20)\d\ds?|\d{1,2}", w)]
+            if len(w) >= 3 and w not in _SIM_SKIP and not re.fullmatch(r"(?:19|20)\d\ds?|\d{1,2}|\d+(?:st|nd|rd|th)", w)]
 
 
 def similar_index():
