@@ -59,13 +59,22 @@
       </form></h2>
     <p class="search-yourself muted">Search it yourself:
       {% for label, url in search_links(term) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
+    {% set fresh = items|rejectattr("is_old")|list %}{% set old = items|selectattr("is_old")|list %}
     {% if items %}
+      {% if fresh %}
       <div class="listing-grid">
-        {% for l in items[:24] %}{{ listing_card(l) }}{% endfor %}
+        {% for l in fresh[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
-      {% if items|length > 24 %}
-        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(items[24:])) }}">
-          <summary>Show all {{ items|length }} (cheapest first)</summary>
+      {% else %}<p class="muted">Nothing posted in the last 30 days that's 10%+ under its comp.</p>{% endif %}
+      {% if fresh|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(fresh[24:])) }}">
+          <summary>Show all {{ fresh|length }} (cheapest first)</summary>
+          <div class="listing-grid"></div>
+        </details>
+      {% endif %}
+      {% if old %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old)) }}">
+          <summary class="muted">{{ old|length }} posted 30+ days ago (still for sale)</summary>
           <div class="listing-grid"></div>
         </details>
       {% endif %}

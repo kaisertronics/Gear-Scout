@@ -677,7 +677,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     try:
                         page.goto(
                             f"https://www.facebook.com/marketplace/{loc_id.group(1)}/search?query={quote_plus(term)}"
-                            "&sortBy=creation_time_descend&exact=false",
+                            "&sortBy=creation_time_descend&daysSinceListed=30&exact=false",
                             wait_until="domcontentloaded", timeout=45000)
                         _wait_for(page, "a[href*='/marketplace/item/']")
                         _collect_marketplace_cards(page, collected, scrolls=BROAD_SCROLLS)

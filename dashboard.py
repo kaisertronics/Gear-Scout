@@ -459,6 +459,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
                 l["stale"] = {"days": days, "offer": f"${max(5, round(value * 0.85 / 5) * 5):,}"}
         except (TypeError, ValueError):
             pass
+        l["age_days"] = _age_days(l)
+        l["age_known"] = bool(l.get("posted_at"))
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
         l["price_ctx"] = price_context(l.get("title"), l.get("price"), index, market,
                                        description=l.get("description"))
@@ -814,6 +816,10 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
                     good.append(r)
             else:
                 unpriced.append(r)
+        # Cheapest first, but ads posted 30+ days ago go after the fresh ones.
+        for r in good:
+            r["is_old"] = (r.get("age_days") or 0) > 30
+        good.sort(key=lambda r: r["is_old"])  # stable: keeps cheapest-first within each
         out_groups.append((term, good[:per_term], unpriced[:per_term]))
     if not note:
         return out_groups

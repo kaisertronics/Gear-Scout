@@ -147,6 +147,18 @@ def _record_status(conn, listing) -> None:
                      (datetime.now(timezone.utc).isoformat(), listing.url))
 
 
+def set_posted_at(url: str, posted) -> None:
+    """Saves when the seller posted the ad, learned from the ad's own page
+    (Facebook "Listed 3 weeks ago", Craigslist's posting time) — the search
+    results on those sites don't say."""
+    if not posted:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET posted_at = ? WHERE url = ? AND (posted_at IS NULL OR posted_at = '')",
+                     (posted.isoformat(), url))
+        conn.commit()
+
+
 def set_pending(url: str, pending: bool) -> None:
     with _conn() as conn:
         conn.execute("UPDATE seen SET pending = ? WHERE url = ?", (1 if pending else 0, url))

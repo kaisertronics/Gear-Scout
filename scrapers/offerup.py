@@ -58,7 +58,7 @@ def scrape_offerup(source: dict, keywords: list[str]) -> ScrapeResult:
     name = source["name"]
     start = time.time()
     term = keywords[0].strip() if len(keywords) == 1 and keywords[0].strip() else ""
-    searches = [(term, "best_match")] if term else [
+    searches = [(term, "-posted")] if term else [
         (t, "-posted") for t in (source.get("broad_terms") or DEFAULT_BROAD_TERMS)]
     manual_url = SEARCH_URL.format(q=quote_plus(term or "microphone"), sort="-posted")
 

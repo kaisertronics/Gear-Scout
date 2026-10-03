@@ -34,7 +34,7 @@ def facebook_marketplace_search_url(location_id: str, query: str = "") -> str:
     Marketplace browse feed (the base /marketplace/{location_id} page, no
     /search segment — a "/search" path with no query isn't a real page)."""
     if query:
-        return f"https://www.facebook.com/marketplace/{location_id}/search?query={quote_plus(query)}&sortBy=best_match"
+        return f"https://www.facebook.com/marketplace/{location_id}/search?query={quote_plus(query)}&sortBy=creation_time_descend&daysSinceListed=30"
     return f"https://www.facebook.com/marketplace/{location_id}"
 
 

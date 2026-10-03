@@ -113,6 +113,14 @@ def check_url(url: str) -> Optional[bool]:
     if not r.ok:
         return None
     html = r.text
+    if "craigslist.org" in url:
+        m = re.search(r'class="date timeago"[^>]*datetime="([^"]+)"', html) or re.search(r'datetime="(\d{4}-\d\d-\d\dT[^"]+)"', html)
+        if m:
+            try:
+                from scrapers.store import set_posted_at
+                set_posted_at(url, datetime.fromisoformat(re.sub(r"([+-]\d\d)(\d\d)$", r"\1:\2", m.group(1))))
+            except ValueError:
+                pass
     if "kijiji.ca" in url:
         # Every Kijiji page carries "no longer available" text somewhere; the
         # ad's own status field is what counts.
@@ -199,6 +207,18 @@ def _record(url: str, gone: Optional[bool]) -> None:
         mark_sold(url)
 
 
+def fb_listed_at(text: str):
+    """When a Facebook Marketplace ad was posted, from "Listed 3 weeks ago"
+    on its page (approximate, which is fine for "how fresh is this")."""
+    from datetime import timedelta
+    m = re.search(r"Listed\s+(?:about\s+|over\s+)?(an?|\d+)\s+(minute|hour|day|week|month|year)s?\s+ago", text, re.I)
+    if not m:
+        return None
+    n = 1 if m.group(1).lower() in ("a", "an") else int(m.group(1))
+    days = {"minute": 1 / 1440, "hour": 1 / 24, "day": 1, "week": 7, "month": 30, "year": 365}[m.group(2).lower()]
+    return datetime.now(timezone.utc) - timedelta(days=n * days)
+
+
 def check_fb(urls: list[str]):
     """Opens each Facebook listing in one paced browser and yields
     (url, gone) — gone is None when the page couldn't be read. Also notes
@@ -230,6 +250,10 @@ def check_fb(urls: list[str]):
                     if not gone:
                         from scrapers.store import set_pending
                         set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
+                        posted = fb_listed_at(text)
+                        if posted:
+                            from scrapers.store import set_posted_at
+                            set_posted_at(url, posted)
                 except Exception as e:
                     logger.debug("FB sold check failed for %s: %s", url, e)
                 yield url, gone
