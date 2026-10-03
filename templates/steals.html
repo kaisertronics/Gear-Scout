@@ -14,6 +14,14 @@
       placeholder prices are left out. New steals also go to your phone and email within the hour.
       Tap 🤖 on a listing for a quick "is this real?" check.
     </p>
+    <div class="scrape-now-row">
+      <form method="post" action="{{ url_for('scrape_start') }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
+      </form>
+      <span class="muted">Quick scrape of every source right now (about 5 minutes); this page refreshes with any new steals when it's done.</span>
+    </div>
+    <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     <div class="steal-levels">
       {% for p in levels %}
         <a href="{{ url_for('steals', pct=p) }}" class="btn btn-sm{{ ' btn-primary' if p == min_pct else '' }}">{{ p }}%+ off</a>
@@ -49,4 +57,28 @@
     </details>
   </section>
   {% endif %}
+<script>
+  (function () {
+    const banner = document.getElementById('scrape-status-banner');
+    const btn = document.getElementById('scrape-now-btn');
+    let sawRunning = false;
+    async function poll() {
+      let data;
+      try { data = await (await fetch("{{ url_for('scrape_status') }}")).json(); } catch (e) { return setTimeout(poll, 3000); }
+      if (data.state === 'running') {
+        sawRunning = true;
+        btn.disabled = true;
+        gsProgress(banner, data.total ? 'Scraping every source…' : 'Starting scrape…', data);
+        setTimeout(poll, 1000);
+      } else if (data.state === 'done' && sawRunning) {
+        gsProgressText(banner, `Scrape done — ${data.new_count} new listing(s). Checking them for steals (about 20 seconds)…`);
+        window.location.reload();
+      } else if (data.state === 'failed' && sawRunning) {
+        btn.disabled = false;
+        gsProgressText(banner, '⚠️ Scrape failed: ' + (data.reason || 'unknown error'));
+      }
+    }
+    poll();
+  })();
+</script>
 {% endblock %}

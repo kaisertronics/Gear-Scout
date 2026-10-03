@@ -1426,7 +1426,8 @@ def scrape_start():
         _write_manual_scrape_status({"state": "running", "done": 0, "total": 0, "current_source": None})
         _manual_scrape_thread = threading.Thread(target=_run_manual_scrape_job, daemon=True)
         _manual_scrape_thread.start()
-    return redirect(url_for("index"))
+    nxt = request.form.get("next", "")
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("index"))
 
 
 @app.route("/scrape/status")
