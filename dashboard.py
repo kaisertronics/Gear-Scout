@@ -822,7 +822,9 @@ def _verify_top_listings():
     for _, good, _ in (_telex_cache.get("groups") or []):
         urls += [r["url"] for r in good[:6]]
     st = _steals_cache.get("data") or {}
-    urls += [l["url"] for l in (st.get("trusted") or [])[:40]] + [l["url"] for l in (st.get("rough") or [])[:12]]
+    # Steals sell within hours: every one is checked, Facebook ones hourly.
+    steal_urls = {l["url"] for l in (st.get("trusted") or []) + (st.get("rough") or [])[:60]}
+    urls = list(steal_urls) + urls
     urls = [u for u in dict.fromkeys(urls) if u]
     if not urls:
         return
@@ -844,10 +846,10 @@ def _verify_top_listings():
             fb = [u for u in urls if "facebook.com/marketplace/item" in u]
             if fb:
                 with _conn() as conn:
-                    fresh = {u for (u,) in conn.execute(
-                        f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(fb))}) AND sold_checked_at >= ?",
-                        (*fb, fb_cutoff))}
-                fb = [u for u in fb if u not in fresh][:25]
+                    checked = dict(conn.execute(
+                        f"SELECT url, MAX(sold_checked_at) FROM seen WHERE url IN ({','.join('?' * len(fb))}) GROUP BY url",
+                        fb).fetchall())
+                fb = [u for u in fb if (checked.get(u) or "") < (cutoff if u in steal_urls else fb_cutoff)][:40]
 
             def one(u):
                 try:

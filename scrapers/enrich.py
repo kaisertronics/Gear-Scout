@@ -580,6 +580,52 @@ def _canonical_model(brand: str, model: str) -> str:
     return model
 
 
+_CLONE_WORD = r"(?:clone|replica|copy|style|inspired|tribute|based)"
+
+
+def strip_clone_reference(title: Optional[str]) -> str:
+    """Takes out the gear a clone imitates, so "Warm Audio EQP-WA (Pultec
+    EQP-1A clone)" is valued as the EQP-WA and "Clone Neve 1073 Chameleon
+    Labs 7602" as the 7602, never as the real Pultec / Neve."""
+    text = title or ""
+    if not re.search(rf"\b{_CLONE_WORD}\b", text, re.I):
+        return text
+    # "(Pultec EQP-1A Tube Equalizer clone)", "[U47 style]"
+    text = re.sub(rf"[(\[][^)\]]*\b{_CLONE_WORD}\b[^)\]]*[)\]]", " ", text, flags=re.I)
+
+    def brandish(word: str) -> bool:
+        return bool(canonical_brand(word))
+    tokens = re.findall(r"\S+", text)
+    drop = set()
+    for i, tok in enumerate(tokens):
+        if not re.fullmatch(rf"{_CLONE_WORD}[.,:;!-]*", tok, re.I):
+            continue
+        drop.add(i)
+        nxt = tokens[i + 1].lower() if i + 1 < len(tokens) else ""
+        if nxt in ("of", "to"):  # "clone of Neve 1073", "tribute to the 1176"
+            j = i + 2
+            if j < len(tokens) and tokens[j].lower() in ("a", "an", "the"):
+                drop.add(j - 1)
+                j += 1
+            drop.update(k for k in (i + 1, j, j + 1) if k < len(tokens))
+            if j < len(tokens) and not brandish(tokens[j]):
+                drop.discard(j + 1)
+        elif i == 0 or re.fullmatch(r"a|an|vintage|classic|retro|old|old-school|\d0'?s", tokens[i - 1].lower()):
+            # "Clone Neve 1073 ...", "Vintage Style RCA 77": the imitated gear follows.
+            j = i + 1
+            if j < len(tokens):
+                drop.add(j)
+                if brandish(tokens[j]) and j + 1 < len(tokens):
+                    drop.add(j + 1)
+        else:
+            # "Neve 1073 clone", "U47 style": the imitated gear comes before.
+            j = i - 1
+            drop.add(j)
+            if j - 1 >= 0 and brandish(tokens[j - 1]):
+                drop.add(j - 1)
+    return " ".join(t for k, t in enumerate(tokens) if k not in drop)
+
+
 @functools.lru_cache(maxsize=100_000)
 def model_key(title: Optional[str]) -> Optional[str]:
     """The first model-number-looking token in a title, normalized and
@@ -587,6 +633,7 @@ def model_key(title: Optional[str]) -> Optional[str]:
     "tascam:portastudio414") — so listings of the same model group together
     even when written "WA-47" or "WA 47". A pedal/kit/plugin/500-series
     version gets its own key ("universal:la2a|pedal")."""
+    title = strip_clone_reference(title)
     found = _model_match(title)
     if not found:
         return None
@@ -901,7 +948,7 @@ def value_key(title: Optional[str]) -> Optional[str]:
     its own, so it falls back to the title words around it. Parts sold on
     their own ("KK 104 capsule head") get their own "p:" key so they're
     valued as the part, never as the whole mic."""
-    q = title_query(title)
+    q = title_query(strip_clone_reference(title))
     if is_partial(title):
         return f"p:{q}" if q else None
     key = model_key(title)
