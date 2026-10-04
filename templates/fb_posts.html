@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — FB Posts{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
   <section class="panel">
     <h2>📣 Facebook post search</h2>
@@ -17,6 +18,7 @@
       <input type="text" name="q" value="{{ q }}" placeholder="e.g. gefell um70" class="search-input" required>
       <button type="submit">Search Facebook posts</button>
     </form>
+    {{ last_searched(['fbposts']) }}
     <div id="fbposts-status" class="live-status-banner" style="display:none;"></div>
   </section>
 

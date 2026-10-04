@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Steals{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
 
   <section class="panel">
@@ -22,6 +23,7 @@
       </form>
       <span class="muted">Quick scrape of every source right now (about 5 minutes); this page refreshes with any new steals when it's done.</span>
     </div>
+    {{ last_searched(['manual', 'auto']) }}
     <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     <div class="steal-levels">
       {% for p in levels %}

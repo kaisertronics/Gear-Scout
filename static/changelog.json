@@ -8,7 +8,10 @@
       "For brand or category terms (“tube mic”, “stam”), only gear from $300 up — near your $500–$2,000 budget.",
       "New-lowest-price alerts now only fire when the new lowest is also 10%+ under the usual used price.",
       "Ads whose title says SOLD / UNAVAILABLE / “has been sold” are treated as sold everywhere.",
-      "The search box for looking up any item and your tracked items are still there, below the board."
+      "The search box for looking up any item and your tracked items are still there, below the board.",
+      "Every Scrape / Search button now shows when it last ran and what it found (manual scrape, the hourly automatic refresh, Telex search, live search, price lookup, Facebook post search).",
+      "Deals has its own Scrape now button with a progress bar.",
+      "Pages stay fast while a scrape runs (they were rebuilding on every progress update)."
     ]
   },
   {

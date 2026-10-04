@@ -36,6 +36,7 @@
     <span class="lowest-price">${{ '{:,.0f}'.format(c.unit) }}{% if c.qty > 1 %}<span class="listing-each">each ({{ c.qty }})</span>{% endif %}{{ extra|safe }}</span>
   </a>
 {% endmacro %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
   <section class="panel">
     <h2>📊 Price Board <span class="muted">— your Telex List and tracked items, updated hourly{% if board_built %} · {{ board_built|local }}{% endif %}</span></h2>
@@ -75,6 +76,7 @@
       <input type="text" name="q" value="{{ q }}" placeholder="e.g. neumann u87ai" class="search-input" required>
       <button type="submit">Find 10 lowest</button>
     </form>
+    {{ last_searched(['lowest']) }}
     <div id="lowest-status" class="live-status-banner" style="display:none;"></div>
   </section>
 

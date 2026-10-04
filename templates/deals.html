@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Deals{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
 
   <section class="panel">
@@ -12,6 +13,15 @@
       seller posted the ad (a "~" means the site doesn't say, so it's when Gear Scout found it). Gear Scout reads deep into Reverb and eBay, so many ads it finds today have
       been up for months. Ads up more than a week are kept under their own filter.
     </p>
+    <div class="scrape-now-row">
+      <form method="post" action="{{ url_for('scrape_start') }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
+      </form>
+      <span class="muted">Quick scrape of every source right now (about 5 minutes); this page refreshes with any new deals when it's done.</span>
+    </div>
+    <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
+    {{ last_searched(['manual', 'auto']) }}
     <div class="steal-levels">
       {% for key, label in prices %}
         <a href="{{ url_for('deals', age=age, sort=sort, price=key) }}" class="btn btn-sm{{ ' btn-primary' if key == price else '' }}">{{ label }}</a>
@@ -58,4 +68,35 @@
     </details>
   </section>
   {% endif %}
+<script>
+  (function () {
+    const banner = document.getElementById('scrape-status-banner');
+    const btn = document.getElementById('scrape-now-btn');
+    let sawRunning = false;
+    async function poll() {
+      let data;
+      try { data = await (await fetch("{{ url_for('scrape_status') }}")).json(); } catch (e) { return setTimeout(poll, 3000); }
+      if (data.state === 'running') {
+        sawRunning = true;
+        btn.disabled = true;
+        gsProgress(banner, data.total ? 'Scraping every source…' : 'Starting scrape…', data);
+        setTimeout(poll, 1000);
+      } else if (data.state === 'done' && sawRunning) {
+        gsProgress(banner, `Scrape done — ${data.new_count} new listing(s). Checking them for deals…`, null);
+        const ready = async () => {
+          try {
+            const st = await (await fetch("{{ url_for('steals_status') }}")).json();
+            if (!st.rebuilding) return window.location.reload();
+          } catch (e) {}
+          setTimeout(ready, 2000);
+        };
+        setTimeout(ready, 1500);
+      } else if (data.state === 'failed' && sawRunning) {
+        btn.disabled = false;
+        gsProgressText(banner, '⚠️ Scrape failed: ' + (data.reason || 'unknown error'));
+      }
+    }
+    poll();
+  })();
+</script>
 {% endblock %}

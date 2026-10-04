@@ -1,0 +1,15 @@
+{# "Last searched" line under a Scrape / Search button. kinds: which runs to mention. #}
+{% macro last_searched(kinds) %}
+{% set ls = last_searches() %}
+<p class="last-searched muted">
+  {% for k in kinds %}{% set x = ls.get(k) %}{% if x %}
+    {% if k == 'manual' %}<span>🔄 Last manual scrape: <strong>{{ x.ago }}</strong>{% if x.failed %} (failed){% elif x.new is not none %} · {{ x.new }} new{% endif %}</span>
+    {% elif k == 'auto' %}<span>⏱ Automatic refresh (hourly): <strong>{{ x.ago }}</strong>{% if x.new is not none %} · {{ x.new }} new{% endif %}</span>
+    {% elif k == 'telex' %}<span>📋 Last Telex search: <strong>{{ x.ago }}</strong> · {{ 'all ' ~ x.terms ~ ' terms' if x.all else 'one term, everywhere' }}{% if x.new is not none %} · {{ x.new }} new{% endif %}</span>
+    {% elif k == 'live' %}<span>🔍 Last live search: <strong>{{ x.ago }}</strong> · “{{ x.query }}”{% if x.found is not none %} · {{ x.found }} found{% endif %}</span>
+    {% elif k == 'lowest' %}<span>💰 Last lookup: <strong>{{ x.ago }}</strong> · “{{ x.query }}”</span>
+    {% elif k == 'fbposts' %}<span>💬 Last post search: <strong>{{ x.ago }}</strong> · “{{ x.query }}”{% if x.found is not none %} · {{ x.found }} found{% endif %}</span>
+    {% endif %}
+  {% endif %}{% endfor %}
+</p>
+{% endmacro %}

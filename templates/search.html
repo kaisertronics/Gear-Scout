@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Search{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
 
   <section class="panel">
@@ -18,6 +19,7 @@
       </form>
       <span class="muted">Re-checks every site right now instead of just what's already been collected — takes a minute or two.</span>
     </div>
+    {{ last_searched(['live', 'auto']) }}
     <div id="live-status-banner" class="live-status-banner" style="display:none;"></div>
     {% if q %}
       {% if watch_saved %}

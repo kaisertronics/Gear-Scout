@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Telex List{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
 
   <section class="panel">
@@ -21,6 +22,7 @@
       <span class="muted">eBay, Reverb, OfferUp, Craigslist, Kijiji, ShopGoodwill and Long &amp; McQuade — about 2 minutes.
         For Facebook, use “Search everywhere” on a term (about 2–3 minutes each); the hourly rotation covers Facebook too.</span>
     </div>
+    {{ last_searched(['telex', 'auto']) }}
     <div id="telex-status" class="live-status-banner" style="display:none;"></div>
     <form method="post" action="{{ url_for('telex_add') }}" class="telex-add">
       <textarea name="terms" rows="3" placeholder="Add terms — one per line" class="search-input"></textarea>

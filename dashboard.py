@@ -110,6 +110,58 @@ def lazy_cards(token):
     return render_template("_lazy_cards.html", items=items)
 
 
+def _ago(when) -> str:
+    """"just now", "12 min ago", "3 h ago", "2 days ago"."""
+    if not when:
+        return ""
+    if isinstance(when, (int, float)):
+        when = datetime.fromtimestamp(when, timezone.utc)
+    elif isinstance(when, str):
+        try:
+            when = datetime.fromisoformat(when)
+        except ValueError:
+            return ""
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    mins = int((datetime.now(timezone.utc) - when).total_seconds() // 60)
+    if mins < 1:
+        return "just now"
+    if mins < 60:
+        return f"{mins} min ago"
+    if mins < 48 * 60:
+        return f"{mins // 60} h ago"
+    return f"{mins // 1440} days ago"
+
+
+def _last_searches() -> dict:
+    """When each kind of scrape/search last finished and what it found —
+    shown under every Scrape / Search button."""
+    out = {}
+
+    def read(path):
+        try:
+            return json.loads(path.read_text()), path.stat().st_mtime
+        except Exception:
+            return None, None
+    st, at = read(MANUAL_SCRAPE_STATUS_PATH)
+    if st and st.get("state") in ("done", "failed"):
+        out["manual"] = {"ago": _ago(at), "new": st.get("new_count"), "failed": st.get("state") == "failed"}
+    st, at = read(Path("/data/last_refresh.json"))
+    if st:
+        out["auto"] = {"ago": _ago(st.get("finished") or at), "new": st.get("new_count")}
+    st, at = read(TELEX_STATUS_PATH)
+    if st and st.get("state") in ("done", "failed"):
+        out["telex"] = {"ago": _ago(at), "new": st.get("new"), "found": st.get("found"),
+                        "all": st.get("fast_only"), "terms": st.get("total")}
+    for kind, path, count in (("live", LIVE_SEARCH_STATUS_PATH, "matched_count"),
+                              ("lowest", LOWEST_STATUS_PATH, "found"), ("fbposts", FBPOSTS_STATUS_PATH, "found")):
+        st, at = read(path)
+        if st and st.get("state") in ("done", "failed"):
+            out[kind] = {"ago": _ago(at), "query": st.get("query"), "found": st.get(count),
+                         "failed": st.get("state") == "failed"}
+    return out
+
+
 @app.context_processor
 def _lazy_context():
     try:
@@ -121,7 +173,8 @@ def _lazy_context():
     except Exception:
         ai_on = False
     from scrapers.telex import search_links
-    return {"lazy_token": lazy_token, "css_version": css_v, "ai_enabled": ai_on, "search_links": search_links}
+    return {"lazy_token": lazy_token, "css_version": css_v, "ai_enabled": ai_on, "search_links": search_links,
+            "last_searches": _last_searches}
 
 
 @app.after_request

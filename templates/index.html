@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Dashboard{% endblock %}
+{% from "_last_searched.html" import last_searched with context %}
 {% block content %}
 
   <div class="scrape-now-row">
     <form method="post" action="{{ url_for('scrape_start') }}" id="scrape-now-form">
       <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
     </form>
-    <span class="muted">Quick scrape of every source right now (about 5 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.
-      {% if last_refresh %}<br>Auto-refreshed {% if last_refresh.mins < 1 %}just now{% elif last_refresh.mins < 120 %}{{ last_refresh.mins }} min ago{% else %}{{ last_refresh.mins // 60 }} h ago{% endif %} · {{ last_refresh.new_count }} new{% endif %}</span>
+    <span class="muted">Quick scrape of every source right now (about 5 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.</span>
   </div>
+  {{ last_searched(['manual', 'auto']) }}
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
 
   {% if grouped_listings %}
