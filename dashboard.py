@@ -320,6 +320,7 @@ def _run_manual_scrape_job():
     try:
         cfg = load_config_raw()
         results, new_listings = run_manual_scrape(cfg, on_progress=on_progress)
+        Path("/data/manual_scrape_finished").touch()  # pages rebuild once, now
         _write_manual_scrape_status({
             "state": "done",
             "new_count": len(new_listings),
@@ -1625,6 +1626,7 @@ def index():
 
 
 _index_cache: dict = {"key": None, "at": 0.0, "data": None}
+_index_state = {"running": False}
 VISIT_FILE = Path("/data/last_visit.json")
 
 
@@ -1676,6 +1678,21 @@ def _index_listings(cfg) -> dict:
         if snap is not None:
             _index_cache.update(key=None, at=0.0, data=snap)
             return snap
+    # Something changed: show the current Dashboard right away and refresh
+    # it in the background, instead of making you wait 30-40s.
+    if _index_cache["data"] is not None and not request.query_string and not request.headers.get("X-Warm"):
+        if not _index_state["running"]:
+            def rebuild():
+                _index_state["running"] = True
+                try:
+                    with app.test_request_context("/", headers={"X-Warm": "1"}):
+                        _index_listings(load_config_raw())
+                except Exception:
+                    logging.exception("Dashboard rebuild failed")
+                finally:
+                    _index_state["running"] = False
+            threading.Thread(target=rebuild, name="index-rebuild", daemon=True).start()
+        return _index_cache["data"]
     data = _build_index_listings(cfg)
     _index_cache.update(key=key, at=time.time(), data=data)
     if not request.query_string:
@@ -1687,7 +1704,9 @@ def _index_listings(cfg) -> dict:
 def _last_change_marker() -> str:
     """Changes when a scrape finishes or settings are saved."""
     marker = ""
-    for p in (Path("/data/last_run.json"), Path("/data/last_refresh.json"), Path("/data/manual_scrape_status.json")):
+    # A manual scrape counts when it finishes — not on every progress update
+    # (that made every page rebuild over and over while a scrape ran).
+    for p in (Path("/data/last_run.json"), Path("/data/last_refresh.json"), Path("/data/manual_scrape_finished")):
         try:
             marker += str(int(p.stat().st_mtime))
         except OSError:
@@ -2579,7 +2598,7 @@ def _keep_caches_warm():
             from scrapers.market import load_market
             load_market()
             # The Dashboard's default view, ready before anyone asks.
-            with app.test_request_context("/"):
+            with app.test_request_context("/", headers={"X-Warm": "1"}):
                 if _index_cache["key"] is None and _index_cache["data"] is not None:
                     # Showing the saved copy from before the restart: rebuild for real now.
                     data = _build_index_listings(load_config_raw())
