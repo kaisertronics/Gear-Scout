@@ -178,6 +178,16 @@ def _lazy_context():
 
 
 @app.after_request
+def _no_stale_pages(resp):
+    """Pages always come fresh (phones, especially iPhones, otherwise
+    show a saved copy and new changes seem missing). Static files and
+    images keep their own caching."""
+    if resp.mimetype == "text/html" and "Cache-Control" not in resp.headers:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
+
+@app.after_request
 def _compress(resp):
     """Gzip pages, JSON, CSS and JS — listing pages shrink about 10x, which
     is most of the load time over the internet / on a phone."""
