@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-04",
+    "title": "Faster term adding, buttons show when they're working",
+    "items": [
+      "Adding a Telex term (the box, the 📋 button on a listing, or Ask AI) now takes a few seconds instead of a minute: only the new term is worked out, and its Price Board row updates in the background. Removing a term is instant.",
+      "Any button you press greys out and says “⏳ Working…” until the page comes back, so you know it's doing something.",
+      "Scrape and search buttons stay greyed out (“⏳ Running…”) on every page while their job is still running in the background, and come back when it's done."
+    ]
+  },
+  {
+    "date": "2026-10-04",
     "title": "Telex List: see what's new",
     "items": [
       "New “🆕 New on your Telex List” section at the top: everything posted in the last 2 days across all your terms, newest first, each labeled with its term.",

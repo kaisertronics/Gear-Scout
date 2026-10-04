@@ -909,3 +909,6 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 .telex-new-item { display: flex; flex-direction: column; }
 .telex-new-term { font-size: 12px; font-weight: 700; color: var(--accent, #1e3a5f); margin: 0 0 4px 2px; }
 .telex-new-item .listing-card { flex: 1; }
+
+/* Buttons while their action is running */
+button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; filter: grayscale(.6); }

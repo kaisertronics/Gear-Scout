@@ -239,6 +239,54 @@
     if (data && data.current_source) parts.push(`now: ${data.current_source}`);
     meta.textContent = parts.join(' · ');
   };
+  // Any button you press greys out ("Working…") until the page comes back,
+  // so you can see it's doing something and can't press it twice. Buttons
+  // handled in place (star, hide, Telex, tags) are left to their own code.
+  document.addEventListener('submit', (e) => {
+    if (e.defaultPrevented) return;
+    const form = e.target;
+    const btns = form.querySelectorAll('button[type=submit], button:not([type]), input[type=submit]');
+    // Disable after the browser has captured the form data.
+    setTimeout(() => btns.forEach((b) => {
+      b.disabled = true;
+      b.classList.add('is-busy');
+      if (b.tagName === 'BUTTON' && b.textContent.trim().length > 2) {
+        b.dataset.label = b.innerHTML;
+        b.innerHTML = '⏳ Working…';
+      }
+    }), 0);
+  });
+  // Coming back with the browser's Back button shows the page as it was:
+  // undo any "Working…" state.
+  window.addEventListener('pageshow', () => document.querySelectorAll('.is-busy').forEach((b) => {
+    if (b.dataset.label) b.innerHTML = b.dataset.label;
+    b.disabled = false;
+    b.classList.remove('is-busy');
+  }));
+
+  // Buttons whose job is still running in the background stay greyed out on
+  // every page until it finishes.
+  window.gsJobButtons = function (jobs) {
+    const sel = {scrape: '#scrape-now-btn', telex: '#telex-scrape-btn, .telex-term-search button',
+                 live: '#live-search-btn', lowest: 'form[action$="/lowest/run"] button',
+                 fbposts: 'form[action$="/fb-posts/search"] button'};
+    const running = new Set(jobs.map((j) => j.kind));
+    Object.entries(sel).forEach(([kind, css]) => document.querySelectorAll(css).forEach((b) => {
+      if (running.has(kind)) {
+        if (!b.dataset.jobLock) { b.dataset.jobLock = '1'; b.dataset.jobLabel = b.innerHTML; b.innerHTML = '⏳ Running…'; }
+        b.disabled = true;
+        b.classList.add('is-busy');
+        b.title = 'Already running — it keeps going in the background';
+      } else if (b.dataset.jobLock) {
+        b.innerHTML = b.dataset.jobLabel;
+        delete b.dataset.jobLock;
+        b.disabled = false;
+        b.classList.remove('is-busy');
+        b.title = '';
+      }
+    }));
+  };
+
   // Manual scrapes and searches run on the server and keep going when you
   // switch pages; this bar shows them on every page (except where the page
   // already has its own progress bar for that job).
@@ -251,6 +299,7 @@
     async function poll() {
       let data;
       try { data = await (await fetch('/jobs/active', {headers: {'X-GearScout-Test': '1'}})).json(); } catch (e) { return setTimeout(poll, 5000); }
+      gsJobButtons(data.jobs || []);
       const jobs = (data.jobs || []).filter(j => !document.getElementById(own[j.kind]));
       if (jobs.length) {
         active = true;
