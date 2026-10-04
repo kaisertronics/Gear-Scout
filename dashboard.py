@@ -1086,11 +1086,12 @@ def _dropped_recently(l: dict, days: int = 7) -> bool:
 
 
 def _fresh_order(l: dict):
-    """Newest day first; within a day, Facebook / Craigslist ads first."""
+    """Strictly newest post first (the owner asked for this on Deals and
+    Steals); Facebook / Craigslist only win a tie."""
     a = l.get("age_days")
     a = 999 if a is None else a
     local = (l.get("source_name") or "").startswith(_LOCAL_FIRST)
-    return (int(a), not local, a)
+    return (round(a, 3), not local)
 
 
 def _age_days(l: dict) -> Optional[float]:
