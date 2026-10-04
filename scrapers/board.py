@@ -124,13 +124,16 @@ def build(cfg: dict) -> list[dict]:
         # The cheapest believable one: placeholders and mismatches (under a
         # fifth of the item's own comp) are skipped.
         cheapest = comp = None
+        checked = []
         for unit, n, r in cands[:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             unit, n = _unit(r, unit, n, c)
             if c and unit < c["ref"] * 0.2:
                 continue
+            checked.append((unit, n, r, c))
+        if checked:  # re-sorted after working out per-piece prices
+            unit, n, r, c = min(checked, key=lambda x: x[0])
             cheapest, comp = _brief(r, unit, n), c
-            break
         fresh = [(u, n, r) for u, n, r in cands if (_age_days(r) or 0) <= FRESH_DAYS]
         # Best deal this week: the biggest real discount among ads posted in
         # the last week (a solid comp, 10-80% under — beyond 80% is almost
