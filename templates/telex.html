@@ -23,6 +23,11 @@
         For Facebook, use “Search everywhere” on a term (about 2–3 minutes each); the hourly rotation covers Facebook too.</span>
     </div>
     {{ last_searched(['telex', 'auto']) }}
+    <div class="steal-levels">
+      <span class="muted">Inside each term:</span>
+      <a href="{{ url_for('telex') }}" class="btn btn-sm{{ ' btn-primary' if sort == 'new' else '' }}">Newest posts first</a>
+      <a href="{{ url_for('telex', sort='cheap') }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">Cheapest first</a>
+    </div>
     <div id="telex-status" class="live-status-banner" style="display:none;"></div>
     <form method="post" action="{{ url_for('telex_add') }}" class="telex-add">
       <textarea name="terms" rows="3" placeholder="Add terms — one per line" class="search-input"></textarea>
@@ -30,9 +35,9 @@
     </form>
     {% if terms %}
       <div class="telex-terms">
-        {% for term, items, unpriced in groups %}
+        {% for v in view %}{% set term, items = v.term, v.fresh %}
           <span class="telex-chip">
-            <a href="#t-{{ loop.index }}">{{ term }} <span class="muted">{{ items|length }}</span></a>
+            <a href="#t-{{ loop.index }}">{{ term }} <span class="muted">{{ items|length }}</span>{% if v.new_count %} <span class="new-tag">{{ v.new_count }} new</span>{% endif %}</a>
             <form method="post" action="{{ url_for('telex_remove') }}" onsubmit="return confirm('Remove &quot;{{ term }}&quot; from the Telex List?');">
               <input type="hidden" name="term" value="{{ term }}">
               <button type="submit" class="hide-btn" title="Remove" aria-label="Remove {{ term }}">✕</button>
@@ -50,7 +55,22 @@
     {% endif %}
   </section>
 
-  {% for term, items, unpriced in groups %}
+  {% if new_items %}
+  <section class="panel" id="telex-new">
+    <h2>🆕 New on your Telex List <span class="muted">— {{ new_items|length }} posted in the last 2 days, newest first</span></h2>
+    <div class="listing-grid">
+      {% for l, term in new_items[:24] %}<div class="telex-new-item"><div class="telex-new-term">{{ term }}</div>{{ listing_card(l) }}</div>{% endfor %}
+    </div>
+    {% if new_items|length > 24 %}
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new_items[24:]|map('first')|list)) }}">
+        <summary>Show all {{ new_items|length }}</summary>
+        <div class="listing-grid"></div>
+      </details>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% for v in view %}{% set term, items, unpriced = v.term, v.all_items, v.unpriced %}
   <section class="panel" id="t-{{ loop.index }}">
     <h2>{{ term }} <span class="muted">— {{ items|length }} ·
       {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
@@ -61,7 +81,7 @@
       </form></h2>
     <p class="search-yourself muted">Search it yourself:
       {% for label, url in search_links(term) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
-    {% set fresh = items|rejectattr("is_old")|list %}{% set old = items|selectattr("is_old")|list %}
+    {% set fresh, old = v.fresh, v.old %}
     {% if items %}
       {% if fresh %}
       <div class="listing-grid">
@@ -70,7 +90,7 @@
       {% else %}<p class="muted">Nothing posted in the last week that's 10%+ under its comp.</p>{% endif %}
       {% if fresh|length > 24 %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(fresh[24:])) }}">
-          <summary>Show all {{ fresh|length }} (cheapest first)</summary>
+          <summary>Show all {{ fresh|length }} ({{ 'newest' if sort == 'new' else 'cheapest' }} first)</summary>
           <div class="listing-grid"></div>
         </details>
       {% endif %}

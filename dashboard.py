@@ -1306,15 +1306,15 @@ def telex():
     # Matching thousands of listings against every term takes a few seconds
     # (much longer while a scrape runs); reuse it for 3 minutes unless
     # something changed.
-    key = (tuple(terms), request.query_string, _data_version[0])
-    if _telex_cache["groups"] is None and not request.query_string:
+    key = (tuple(terms), _data_version[0])  # ?sort= only changes the display
+    if _telex_cache["groups"] is None:
         snap = _snapshot_load("telex")
         if snap is not None and [t for t, _, _ in snap] == terms:
             _telex_cache.update(key=None, at=0.0, groups=snap)
     fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180
     if fresh:
         groups = _telex_cache["groups"]
-    elif (_telex_cache["groups"] is not None and not request.query_string
+    elif (_telex_cache["groups"] is not None
           and [t for t, _, _ in _telex_cache["groups"]] == terms and not request.headers.get("X-Warm")):
         # Show the last list right away and refresh it in the background.
         groups = _telex_cache["groups"]
@@ -1332,12 +1332,38 @@ def telex():
     else:
         groups = _telex_matches(terms)
         _telex_cache.update(key=key, at=time.time(), groups=groups)
-        if not request.query_string:
-            _snapshot_save("telex", groups)
+        _snapshot_save("telex", groups)
         _verify_top_listings()
+    # What changed since you last looked: newest posts first inside each
+    # term (or cheapest first, one tap), terms with something new on top,
+    # and everything posted in the last 2 days collected at the top.
+    sort = "cheap" if request.args.get("sort") == "cheap" else "new"
+    age = lambda r: r.get("age_days") if r.get("age_days") is not None else 999
+    view, new_all = [], {}
+    from scrapers.board import _is_specific
+    from scrapers.enrich import parse_price
+    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 0
+    for term, items, unpriced in groups:
+        # Broad terms ("vintage microphone", "tube mic", "stam") match lots of
+        # cheap odds and ends: nothing under $150 there, and only $300+ (near
+        # your budget) in the "New" section. Specific models: any price.
+        specific = _is_specific(term)
+        if not specific:
+            items = [r for r in items if unit(r) >= 150]
+        fresh = [r for r in items if not r.get("is_old")]
+        old = [r for r in items if r.get("is_old")]
+        if sort == "new":
+            fresh = sorted(fresh, key=age)
+        new = [r for r in fresh if age(r) <= 2 and (specific or unit(r) >= 300)]
+        for r in new:
+            new_all.setdefault(r["url"], (r, term))
+        view.append({"term": term, "all_items": items, "fresh": fresh, "old": old, "unpriced": unpriced,
+                     "new_count": len(new)})
+    view.sort(key=lambda v: v["new_count"] == 0)  # stable: keeps your order otherwise
+    new_items = sorted(new_all.values(), key=lambda x: age(x[0]))
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
-    return render_template("telex.html", groups=groups, terms=terms,
+    return render_template("telex.html", groups=groups, terms=terms, view=view, new_items=new_items, sort=sort,
                            total=sum(len(g) for _, g, _ in groups), sweep=telex_state(),
                            model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 

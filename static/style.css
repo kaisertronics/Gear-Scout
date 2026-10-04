@@ -906,3 +906,6 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 .trend-down { color: #166534; font-weight: 600; }
 .trend-up { color: #b45309; font-weight: 600; }
 .last-searched { margin: 6px 0 0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.telex-new-item { display: flex; flex-direction: column; }
+.telex-new-term { font-size: 12px; font-weight: 700; color: var(--accent, #1e3a5f); margin: 0 0 4px 2px; }
+.telex-new-item .listing-card { flex: 1; }

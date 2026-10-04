@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-04",
+    "title": "Telex List: see what's new",
+    "items": [
+      "New “🆕 New on your Telex List” section at the top: everything posted in the last 2 days across all your terms, newest first, each labeled with its term.",
+      "Inside each term, newest posts now come first (one tap for “Cheapest first”), and terms with something new move to the top — the chips show how many are new.",
+      "Broad terms (“vintage microphone”, “tube mic”, “stam”…) no longer show odds and ends under $150, and only $300+ finds from them make the New section. Specific models show at any price."
+    ]
+  },
+  {
+    "date": "2026-10-04",
     "title": "Nightly update: alerts fixed, price drops, cleaner deals",
     "items": [
       "Fixed: steal alerts were never actually sent (a bug stopped every one). They work now.",
