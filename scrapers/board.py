@@ -70,7 +70,10 @@ def _brief(r: dict, unit: float, n: int) -> dict:
             "age_known": bool(r.get("posted_at"))}
 
 
-def build(cfg: dict) -> list[dict]:
+def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
+    """Rebuilds the whole board (hourly), or with `only`: just those terms,
+    merged into the saved board (seconds, when you add a term), dropping
+    terms no longer on your lists."""
     from scrapers.base import fix_brand_spelling
     from scrapers.comps import evaluate, price_index, similar_index
     from scrapers.enrich import (exclude_match, is_accessory_only, is_not_audio, is_partial, item_form,
@@ -84,6 +87,9 @@ def build(cfg: dict) -> list[dict]:
     telex = terms(cfg)
     tracked = [q for q in tracked_queries(cfg) if q.lower() not in {t.lower() for t in telex}]
     all_terms = [(t, "telex") for t in telex] + [(q, "tracked") for q in tracked]
+    wanted = [t for t, _ in all_terms]
+    if only is not None:
+        all_terms = [(t, k) for t, k in all_terms if t in only]
     exclude = cfg.get("exclude_words") or []
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
@@ -176,6 +182,10 @@ def build(cfg: dict) -> list[dict]:
         conn.executemany("INSERT OR REPLACE INTO board_history VALUES (?, ?, ?)",
                          [(r["term"], today.isoformat(), r["cheapest"]["unit"]) for r in board if r.get("cheapest")])
         conn.commit()
+    if only is not None:
+        merged = {r["term"]: r for r in load().get("rows") or []}
+        merged.update({r["term"]: r for r in board})
+        board = [merged[t] for t in wanted if t in merged]
     BOARD_PATH.write_text(json.dumps({"built": datetime.now(timezone.utc).isoformat(), "rows": board}))
     logger.info("Price Board: %d rows", len(board))
     return board

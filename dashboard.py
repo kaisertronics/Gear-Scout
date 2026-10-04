@@ -1312,6 +1312,19 @@ def telex():
         if snap is not None and [t for t, _, _ in snap] == terms:
             _telex_cache.update(key=None, at=0.0, groups=snap)
     fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180
+    cached = _telex_cache["groups"]
+    if (not fresh and cached is not None and not request.headers.get("X-Warm")
+            and [t for t, _, _ in cached] != terms):
+        # You added or removed a term: work out only the new one(s) — a few
+        # seconds — instead of all ~45 terms (a minute), then refresh the
+        # rest in the background.
+        have = {t: g for g in cached for t in [g[0]]}
+        missing = [t for t in terms if t not in have]
+        if len(missing) <= 5:
+            if missing:
+                have.update({g[0]: g for g in _telex_matches(missing, note=False)})
+            cached = [have[t] for t in terms]
+            _telex_cache.update(key=None, at=0.0, groups=cached)
     if fresh:
         groups = _telex_cache["groups"]
     elif (_telex_cache["groups"] is not None
@@ -1402,6 +1415,7 @@ def _run_telex_job(terms: list[str], fast_only: bool):
                 write("running", done=done, total=len(terms), current_source=futures[fut])
         write("done", done=len(terms), total=len(terms))
         _data_changed()
+        _terms_changed(terms)  # their Price Board rows include what the search just found
     except Exception as e:
         logging.exception("Telex search failed")
         write("failed", reason=str(e))
@@ -1436,6 +1450,20 @@ def telex_status():
     return st
 
 
+def _terms_changed(added: list[str] | None = None) -> None:
+    """After a Telex term is added or removed: update only what that term
+    touches — its Price Board row (in the background, a few seconds) — instead
+    of recalculating everything. The Telex page itself works out just the new
+    term on its next load."""
+    def run():
+        try:
+            from scrapers import board
+            board.build(load_config_raw(), only=added or [])
+        except Exception:
+            logging.exception("Price Board update for new terms failed")
+    threading.Thread(target=run, name="board-terms", daemon=True).start()
+
+
 @app.route("/telex/add", methods=["POST"])
 def telex_add():
     _data_changed()
@@ -1450,6 +1478,7 @@ def telex_add():
                 lower.add(t.lower())
         cfg["telex_list"] = terms
         save_config_raw(cfg)
+        _terms_changed(new)
     return redirect(url_for("telex"))
 
 
@@ -1478,6 +1507,7 @@ def telex_add_from_listing():
         cfg["telex_list"] = terms + [term]
         save_config_raw(cfg)
         _data_changed()
+        _terms_changed([term])
         # Search it right away on the fast sites (the hourly rotation adds
         # Facebook later), if no other Telex search is running.
         if _telex_thread is None or not _telex_thread.is_alive():
@@ -1497,6 +1527,7 @@ def telex_remove():
     cfg = load_config_for_edit()
     cfg["telex_list"] = [t for t in (cfg.get("telex_list") or []) if str(t).strip() != term]
     save_config_raw(cfg)
+    _terms_changed([])
     return redirect(url_for("telex"))
 
 
@@ -1552,6 +1583,7 @@ def _assistant_add_telex(term: str):
         cfg["telex_list"] = terms + [term]
         save_config_raw(cfg)
         _data_changed()
+        _terms_changed([term])
 
 
 def _assistant_live_search(term: str):
