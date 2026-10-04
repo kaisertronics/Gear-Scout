@@ -335,7 +335,11 @@ def check_telex_lowest(cfg: dict) -> int:
             continue
         value, r = best
         prev = state_rows.get(term)
-        if prev and prev["lowest"] and value < prev["lowest"] - 0.5 and r["url"] != prev["url"]:
+        # Only worth a push when the new lowest is also 10%+ under what the
+        # gear usually sells for (a new lowest that's still overpriced isn't news).
+        c_best = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
+        real_deal = bool(c_best and not c_best["est"] and value <= c_best["ref"] * 0.9)
+        if prev and prev["lowest"] and value < prev["lowest"] - 0.5 and r["url"] != prev["url"] and real_deal:
             key = (term, r["url"])
             if key not in alerted or value < (alerted[key] or 1e12) - 0.5:
                 n = quantity(r["title"] or "")

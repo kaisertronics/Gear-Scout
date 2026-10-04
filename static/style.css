@@ -894,3 +894,14 @@ section[id^="src-"] { scroll-margin-top: 64px; }
   margin-left: 4px; background: #f1f5f9; color: #475569; vertical-align: middle; }
 .age-tag.age-fresh { background: #dcfce7; color: #166534; }
 .age-tag.age-old { background: #f3f4f6; color: #9ca3af; }
+
+/* Price Board */
+.board-row h3 { margin: 0 0 8px; font-size: 16px; line-height: 1.45; }
+.board-item { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border, #e2e8f0);
+  color: inherit; text-decoration: none; }
+.board-item .lowest-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.board-item .lowest-title { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.board-label { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.board-item .lowest-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-weight: 700; }
+.trend-down { color: #166534; font-weight: 600; }
+.trend-up { color: #b45309; font-weight: 600; }

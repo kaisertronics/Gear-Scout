@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-10-03",
+    "title": "📊 Price Board (was Lowest Price)",
+    "items": [
+      "Lowest Price is now a Price Board that fills itself in: one row for every Telex term and tracked item, updated hourly — no typing needed.",
+      "Each row shows the best deal posted this week (biggest discount vs. what that gear usually sells for used) and, for specific models, the cheapest one for sale anywhere, plus how many are for sale, how many were posted this week, and whether the lowest price is going up or down.",
+      "For brand or category terms (“tube mic”, “stam”), only gear from $300 up — near your $500–$2,000 budget.",
+      "New-lowest-price alerts now only fire when the new lowest is also 10%+ under the usual used price.",
+      "Ads whose title says SOLD / UNAVAILABLE / “has been sold” are treated as sold everywhere.",
+      "The search box for looking up any item and your tracked items are still there, below the board."
+    ]
+  },
+  {
+    "date": "2026-10-03",
     "title": "Fresh ads, your budget, Facebook & Craigslist first",
     "items": [
       "Facebook Marketplace and Craigslist never say when an ad was posted in their search results — so old ads looked brand new. Gear Scout now reads the real posting date from each ad's own page when it checks whether it sold (no extra requests).",

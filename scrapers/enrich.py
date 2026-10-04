@@ -299,6 +299,17 @@ _MAIN_GEAR = re.compile(
     r"processors?|channel strips?|reverbs?|delays?|synths?|headphones?)\b", re.I)
 
 
+_SAYS_SOLD = re.compile(r"^\W*(?:sold|unavailable|no longer available|sale pending|pending)\s*(?:[-:!|/–—]|$)|^\W*(?:unavailable|sale pending)\b|\(\s*(?:sold|unavailable|pending)\s*\)|"
+                        r"\bsold out\b|\bhas been sold\b|\b(?:sorry,? )?sold\W*$", re.I)
+
+
+def title_says_sold(title: Optional[str]) -> bool:
+    """"(UNAVAILABLE) API 550a Pair", "SOLD - Neve 1073", "Sony C-38B …
+    Sorry, Has Been Sold": the seller edited the title instead of removing
+    the ad."""
+    return bool(_SAYS_SOLD.search(title or ""))
+
+
 @functools.lru_cache(maxsize=100_000)
 def is_accessory_only(title: Optional[str]) -> bool:
     t = title or ""

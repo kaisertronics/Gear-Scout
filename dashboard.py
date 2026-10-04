@@ -406,6 +406,7 @@ def _price_index() -> dict:
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
+    from scrapers.enrich import title_says_sold
     from scrapers.enrich import (build_price_index, exclude_match, is_accessory_only, is_not_audio,
                                  needs_repair, price_context)
 
@@ -438,7 +439,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
     now = datetime.now(timezone.utc)
     out = []
     for l in listings:
-        if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title"))
+        if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
                 or (hide_acc and is_accessory_only(l.get("title")))
                 or (hide_pedals and item_form(l.get("title")) == "pedal")):
             continue
@@ -1956,8 +1957,15 @@ def lowest():
     cfg = load_config_raw()
     q = normalize(request.args.get("q", ""))
     tracked = tracked_queries(cfg)
+    from scrapers import board as price_board
+    b = price_board.load()
+    rows = b.get("rows") or []
+    with_deal = sorted((r for r in rows if r.get("best")), key=lambda r: -r["best"]["pct"])
+    cheapest_only = sorted((r for r in rows if not r.get("best") and r.get("cheapest")),
+                           key=lambda r: -((r.get("comp") or {}).get("pct") or -999))
+    empty = [r for r in rows if not r.get("best") and not r.get("cheapest")]
     return render_template(
-        "lowest.html",
+        "lowest.html", board_rows=with_deal + cheapest_only, board_empty=empty, board_built=b.get("built"),
         q=q,
         current=get_state(q) if q else None,
         is_tracked=q in tracked,

@@ -424,6 +424,11 @@ def run_watch_cycle():
             check_telex_lowest(cfg)
         except Exception:
             logger.exception("Telex sweep / lowest-price check failed")
+        try:
+            from scrapers import board
+            board.build(cfg)
+        except Exception:
+            logger.exception("Price Board build failed")
         # Auctions: eBay's ending-soonest pro-audio auctions, then daytime
         # "ending soon" alerts and the 9 PM overnight-auctions list.
         try:

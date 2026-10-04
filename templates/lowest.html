@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Gear Scout — Lowest Price{% endblock %}
+{% block title %}Gear Scout — Price Board{% endblock %}
 
 {% macro ranked_list(top) %}
   {% if top %}
@@ -25,9 +25,45 @@
   {% endif %}
 {% endmacro %}
 
+{% macro board_item(label, c, extra) %}
+  <a class="board-item" href="{{ c.url }}" target="_blank" rel="noopener">
+    {% if c.image_url %}<img src="{{ c.image_url|img }}" alt="" class="lowest-img" loading="lazy">{% else %}<span class="lowest-img lowest-img-empty"></span>{% endif %}
+    <span class="lowest-info">
+      <span class="muted board-label">{{ label }}</span>
+      <span class="lowest-title">{{ c.title }}</span>
+      <span class="muted">{{ c.source }}{% if c.location %} · 📍 {{ c.location }}{% endif %}{% if c.age_days is not none %} · {{ '' if c.age_known else '~' }}{% if c.age_days < 1 %}today{% else %}{{ c.age_days|int }}d ago{% endif %}{% endif %}</span>
+    </span>
+    <span class="lowest-price">${{ '{:,.0f}'.format(c.unit) }}{% if c.qty > 1 %}<span class="listing-each">each ({{ c.qty }})</span>{% endif %}{{ extra|safe }}</span>
+  </a>
+{% endmacro %}
 {% block content %}
   <section class="panel">
-    <h2>💰 Lowest price</h2>
+    <h2>📊 Price Board <span class="muted">— your Telex List and tracked items, updated hourly{% if board_built %} · {{ board_built|local }}{% endif %}</span></h2>
+    <p class="muted">For each term: the <strong>best deal posted this week</strong> (biggest discount against what that gear
+      usually sells for used) and, for specific models, the <strong>cheapest one for sale anywhere</strong>. Price per piece;
+      parts, accessories, auctions and placeholder prices are left out. Best deals first. You get a push + email when a
+      new lowest shows up <em>and</em> it's 10%+ under the usual used price.</p>
+  </section>
+  {% for r in board_rows %}
+  <section class="panel board-row">
+    <h3>{{ r.term }} <span class="muted">— {{ r.count }} for sale · {{ r.fresh_count }} posted this week
+      {% if r.cheapest and r.was_week %}· {% set d = r.cheapest.unit - r.was_week %}{% if d < -1 %}<span class="trend-down">lowest ↓ ${{ '{:,.0f}'.format(-d) }} vs last week</span>{% elif d > 1 %}<span class="trend-up">lowest ↑ ${{ '{:,.0f}'.format(d) }} vs last week</span>{% else %}lowest steady vs last week{% endif %}{% endif %}
+      · <a href="{{ url_for('telex') }}">Telex</a> · <a href="{{ url_for('search', q=r.term) }}">search</a></span></h3>
+    {% if r.best %}{{ board_item("Best deal this week", r.best, '<span class="flag flag-deal">' ~ r.best.pct ~ '% under</span><span class="listing-each">vs ~$' ~ '{:,.0f}'.format(r.best.ref) ~ '</span>') }}{% endif %}
+    {% if r.cheapest and (not r.best or r.cheapest.url != r.best.url) %}
+      {% set pct = r.comp.pct if r.comp else none %}
+      {{ board_item("Cheapest anywhere (any age)", r.cheapest, ('<span class="listing-each">' ~ (pct ~ '% under' if pct and pct > 0 else ((-pct) ~ '% over usual' if pct else 'no comp yet')) ~ (' vs ~$' ~ '{:,.0f}'.format(r.comp.ref) if r.comp else '') ~ '</span>')) }}
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% if board_empty %}
+  <section class="panel">
+    <p class="muted">Nothing for sale right now: {{ board_empty|map(attribute='term')|join(' · ') }}</p>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>💰 Look up any item</h2>
     <p class="muted">
       Finds the 10 cheapest listings of an item across every source right now. Track an item and
       you'll get a push notification and an email whenever something is listed below its current
