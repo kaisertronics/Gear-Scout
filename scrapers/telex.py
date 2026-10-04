@@ -322,8 +322,13 @@ def check_telex_lowest(cfg: dict) -> int:
             value = parse_price(r["price"])
             if not value or value < 20:
                 continue
-            if quantity(title) > 1:
-                value = value / quantity(title)
+            n = quantity(title, r.get("description"))
+            if n > 1:
+                # Per piece — unless the price is close to one unit's usual
+                # price, which means it's per piece already.
+                c_q = evaluate(title, r["price"], r.get("description"), r["url"], market, index, similar)
+                from scrapers.enrich import price_basis
+                value = price_basis(title, r.get("description"), value, c_q["ref"] if c_q else None)[2]
             if best is not None and value >= best[0]:
                 continue
             # Not a real price for the item: under a fifth of its comp.

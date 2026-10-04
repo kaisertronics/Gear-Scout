@@ -50,6 +50,19 @@ def _is_specific(term: str) -> bool:
     return bool(words) and (bool(brand) or len(words[0]) >= 6)
 
 
+def _unit(r: dict, unit: float, n: int, c) -> tuple[float, int]:
+    """Price per piece for a several-piece ad: "Selling 3 Apollo x8p —
+    C$2,800" is almost certainly C$2,800 each (a mint x8p goes for ~$1,800),
+    not three for C$2,800. Uses the same rule as everywhere else: a price
+    near ONE unit's usual price is per piece."""
+    if n < 2 or not c:
+        return unit, n
+    from scrapers.enrich import parse_price, price_basis
+    value = parse_price(r["price"]) or unit * n
+    basis, qty, per = price_basis(r["title"], r.get("description"), value, c["ref"])
+    return per, (qty if basis.startswith("each") or basis == "set" else n)
+
+
 def _brief(r: dict, unit: float, n: int) -> dict:
     return {"title": r["title"], "price": r["price"], "unit": unit, "qty": n, "url": r["url"],
             "image_url": r.get("image_url"), "source": (r.get("source_name") or "").split(" — ")[0],
@@ -113,6 +126,7 @@ def build(cfg: dict) -> list[dict]:
         cheapest = comp = None
         for unit, n, r in cands[:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
+            unit, n = _unit(r, unit, n, c)
             if c and unit < c["ref"] * 0.2:
                 continue
             cheapest, comp = _brief(r, unit, n), c
@@ -131,6 +145,7 @@ def build(cfg: dict) -> list[dict]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             if not c or c["est"] or c["ref"] < 100:
                 continue
+            unit, n = _unit(r, unit, n, c)
             pct = round((1 - unit / c["ref"]) * 100)
             if 10 <= pct <= 80 and (best is None or pct > best[0]):
                 best = (pct, _brief(r, unit, n), c)
