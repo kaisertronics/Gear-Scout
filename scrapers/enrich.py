@@ -132,10 +132,12 @@ _PART_WORDS = re.compile(r"\b(?:input|output|interstage|mic) transformers?\b|\bt
 _TUBE_TYPES = re.compile(
     r"\b(?:12a[xtuy]7a?|12ay7|ecc8[1-3]|ecc88|e8[0-9]cc|el3[4-7]|el84|6l6\w*|6v6\w*|6ca7|kt\d{2}|ef86|ef14|"
     r"6072a?|5751|6sn7\w*|6sl7\w*|6922|7025|6267|5879|vf14|ac701|6au6|6as7|5ar4|gz3[2-4]|5y3|274b|300b|2a3|"
-    r"6dj8|6bq5|6bq7|6cg7|6fq7|e88cc|cv4004)\b", re.I)
+    r"6dj8|6bq5|6bq7|6cg7|6fq7|e88cc|cv4004|ec80\d\d|ec8[0-9]|ef8[0-9]|e180f|e288cc|pcc88|6sj7|6j5)\b"
+    r"|\bgold pins?\b", re.I)
 _PART_NAMED = re.compile(
     r"\b(?:power suppl(?:y|ies)|psu|meter bridge|vu meters?|capstan(?: motor)?|head ?stack|head ?block|"
-    r"pinch roller|capsules?|tubes? only|valves? only|faceplate|front panel|chassis only|pcb set|board set|"
+    r"pinch roller|capsules?|tubes? only|valves? only|face ?plate|front panel|chassis only|pcb set|board set|"
+    r"\(part\)|part only|grilles?|speaker grill|voice coils?|replacement diaphragm|"
     r"tube set|tube kit|valve set|tube replacement|retube kit|transformers?|part:|part #|part number|"
     r"insert jack|input jack|output jack|channel strip board|replacement (?:board|card|module)|card only|"
     r"knobs?|lamps?|bulbs?|rack ears?|input panel|break-?in panel|push ?button switch|switch caps?|"
@@ -269,7 +271,7 @@ _JUNK = re.compile(
     r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
-    r"gift wrap|scrapbook|sewing|craft ribbon|"
+    r"gift wrap|scrapbook|sewing|craft ribbon|decor|decoration|ornament|prop microphone|"
     # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
     r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"
     # air / HVAC compressors
@@ -329,8 +331,9 @@ def is_accessory_only(title: Optional[str]) -> bool:
     # the accessory is extra, the listing is the gear.
     # Also a list of gear: "Apollo Twin X, Shure SM7B, M50x, Mic Arm",
     # "Blue microphone and Blue boom arm", "SM7B / Rode PSA1 arm".
-    if re.search(joiner, before, re.I) or (re.search(r",|\band\b|\s/\s|\||–", before)
-                                          and (_MAIN_GEAR.search(before) or _model_tokens(before))):
+    # (years and decades like "1930s / 20s" aren't model numbers)
+    real_models = {m for m in _model_tokens(before) if not re.fullmatch(r"(?:19|20)?\d0|(?:19|20)\d\d", m)}
+    if re.search(joiner, before, re.I) or (re.search(r",|\band\b|\s/\s|\||–", before) and real_models):
         return False
     # "Gator rack case with Lexicon PCM 70": gear comes with it.
     # (but "Boom Arm with Pop Filter - Mic Arm": "mic" there describes an accessory)
@@ -617,11 +620,25 @@ def _canonical_model(brand: str, model: str) -> str:
 _CLONE_WORD = r"(?:clone|replica|copy|style|inspired|tribute|based)"
 
 
+# Makers whose products are mostly copies of classic gear, and say so by
+# naming the original ("Stam SA-432D+ Sontec 432D9", "Stam Pultec MEQP-1A+").
+_CLONE_MAKERS = {"stam", "warm-audio", "golden-age", "audioscape", "lindell", "klark-teknik", "behringer",
+                 "drip", "heritage-audio", "black-lion", "chameleon", "soundskulptor", "sound-skulptor",
+                 "wes-audio", "korneff", "aml", "capi", "hairball", "rupert-neve-designs"}
+
+
 def strip_clone_reference(title: Optional[str]) -> str:
     """Takes out the gear a clone imitates, so "Warm Audio EQP-WA (Pultec
     EQP-1A clone)" is valued as the EQP-WA and "Clone Neve 1073 Chameleon
     Labs 7602" as the 7602, never as the real Pultec / Neve."""
     text = title or ""
+    maker = canonical_brand(text)
+    if maker in _CLONE_MAKERS:
+        # Drop every other brand name (and the model right after it).
+        def drop(m):
+            return "" if _ALIAS_TO_BRAND.get(m.group(1).lower()) not in (None, maker) else m.group(0)
+        text = re.sub(r"(?i)(?<![a-z0-9])(" + "|".join(re.escape(a) for a in sorted(_ALIAS_TO_BRAND, key=len, reverse=True))
+                      + r")(?![a-z0-9])(?:[\s-]+[a-z]*\d[\w+-]*)?", drop, text)
     if not re.search(rf"\b{_CLONE_WORD}\b", text, re.I):
         return text
     # "(Pultec EQP-1A Tube Equalizer clone)", "[U47 style]"

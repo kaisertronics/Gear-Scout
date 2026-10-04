@@ -252,7 +252,7 @@ def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optio
     from scrapers.notify import push_enabled, send_push
 
     was = f"${previous_lowest:,.0f}" if previous_lowest is not None else "?"
-    repair = (" (clone)" if alert.get("is_clone") else "") + (" (needs repair)" if alert["needs_repair"] else "")
+    repair = (" (clone)" if alert.get("is_clone") else "") + (" (needs repair)" if alert.get("needs_repair") else "")
     if push_enabled(cfg):
         send_push(
             cfg, f"New lowest price: {query}",

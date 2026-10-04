@@ -619,7 +619,10 @@ def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
 def _deals_from(grouped: list[tuple]) -> list[dict]:
     """Every deal across all sources, biggest discount first — shown in its
     own section above the per-source groups."""
-    deals = [l for _, items in grouped for l in items if l.get("is_deal")]
+    # Around your budget ($500–$2,000, with some room): no $25 interfaces.
+    lo, hi = BUDGET[0] * 0.6, BUDGET[1] * 1.25
+    deals = [l for _, items in grouped for l in items if l.get("is_deal")
+             and lo <= ((l.get("price_ctx") or {}).get("unit_value") or 0) <= hi]
     return sorted(deals, key=lambda l: l["price_ctx"].get("pct_under", 0), reverse=True)
 
 
@@ -805,13 +808,16 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
     from scrapers.enrich import is_accessory_only, is_partial, item_form
     out = []
     for term in terms:
-        hits, seen_urls = [], set()
+        hits, seen_urls, seen_ads = [], set(), set()
         match = matcher(term)
         # "LA-2A" means the studio unit: pedal and plugin versions only show
         # when the term asks for them ("LA-2A pedal").
         term_form = item_form(term)
         for r, text in zip(rows, texts):
             if r["url"] in seen_urls or not match(text):
+                continue
+            ad = ((r["title"] or "").lower().strip(), r["price"])
+            if ad in seen_ads:  # the same ad stored twice (another link to it)
                 continue
             form = item_form(r["title"])
             if form in ("pedal", "plugin") and form != term_form:
@@ -821,6 +827,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
             if is_partial(r["title"]) or is_accessory_only(r["title"]):
                 continue
             seen_urls.add(r["url"])
+            seen_ads.add(ad)
             hits.append(r)
             if len(hits) >= 3000:
                 break
@@ -1037,7 +1044,7 @@ def _snapshot_save(name: str, data) -> None:
     wait 30-80s while everything is recalculated."""
     import pickle
     try:
-        tmp = Path(f"/data/.snap_{name}.tmp")
+        tmp = Path(f"/data/.snap_{name}.{threading.get_ident()}.tmp")
         tmp.write_bytes(pickle.dumps(data))
         tmp.replace(Path(f"/data/.snap_{name}.pkl"))
     except Exception:
@@ -1059,7 +1066,7 @@ _deals_cache: dict = {"key": None, "at": 0.0, "data": None}
 _deals_state = {"running": False}
 STEAL_LEVELS = (50, 60, 70, 80)
 DEAL_AGES = (("1", "Today"), ("3", "3 days"), ("7", "This week"), ("30", "This month"), ("all", "Any age"),
-             ("old", "Older than a week"))
+             ("old", "Older than a week"), ("dropped", "📉 Price just cut"))
 DEAL_PRICES = (("500-2000", "$500–$2,000"), ("0-500", "Under $500"), ("2000-", "$2,000+"), ("any", "Any price"))
 # The owner wants fresh ads (last few days): anything posted more than a
 # week ago goes to a collapsed "older" section on every page.
@@ -1068,6 +1075,14 @@ BUDGET = (500, 2000)  # what the owner usually spends
 # Facebook Marketplace and Craigslist come first: local sellers price
 # lowest, and many ship these days.
 _LOCAL_FIRST = ("FB Marketplace", "Craigslist", "OfferUp", "Kijiji", "FB —", "seattle group")
+
+
+def _dropped_recently(l: dict, days: int = 7) -> bool:
+    """The seller cut the price in the last week (usually a motivated seller)."""
+    when = l.get("price_dropped_at")
+    if not when or not l.get("previous_price"):
+        return False
+    return when >= (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
 def _fresh_order(l: dict):
@@ -1169,6 +1184,8 @@ def deals():
     def keep(l):
         a = l.get("age_days")
         a = 0 if a is None else a
+        if age == "dropped":
+            return in_price(l) and _dropped_recently(l)
         return in_price(l) and (a > FRESH_DAYS if age == "old" else (age == "all" or a <= float(age)))
     trusted = [l for l in d["trusted"] if keep(l)]
     rough = [l for l in d["rough"] if keep(l)]
@@ -1179,7 +1196,8 @@ def deals():
     trusted.sort(key=order.get(sort, order["new"]))
     rough.sort(key=order.get(sort, order["new"]))
     counts = {k: sum(1 for l in d["trusted"] if in_price(l) and (
-        lambda a: a > FRESH_DAYS if k == "old" else (k == "all" or a <= float(k)))(l.get("age_days") or 0))
+        _dropped_recently(l) if k == "dropped" else
+        (lambda a: a > FRESH_DAYS if k == "old" else (k == "all" or a <= float(k)))(l.get("age_days") or 0)))
         for k, _ in DEAL_AGES}
     _verify_top_listings()
     return render_template("deals.html", trusted=trusted, rough=rough, age=age, sort=sort, ages=DEAL_AGES,

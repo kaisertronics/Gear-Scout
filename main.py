@@ -437,6 +437,12 @@ def run_watch_cycle():
             auctions.check(cfg)
         except Exception:
             logger.exception("Auction check failed")
+        # Price cuts that turn an ad into a deal (in budget): push + email.
+        try:
+            from scrapers import price_drops
+            price_drops.alert(cfg)
+        except Exception:
+            logger.exception("Price-drop check failed")
         # New steals (60%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new

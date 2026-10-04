@@ -1,5 +1,18 @@
 [
   {
+    "date": "2026-10-04",
+    "title": "Nightly update: alerts fixed, price drops, cleaner deals",
+    "items": [
+      "Fixed: steal alerts were never actually sent (a bug stopped every one). They work now.",
+      "New: price-drop alerts — when a seller cuts the price of something in your range and it becomes a real deal (15%+ under what it sells for used), you get a push + email. Sellers who drop their price are usually open to offers too.",
+      "New on Deals: “📉 Price just cut” — every deal whose price was lowered in the last week.",
+      "Clone makers that name the original (“Stam SA-432D+ Sontec 432D9”, “Stam Pultec MEQP-1A+”) are now priced as the Stam, not the $14,000 original.",
+      "Filtered out: loose vacuum tubes (e.g. EC8020 “gold pins”), speaker grilles, voice coils / replacement diaphragms, “(PART)” face plates, mic desk stands and “microphone decor”.",
+      "Dashboard “Deals” section keeps to $300–$2,500 (no $25 interfaces); the same ad listed twice shows once on the Telex List.",
+      "Accuracy check of 60 listings on your pages: ~88% real studio gear and ~93% right comparisons before tonight's fixes; all junk and wrong comps found are fixed."
+    ]
+  },
+  {
     "date": "2026-10-03",
     "title": "📊 Price Board (was Lowest Price)",
     "items": [
