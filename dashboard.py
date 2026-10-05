@@ -460,11 +460,10 @@ _price_index_cache: dict = {"at": 0.0, "index": None}
 def _price_index() -> dict:
     """Typical prices from local history — rebuilt at most every 5 minutes
     (it reads every priced listing and takes a couple of seconds)."""
-    from scrapers.comps import _index_cache, price_index
-    if _price_index_cache["at"] == 0:
-        _index_cache["at"] = 0  # forced rebuild requested (cache warmer)
+    from scrapers.comps import price_index
+    forced = _price_index_cache["at"] == 0  # the cache warmer asks for a fresh one
     _price_index_cache["at"] = time.time()
-    return price_index()
+    return price_index(force=forced)
 
 
 def _decorate(listings: list[dict]) -> list[dict]:
@@ -1310,7 +1309,7 @@ def telex():
     key = (tuple(terms), _data_version[0])  # ?sort= only changes the display
     if _telex_cache["groups"] is None:
         snap = _snapshot_load("telex")
-        if snap is not None and [t for t, _, _ in snap] == terms:
+        if snap is not None:  # terms changed since? only the differences get worked out below
             _telex_cache.update(key=None, at=0.0, groups=snap)
     fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180
     cached = _telex_cache["groups"]
@@ -1467,7 +1466,8 @@ def _terms_changed(added: list[str] | None = None) -> None:
 
 @app.route("/telex/add", methods=["POST"])
 def telex_add():
-    _data_changed()
+    # No full recalculation: the Telex page works out only the new term(s);
+    # Dashboard and Deals pick the term up on their regular refresh.
     new = [l.strip() for l in request.form.get("terms", "").splitlines() if l.strip()]
     if new:
         cfg = load_config_for_edit()
@@ -1507,7 +1507,6 @@ def telex_add_from_listing():
     if not already:
         cfg["telex_list"] = terms + [term]
         save_config_raw(cfg)
-        _data_changed()
         _terms_changed([term])
         # Search it right away on the fast sites (the hourly rotation adds
         # Facebook later), if no other Telex search is running.
@@ -1523,7 +1522,6 @@ def telex_add_from_listing():
 
 @app.route("/telex/remove", methods=["POST"])
 def telex_remove():
-    _data_changed()
     term = request.form.get("term", "").strip()
     cfg = load_config_for_edit()
     cfg["telex_list"] = [t for t in (cfg.get("telex_list") or []) if str(t).strip() != term]
@@ -1583,7 +1581,6 @@ def _assistant_add_telex(term: str):
     if term.lower() not in (str(t).lower() for t in terms):
         cfg["telex_list"] = terms + [term]
         save_config_raw(cfg)
-        _data_changed()
         _terms_changed([term])
 
 

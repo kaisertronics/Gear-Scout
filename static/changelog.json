@@ -5,7 +5,9 @@
     "items": [
       "Adding a Telex term (the box, the 📋 button on a listing, or Ask AI) now takes a few seconds instead of a minute: only the new term is worked out, and its Price Board row updates in the background. Removing a term is instant.",
       "Any button you press greys out and says “⏳ Working…” until the page comes back, so you know it's doing something.",
-      "Scrape and search buttons stay greyed out (“⏳ Running…”) on every page while their job is still running in the background, and come back when it's done."
+      "Scrape and search buttons stay greyed out (“⏳ Running…”) on every page while their job is still running in the background, and come back when it's done.",
+      "Much faster overall: the price-history rebuild (every 5 minutes) used to run inside whichever page you opened — up to a minute's wait (Search took 39s). It now runs in the background and is 4–5x faster; Search opens in 2–7s.",
+      "Adding or removing a Telex term no longer makes the Dashboard and Deals recalculate everything; Telex opens instantly after an update even if your terms changed."
     ]
   },
   {

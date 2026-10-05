@@ -25,11 +25,23 @@ FLOOR_RATIO = 0.2   # under a fifth of the comp = a mismatch or placeholder
 _index_cache: dict = {"at": 0.0, "index": None}
 
 
-def price_index() -> dict:
-    """Typical prices from Gear Scout's own history, rebuilt every 5 minutes."""
+def price_index(force: bool = False) -> dict:
+    """Typical prices from Gear Scout's own history, refreshed every 5
+    minutes — in the background: a page never waits for the rebuild (it
+    reads every priced listing), it uses the last one."""
     from scrapers.enrich import build_price_index
-    if _index_cache["index"] is None or time.time() - _index_cache["at"] > 300:
+    if force or _index_cache["index"] is None:
         _index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
+    elif time.time() - _index_cache["at"] > 300 and not _index_cache.get("running"):
+        import threading
+
+        def rebuild():
+            _index_cache["running"] = True
+            try:
+                _index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
+            finally:
+                _index_cache["running"] = False
+        threading.Thread(target=rebuild, name="price-index", daemon=True).start()
     return _index_cache["index"]
 
 

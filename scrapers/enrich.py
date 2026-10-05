@@ -722,7 +722,13 @@ def _model_variant(title: Optional[str], query: str) -> Optional[str]:
     shown = (query or "").split()[-1] if query else ""
     if not shown or not title:
         return None
-    m = re.search(re.escape(shown) + _VARIANT.pattern, title, re.I)
+    # (Built a new pattern per title before — thousands of regex compiles
+    # every time the price history was rebuilt.)
+    low, needle = title.lower(), shown.lower()
+    i, m = low.find(needle), None
+    while i != -1 and not m:
+        m = _VARIANT.match(title, i + len(needle))
+        i = low.find(needle, i + 1)
     if not m:
         return None
     v = re.sub(r"\W|mark|mk", "", m.group(1).lower())
