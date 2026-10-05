@@ -26,13 +26,13 @@ _index_cache: dict = {"at": 0.0, "index": None}
 
 
 def price_index(force: bool = False) -> dict:
-    """Typical prices from Gear Scout's own history, refreshed every 5
+    """Typical prices from Gear Scout's own history, refreshed every 15
     minutes — in the background: a page never waits for the rebuild (it
     reads every priced listing), it uses the last one."""
     from scrapers.enrich import build_price_index
     if force or _index_cache["index"] is None:
         _index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
-    elif time.time() - _index_cache["at"] > 300 and not _index_cache.get("running"):
+    elif time.time() - _index_cache["at"] > 900 and not _index_cache.get("running"):
         import threading
 
         def rebuild():

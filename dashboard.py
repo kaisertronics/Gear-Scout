@@ -990,10 +990,8 @@ def _verify_top_listings():
                 return u, gone
             with ThreadPoolExecutor(max_workers=4) as pool:
                 gone = [u for u, g in pool.map(one, todo) if g]
-            for u, g in check_fb(fb):
-                _record(u, g)
-                if g:
-                    gone.append(u)
+            # Facebook ads need a real browser — heavy on this Mac — so they're
+            # left to the scraper's hourly sold check (ads on your pages first).
             if gone:
                 with _conn() as conn:
                     gids = [g for (g,) in conn.execute(
@@ -1071,6 +1069,9 @@ DEAL_PRICES = (("500-2000", "$500–$2,000"), ("0-500", "Under $500"), ("2000-",
 # week ago goes to a collapsed "older" section on every page.
 FRESH_DAYS = 7
 BUDGET = (500, 2000)  # what the owner usually spends
+# Pages are recalculated when something changes (a scrape finishes, you hide /
+# star / change terms) — otherwise at most every 15 minutes.
+PAGE_REFRESH = 900
 # Facebook Marketplace and Craigslist come first: local sellers price
 # lowest, and many ship these days.
 _LOCAL_FIRST = ("FB Marketplace", "Craigslist", "OfferUp", "Kijiji", "FB —", "seattle group")
@@ -1114,7 +1115,7 @@ def _all_deals(background: bool = False) -> dict:
     over everything stored, so it's reused for 10 minutes unless something
     changed, rebuilt in the background, and kept warm."""
     key = (_data_version[0], _last_change_marker())
-    if _deals_cache["key"] == key and time.time() - _deals_cache["at"] < 600:
+    if _deals_cache["key"] == key and time.time() - _deals_cache["at"] < PAGE_REFRESH:
         return _deals_cache["data"]
     if _deals_cache["data"] is None and not background:
         snap = _snapshot_load("deals")
@@ -1311,7 +1312,7 @@ def telex():
         snap = _snapshot_load("telex")
         if snap is not None:  # terms changed since? only the differences get worked out below
             _telex_cache.update(key=None, at=0.0, groups=snap)
-    fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < 180
+    fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < PAGE_REFRESH
     cached = _telex_cache["groups"]
     if (not fresh and cached is not None and not request.headers.get("X-Warm")
             and [t for t, _, _ in cached] != terms):
@@ -1806,7 +1807,7 @@ def _index_listings(cfg) -> dict:
     reused for 3 minutes unless something changed (hide, favorite, settings,
     a finished scrape). The cache warmer keeps the default view ready."""
     key = (request.query_string, _last_change_marker())
-    if _index_cache["key"] == key and time.time() - _index_cache["at"] < 180:
+    if _index_cache["key"] == key and time.time() - _index_cache["at"] < PAGE_REFRESH:
         return _index_cache["data"]
     # Right after a restart: show the last Dashboard saved on disk at once
     # and rebuild in the background (the cache warmer does it).
@@ -2727,11 +2728,12 @@ def _keep_caches_warm():
     open fast even right after a restart or a big scrape."""
     while True:
         try:
-            _price_index_cache["at"] = 0  # force a rebuild
+            # Only what's out of date gets redone (it used to force every
+            # rebuild every 3 minutes — a constant load on the old Mac).
             _price_index()
             from scrapers.learning import sale_stats, taste
-            taste(max_age_seconds=0)
-            sale_stats(max_age_seconds=0)
+            taste()
+            sale_stats()
             from scrapers.market import load_market
             load_market()
             # The Dashboard's default view, ready before anyone asks.
@@ -2751,7 +2753,7 @@ def _keep_caches_warm():
             _verify_top_listings()
         except Exception:
             logging.exception("Cache warm-up failed")
-        time.sleep(170)
+        time.sleep(300)
 
 
 if __name__ == "__main__":

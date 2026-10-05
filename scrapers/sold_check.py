@@ -262,7 +262,7 @@ def check_fb(urls: list[str]):
         logger.exception("Facebook sold check skipped")
 
 
-def run_sold_check(max_http: int = 120, max_fb: int = 100) -> dict:
+def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     """Website checks run 4 at a time while the Facebook checks (one
     browser, paced) run alongside them."""
     import threading
