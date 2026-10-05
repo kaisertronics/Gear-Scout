@@ -177,6 +177,24 @@ def _lazy_context():
             "last_searches": _last_searches}
 
 
+_last_use = {"at": 0.0}
+
+
+@app.after_request
+def _note_owner_activity(resp):
+    """Remembers when you last opened a page (not background checks or
+    polling), so updates wait instead of restarting Gear Scout while you're
+    using it (scripts/safe_deploy.sh reads /data/last_user_request)."""
+    if (resp.mimetype == "text/html" and not request.headers.get("X-GearScout-Test")
+            and not request.headers.get("X-Warm") and time.time() - _last_use["at"] > 20):
+        _last_use["at"] = time.time()
+        try:
+            Path("/data/last_user_request").touch()
+        except OSError:
+            pass
+    return resp
+
+
 @app.after_request
 def _no_stale_pages(resp):
     """Pages always come fresh (phones, especially iPhones, otherwise

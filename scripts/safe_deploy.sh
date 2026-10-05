@@ -11,6 +11,15 @@ for f in manual_scrape_status live_search_status lowest_status fbposts_status te
     exit 1
   fi
 done
+# Don't restart while you're using Gear Scout (a page opened in the last 3
+# minutes): the site would drop out for ~30-60s under you.
+if [ "$target" != "scout" ] && [ -z "$FORCE_DEPLOY" ]; then
+  idle=$(docker exec gear-scout-dashboard sh -c 'f=/data/last_user_request; [ -f $f ] && echo $(( $(date +%s) - $(stat -c %Y $f) )) || echo 9999' 2>/dev/null || echo 9999)
+  if [ "$idle" -lt 180 ]; then
+    echo "Not deploying: you're using Gear Scout right now (last page ${idle}s ago). Try again in a few minutes."
+    exit 1
+  fi
+fi
 if [ "$target" != "dashboard" ]; then
   last_start=$(docker compose logs scout --since 30m 2>&1 | grep -c "Gear Scout run #" || true)
   last_done=$(docker compose logs scout --since 30m 2>&1 | grep -c "complete\." || true)
