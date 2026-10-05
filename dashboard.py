@@ -10,7 +10,7 @@ Run with: python3 dashboard.py  (inside the container — see docker-compose.yml
 import json
 from typing import Optional
 
-from scrapers.comps import best_comp, similar_index
+from scrapers.comps import believable, best_comp, similar_index
 import logging
 import os
 import re
@@ -627,7 +627,7 @@ def _apply_comp_rule(listings: list[dict]) -> tuple[list[dict], list[dict]]:
                 no_comp.append(l)
                 continue
             ref, label, est = comp
-        if ref * 0.2 <= value <= ref * 0.9:
+        if ref * 0.2 <= value <= ref * 0.9 and believable(value, ref, est):
             l["comp"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}", "label": label, "est": est}
             worth.append(l)
     return worth, no_comp
@@ -908,7 +908,7 @@ def _telex_matches(terms: list[str], per_term: int = 1000, strict: bool = False,
             value = (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price"))
             if comp and value:
                 ref, label, est = comp
-                if ref * 0.2 <= value <= ref * 0.9:
+                if ref * 0.2 <= value <= ref * 0.9 and believable(value, ref, est):
                     r["comp"] = {"pct": round((1 - value / ref) * 100), "ref": f"${ref:,.0f}",
                                  "label": label, "est": est}
                     good.append(r)
@@ -1903,7 +1903,9 @@ def _build_index_listings(cfg) -> dict:
         Path("/data/shown_dashboard.txt").write_text("\n".join(dict.fromkeys(u for u in shown if u)))
     except OSError:
         pass
-    return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you, "deals": _deals_from(grouped),
+    picked = {l.get("url") for l in for_you}
+    return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you,
+            "deals": [l for l in _deals_from(grouped) if l.get("url") not in picked],  # each ad once
             "auctions": auctions, "old": old}
 
 

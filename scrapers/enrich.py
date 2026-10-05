@@ -272,6 +272,9 @@ _JUNK = re.compile(
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
     r"gift wrap|scrapbook|sewing|craft ribbon|decor|decoration|ornament|prop microphone|"
+    # wireless systems that don't say "wireless", car audio, test gear
+    r"wms[\s-]?\d+\w*|ism\d?|uhf|vhf|bodypack|phoenix gold|\d+(?:\.\d)?\s?(?:watts? )?rms|tube tester|"
+    r"multimeter|oscilloscope|signal generator|bass trainer|metronome|"
     # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
     r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"
     # air / HVAC compressors
@@ -294,7 +297,7 @@ _ACCESSORY_ONLY = re.compile(
     r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
     r"rack rails|rack shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
     r"suspensions?|desktop enclosure|(?:usb|adat|dante|madi|option|expansion)(?:\s*/\s*\w+)?\s+cards?|"
-    r"(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
+    r"goosenecks?|gooseneck module|(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
 _MAIN_GEAR = re.compile(
     r"\b(?:microphones?|mics?|preamps?|pre-amps?|compressors?|limiters?|interfaces?|mixers?|consoles?|"
     r"monitors?|speakers?|recorders?|decks?|equalizers?|eqs?|amps?|amplifiers?|receivers?|transmitters?|"
@@ -315,6 +318,10 @@ def title_says_sold(title: Optional[str]) -> bool:
 @functools.lru_cache(maxsize=100_000)
 def is_accessory_only(title: Optional[str]) -> bool:
     t = title or ""
+    # "HOSA 15 ft. XLR-F to DB25": a cable, named by its length and plugs.
+    if re.search(r"\b\d+\s?(?:ft|feet|foot|m)\b\.?", t, re.I) and re.search(r"\b(?:xlr|db-?25|trs|ts|rca|1/4|bantam|tt)\b", t, re.I) \
+            and not _MAIN_GEAR.search(t) and not re.search(r"\bpatch ?bay\b", t, re.I):
+        return True
     # "RCA BK-6B Clamp Part No 210221": a numbered spare part, whatever it fits.
     # "C414 Original Case Shock Mount Windscreen Accessory": says so itself.
     if re.search(r"\baccessor(?:y|ies)\b", t, re.I) and _ACCESSORY_ONLY.search(t) \
@@ -338,7 +345,8 @@ def is_accessory_only(title: Optional[str]) -> bool:
     # "Gator rack case with Lexicon PCM 70": gear comes with it.
     # (but "Boom Arm with Pop Filter - Mic Arm": "mic" there describes an accessory)
     gear_after = _MAIN_GEAR.search(after)
-    if gear_after and _ACCESSORY_ONLY.match(after[gear_after.end():].lstrip()):
+    if gear_after and (_ACCESSORY_ONLY.match(after[gear_after.end():].lstrip())
+                       or not after[:gear_after.start()].strip()):  # "Boom Arm Microphone…"
         gear_after = None
     if re.search(joiner, after, re.I) and (gear_after or _model_tokens(after)
                                            or canonical_brand(after)):
@@ -346,9 +354,9 @@ def is_accessory_only(title: Optional[str]) -> bool:
     # "Pop filter for mic", "Case for Neumann U87": made for the gear.
     if re.match(r"\s*(?:\([^)]*\)\s*)?(?:for|fits)\b", after, re.I):
         return True
-    # "Microphone stand", "XLR microphone cables", "Monitor isolation pads":
-    # the gear word is only describing the accessory.
-    return not _MAIN_GEAR.search(after)
+    # "Microphone stand", "XLR microphone cables", "Monitor isolation pads",
+    # "Boom Arm Microphone Broadcast": the gear word only describes the accessory.
+    return not gear_after
 
 
 @functools.lru_cache(maxsize=100_000)

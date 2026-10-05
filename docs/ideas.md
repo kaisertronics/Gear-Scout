@@ -10,3 +10,6 @@ change how you use Gear Scout). Smaller improvements just get done.
 
 - **Offer helper for price-cut ads** — for ads whose price has been cut (or sat 3+ weeks), suggest an offer amount and a short message (the 🤖 deal check already drafts one; could be one tap from the card).
 - **Sharper Telex terms** — broad terms (stam, ssl, drawmer, daking, link audio) match lots of unrelated gear; suggest specific models based on what you've starred.
+
+- **Guitar Center / Sweetwater used gear** — both block automated visits (Akamai “Access Denied”, PerimeterX captcha). If you sign up for their own used-gear email alerts, those emails could be fed into Gear Scout.
+- **Fewer, sharper Telex terms** — brand-only terms (stam, ssl, drawmer, daking, maag, phoenix audio, link audio) still match hundreds of listings; specific models would make the Price Board and New section sharper.

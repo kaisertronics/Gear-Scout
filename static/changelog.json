@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-10-05",
+    "title": "Nightly update: fewer fake deals, no repeats",
+    "items": [
+      "Rough price estimates can no longer make something look 55–80% off — they mixed in other models (an SSL 1 interface vs. pricier SSL gear, a Lynx Aurora 8 vs. newer Auroras, a Maag PREQ2 vs. pricier Maag modules). Real comparisons are unaffected.",
+      "Filtered out: wireless systems that don't say “wireless” (WMS-40, UHF/VHF, bodypacks), car amplifiers (Phoenix Gold), tube testers and test gear, bass trainers/metronomes, mic goosenecks, boom arms described as “… Microphone”, and cables named by length (“HOSA 15 ft XLR to DB25”).",
+      "Dashboard: an ad in “Picked for you” no longer repeats in “Deals” right below it.",
+      "Brand-only Telex terms (“phoenix audio”, “daking”, “maag”, “overstayer”…) are treated as broad terms: no odds and ends under $150 (a $15 USB conference mic was showing).",
+      "Checked: Guitar Center and Sweetwater used gear block automated visits (bot protection), so Gear Scout skips them rather than trying to get around it.",
+      "Accuracy check of 60 listings on your pages: ~88% real studio gear and ~87% right comparisons before tonight's fixes (every one still for sale); the junk and misleading estimates found are fixed."
+    ]
+  },
+  {
     "date": "2026-10-04",
     "title": "Faster term adding, buttons show when they're working",
     "items": [

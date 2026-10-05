@@ -45,6 +45,14 @@ def price_index(force: bool = False) -> dict:
     return _index_cache["index"]
 
 
+def believable(value: float, ref: float, est: bool) -> bool:
+    """A rough estimate ("similar listings", a loose lookup) mixes in other
+    models, so it may say "55-80% off" when the item is just its normal price
+    (an SSL 1 vs. pricier SSL gear, a Lynx Aurora 8 vs. newer Auroras). It
+    can back a modest discount, not a huge one."""
+    return not (est and value < ref * 0.6)
+
+
 def best_comp(r, market, index, similar, term_comp, term_brand):
     """(comp price, where it came from, is it only an estimate) for a
     listing — the most trustworthy source first:
@@ -164,5 +172,7 @@ def evaluate(title: Optional[str], price: Optional[str], description: Optional[s
         if not comp:
             return None
         ref, label, est = comp
+    if not believable(value, ref, est):
+        return None
     return {"ref": ref, "label": label, "est": est, "pct": round((1 - value / ref) * 100), "value": value,
             "worth": ref * FLOOR_RATIO <= value <= ref * WORTH_RATIO}

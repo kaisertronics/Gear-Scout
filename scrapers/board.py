@@ -47,7 +47,10 @@ def _is_specific(term: str) -> bool:
     brand = canonical_brand(term) or ""
     words = [w for w in re.findall(r"[a-z]+", low) if w not in brand.replace("-", " ").split()
              and not is_generic_term(w) and w not in ("audio", "labs", "mic", "microphone", "clone", "pro")]
-    return bool(words) and (bool(brand) or len(words[0]) >= 6)
+    # A known brand plus a model/line word ("Cascade Fathead", "Distressor"),
+    # or two telling words without a known brand ("Overstayer Stereo Field").
+    # One unknown word ("phoenix audio", "daking") is a brand, not a model.
+    return bool(words) and (bool(brand) or len(words) >= 2)
 
 
 def _unit(r: dict, unit: float, n: int, c) -> tuple[float, int]:
