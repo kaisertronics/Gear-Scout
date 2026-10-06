@@ -17,12 +17,15 @@
 <body data-endpoint="{{ request.endpoint }}">
   <header class="topbar">
     <div class="topbar-inner">
-      <a href="{{ url_for('index') }}" class="brand">🎛 Gear Scout</a>
+      <a href="{{ url_for('feed') }}" class="brand">🎛 Gear Scout</a>
       <form method="get" action="{{ url_for('search') }}" class="topbar-search">
         <input type="text" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'search' else '' }}" placeholder="Search all sources...">
         <button type="submit" class="topbar-search-btn" aria-label="Search">&rarr;</button>
       </form>
       <nav>
+        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' else '' }}">📬 Feed</a>
+        <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
+        <a href="{{ url_for('health') }}" class="{{ 'active' if request.endpoint == 'health' else '' }}">Health</a>
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Dashboard</a>
         <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>
         <a href="{{ url_for('steals') }}" class="{{ 'active' if request.endpoint == 'steals' else '' }}">🔥 Steals</a>
@@ -30,7 +33,6 @@
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Price Board</a>
         <a href="{{ url_for('fb_posts_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('fb_posts') else '' }}">FB Posts</a>
         <a href="{{ url_for('ask_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('ask') else '' }}">Ask AI</a>
-        <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('learning_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('learning') else '' }}">Learning</a>
         <a href="{{ url_for('whats_new') }}" class="{{ 'active' if request.endpoint == 'whats_new' else '' }}">What's new</a>
         <a href="{{ url_for('sources') }}" class="{{ 'active' if request.endpoint in ('sources','add_source') else '' }}">Sources</a>

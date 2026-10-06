@@ -442,7 +442,7 @@ def login():
         password_ok = bool(real_password) and secrets.compare_digest(given_password, real_password)
         if email_ok and password_ok:
             session["authenticated"] = True
-            return redirect(request.args.get("next") or url_for("index"))
+            return redirect(request.args.get("next") or url_for("feed"))
         error = "Wrong email or password."
     return render_template("login.html", error=error)
 
@@ -1028,6 +1028,8 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
     """Applies a star / hide to the cached Dashboard and Telex lists in
     place, so those pages stay instant instead of rebuilding."""
     def lists():
+        if _feed_cache.get("data") is not None:
+            yield _feed_cache["data"]
         d = _index_cache.get("data")
         if d:
             yield d["no_comp"]
@@ -1740,7 +1742,266 @@ def learning_dismiss():
     return redirect(url_for("learning_page"))
 
 
+# ---------------------------------------------------------------------------
+# Feed — the home page: everything for sale that matches your Wanted list
+# (Telex List), newest post first, with what's new since you last looked on
+# top. One list, one set of rules (scrapers/wanted.py); deals and steals are
+# badges and filters on it rather than separate pages.
+# ---------------------------------------------------------------------------
+
+FEED_VISIT_FILE = Path("/data/feed_visit.json")
+FEED_RECENT_DAYS = 14   # posted within this → main list; older → collapsed section
+FEED_STEAL_PCT = 50
+_feed_cache: dict = {"key": None, "at": 0.0, "data": None}
+
+
+def _feed_visit() -> Optional[str]:
+    """Your previous Feed visit (UTC ISO). Coming back after 30+ minutes
+    starts a new visit; reloading in between keeps the same "new" line."""
+    now = datetime.now(timezone.utc)
+    try:
+        v = json.loads(FEED_VISIT_FILE.read_text())
+    except Exception:
+        v = {}
+    if request.headers.get("X-GearScout-Test") or request.headers.get("X-Warm"):
+        return v.get("previous")
+    current = v.get("current")
+    if not current or now - datetime.fromisoformat(current) > timedelta(minutes=30):
+        v["previous"] = current
+    v["current"] = now.isoformat()
+    try:
+        FEED_VISIT_FILE.write_text(json.dumps(v))
+    except OSError:
+        pass
+    return v.get("previous")
+
+
+def _ago(iso: Optional[str]) -> Optional[str]:
+    try:
+        d = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    mins = int((datetime.now(timezone.utc) - d).total_seconds() // 60)
+    if mins < 60:
+        return f"{max(mins, 1)}m ago"
+    if mins < 48 * 60:
+        return f"{mins // 60}h ago"
+    return f"{mins // 1440}d ago"
+
+
+def _feed_items(cfg) -> list[dict]:
+    """Every Wanted match still for sale, decorated for display, newest post
+    first. Rebuilt when a scrape or sweep finishes, or every 3 minutes."""
+    from scrapers import wanted
+    from scrapers.enrich import parse_price
+    marker = _last_change_marker()
+    try:
+        marker += str(int(Path("/data/last_sweep.json").stat().st_mtime))
+    except OSError:
+        pass
+    key = (_data_version[0], marker, tuple(wanted.terms(cfg)))
+    c = _feed_cache
+    if c["data"] is not None and c["key"] == key and time.time() - c["at"] < 180:
+        return c["data"]
+    ms = wanted.matchers(cfg)
+    items, seen_ads = [], set()
+    for r in wanted.recent_rows():
+        found = wanted.match(r.get("title"), r.get("price"), ms)
+        if not found:
+            continue
+        ad = ((r.get("title") or "").lower().strip(), r.get("price"))
+        if ad in seen_ads:  # the same ad stored twice (another link to it)
+            continue
+        seen_ads.add(ad)
+        r["wanted"] = found
+        items.append(r)
+    # Display fields and the shared junk filters, independent of this
+    # request's own filters (those are applied afterwards).
+    with app.test_request_context("/", headers={"X-Warm": "1"}):
+        items = _decorate(items)
+    out = []
+    for l in items:
+        ctx = l.get("price_ctx") or {}
+        typical = parse_price(ctx.get("typical")) if ctx.get("typical") and not ctx.get("rough") else None
+        value = ctx.get("unit_value") or parse_price(l.get("price"))
+        if typical and value and value < typical * 0.15:
+            continue  # a part or plugin with a vague title
+        pct = ctx.get("pct_under") if ctx.get("deal") else None
+        l["deal_pct"] = pct
+        l["is_steal"] = bool(pct and pct >= FEED_STEAL_PCT and not ctx.get("rough"))
+        l["checked_label"] = _ago(l.get("sold_checked_at"))
+        out.append(l)
+    # Newest post first; ties (same posting time, or no posting time) go to
+    # the one Gear Scout found most recently.
+    out.sort(key=lambda l: l.get("first_seen") or "", reverse=True)
+    out.sort(key=lambda l: l["age_days"] if l.get("age_days") is not None else 999)
+    try:
+        Path("/data/shown_feed.txt").write_text("\n".join(l["url"] for l in out[:400] if l.get("url")))
+    except OSError:
+        pass
+    c.update(key=key, at=time.time(), data=out)
+    return out
+
+
 @app.route("/")
+def feed():
+    from scrapers import wanted
+    cfg = load_config_raw()
+    terms = wanted.terms(cfg)
+    items = _feed_items(cfg)
+    since = _feed_visit()
+    show = request.args.get("show") or "all"
+    term = request.args.get("term") or ""
+    try:
+        within = int(request.args.get("within") or 0)
+    except ValueError:
+        within = 0
+    counts = {t: 0 for t in terms}
+    for l in items:
+        for t in l["wanted"]:
+            if t in counts:
+                counts[t] += 1
+    view = items
+    if term:
+        view = [l for l in view if term in l["wanted"]]
+    if show == "deals":
+        view = [l for l in view if l.get("deal_pct")]
+    elif show == "steals":
+        view = [l for l in view if l.get("is_steal")]
+    if within:
+        view = [l for l in view if l.get("distance") is None or l["distance"] <= within]
+    for l in view:
+        l["is_new"] = bool(since and (l.get("first_seen") or "") > since)
+    new = [l for l in view if l["is_new"]]
+    age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
+    recent = [l for l in view if not l["is_new"] and age(l) <= FEED_RECENT_DAYS]
+    older = [l for l in view if not l["is_new"] and age(l) > FEED_RECENT_DAYS]
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    _verify_feed([l["url"] for l in (new + recent)[:80]])
+    return render_template("feed.html", new=new, recent=recent, older=older, total=len(items),
+                           terms=terms, counts=counts, term=term, show=show, since_label=_ago(since),
+                           sweep=sweep, recent_days=FEED_RECENT_DAYS, steal_pct=FEED_STEAL_PCT,
+                           first_visit=since is None)
+
+
+_feed_verify = {"running": False}
+
+
+def _verify_feed(urls: list[str]):
+    """Sold check for the top of the Feed right away (websites hourly;
+    Facebook ads are left to the scraper's sold check, Feed first)."""
+    if _feed_verify["running"] or not urls:
+        return
+
+    def run():
+        from concurrent.futures import ThreadPoolExecutor
+        from scrapers.sold_check import _record, check_url
+        from scrapers.store import _conn
+        _feed_verify["running"] = True
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            web = [u for u in urls if "facebook.com" not in u]
+            with _conn() as conn:
+                recent = {u for (u,) in conn.execute(
+                    f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(web))}) AND sold_checked_at >= ?",
+                    (*web, cutoff))} if web else set()
+            todo = [u for u in web if u not in recent]
+
+            def one(u):
+                try:
+                    gone = check_url(u)
+                except Exception:
+                    gone = None
+                _record(u, gone)
+                return u, gone
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                gone = [u for u, g in pool.map(one, todo) if g]
+            if gone:
+                _data_changed()
+                logging.info("Feed: %d sold/ended listings taken off", len(gone))
+        finally:
+            _feed_verify["running"] = False
+    threading.Thread(target=run, name="verify-feed", daemon=True).start()
+
+
+@app.route("/health")
+def health():
+    """Is everything being searched? Per site: last search, how many it
+    found and how many were new; per Wanted term: when each site group last
+    searched it; and how fresh the Feed is."""
+    from scrapers import wanted
+    from scrapers.store import _conn
+    from scrapers.telex import EBAY_EVERY_MIN, FAST_EVERY_MIN, sweep_state
+    cfg = load_config_raw()
+    try:
+        run = json.loads(Path("/data/last_run.json").read_text())
+    except Exception:
+        run = {}
+    with _conn() as conn:
+        last_found = dict(conn.execute("SELECT source_name, MAX(first_seen) FROM seen GROUP BY source_name").fetchall())
+        new_24h = dict(conn.execute(
+            "SELECT source_name, COUNT(*) FROM seen WHERE first_seen >= ? GROUP BY source_name",
+            ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),)).fetchall())
+    sites = []
+    for s in run.get("sources") or []:
+        name = s.get("name")
+        sites.append({"name": name, "ok": s.get("success"), "blocked": s.get("blocked"), "count": s.get("count"),
+                      "error": s.get("error"), "last_new": _ago(last_found.get(name)),
+                      "new_24h": new_24h.get(name, 0)})
+    # Facebook Marketplace regions and Craigslist cities are many small sources: one row each group.
+    st = sweep_state()
+    term_rows = []
+    for t in wanted.terms(cfg):
+        row = {"term": t}
+        for site in ("fast", "ebay", "fb"):
+            s = st.get((t, site)) or {}
+            row[site] = _ago(s.get("searched_at"))
+            row[site + "_new"] = s.get("new") or 0
+        term_rows.append(row)
+    items = _feed_items(cfg)
+    # Freshness: for Feed listings found in the last day with a known posting
+    # time, how long after the seller posted Gear Scout found them.
+    lags = []
+    for l in items:
+        if l.get("age_known") and l.get("posted_at") and l.get("first_seen"):
+            try:
+                p = datetime.fromisoformat(l["posted_at"])
+                f = datetime.fromisoformat(l["first_seen"])
+                p = p if p.tzinfo else p.replace(tzinfo=timezone.utc)
+                f = f if f.tzinfo else f.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - f < timedelta(days=1):
+                    lags.append(max(0.0, (f - p).total_seconds() / 3600))
+            except ValueError:
+                pass
+    lags.sort()
+    lag = {"n": len(lags), "median": round(lags[len(lags) // 2], 1) if lags else None,
+           "within_1h": sum(x <= 1 for x in lags), "within_6h": sum(x <= 6 for x in lags)}
+    checks = {"total": len(items), "fresh": sum(1 for l in items if l.get("checked_label") and
+                                                   (l.get("sold_checked_at") or "") >=
+                                                   (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat())}
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    try:
+        refresh = json.loads(Path("/data/last_refresh.json").read_text())
+        refresh = {"ago": _ago(refresh["finished"]), "new": refresh.get("new_count", 0)}
+    except Exception:
+        refresh = None
+    return render_template("health.html", sites=sites, term_rows=term_rows, lag=lag, checks=checks,
+                           sweep=sweep, refresh=refresh, fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
+
+
+@app.route("/dashboard")
 def index():
     cfg = load_config_raw()
     data = _index_listings(cfg)
@@ -1841,7 +2102,7 @@ def _index_listings(cfg) -> dict:
             def rebuild():
                 _index_state["running"] = True
                 try:
-                    with app.test_request_context("/", headers={"X-Warm": "1"}):
+                    with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
                         _index_listings(load_config_raw())
                 except Exception:
                     logging.exception("Dashboard rebuild failed")
@@ -2756,8 +3017,9 @@ def _keep_caches_warm():
             sale_stats()
             from scrapers.market import load_market
             load_market()
+            _feed_items(load_config_raw())  # the Feed (home page) first
             # The Dashboard's default view, ready before anyone asks.
-            with app.test_request_context("/", headers={"X-Warm": "1"}):
+            with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
                 if _index_cache["key"] is None and _index_cache["data"] is not None:
                     # Showing the saved copy from before the restart: rebuild for real now.
                     data = _build_index_listings(load_config_raw())

@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-10-06",
+    "title": "New home page: one Feed for your Wanted list",
+    "items": [
+      "📬 Feed is the new home page: everything for sale that matches your Telex List — at any price, newest post first. The Telex page only showed listings 10%+ under their comp, so normally priced gear never reached you.",
+      "“New since you last looked” at the top; anything you've already seen drops below it, so the same listings no longer sit on top day after day.",
+      "Only your own Telex List counts now. The imported model group (Cole Picks, e.g. Sony C-38B) and the long keyword list no longer put listings in front of you.",
+      "Every Wanted term is now searched directly on Reverb, Craigslist, Kijiji, ShopGoodwill, Long & McQuade and OfferUp every 30 minutes and on eBay every 2 hours (before: each term every 12–40 hours). Facebook Marketplace and group posts rotate through your terms all day.",
+      "Phone alert within ~30 minutes for every new ad that matches your Wanted list.",
+      "Sold Facebook ads: when a seller deletes or sells an ad, Facebook usually just shows Marketplace with no ad on it — Gear Scout now counts that as gone (about 1 in 5 Facebook ads on your pages were already gone). Feed ads are re-checked first and show when they were last checked.",
+      "🩺 Health page: when each term was last searched on each kind of site, how many new ads every site found today, and how fast new ads reach you.",
+      "Deals and Steals are now filters on the Feed. The old Dashboard, Deals and Steals pages are still there for now."
+    ]
+  },
+  {
     "date": "2026-10-05",
     "title": "Nightly update: fewer fake deals, no repeats",
     "items": [

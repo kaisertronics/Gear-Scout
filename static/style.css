@@ -912,3 +912,16 @@ section[id^="src-"] { scroll-margin-top: 64px; }
 
 /* Buttons while their action is running */
 button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; filter: grayscale(.6); }
+
+/* Feed + Health */
+.feed-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.feed-filters a { text-decoration: none; }
+.feed-terms { margin-top: 10px; }
+.feed-terms summary { cursor: pointer; }
+.feed-term-empty { opacity: .55; }
+.listing-wanted { font-size: 12px; color: var(--muted, #667); margin-top: 2px; }
+.listing-checked { font-size: 11px; color: #2e7d32; margin-top: 4px; }
+.health-summary { line-height: 1.7; padding-left: 18px; }
+.table-scroll { overflow-x: auto; }
+.health-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.health-table th, .health-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid rgba(127,127,127,.2); white-space: nowrap; }

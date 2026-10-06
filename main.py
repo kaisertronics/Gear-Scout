@@ -400,6 +400,17 @@ def _dashboard_job_running() -> bool:
     return False
 
 
+REFRESH_EVERY_MINUTES = 55
+
+
+def _refresh_due() -> bool:
+    try:
+        last = datetime.fromisoformat(json.loads(Path("/data/last_refresh.json").read_text())["finished"])
+    except Exception:
+        return True
+    return (datetime.now(timezone.utc) - last).total_seconds() >= REFRESH_EVERY_MINUTES * 60
+
+
 def run_watch_cycle():
     if _dashboard_job_running():
         logger.info("Hourly refresh skipped — a search from the dashboard is running.")
@@ -411,19 +422,25 @@ def run_watch_cycle():
         from scrapers.lowest import run_trackers, tracked_queries
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
-        if (cfg.get("schedule") or {}).get("background_refresh", True):
+        # This cycle runs every 30 minutes; re-reading every site's feed is
+        # heavier, so it happens on every other one (hourly).
+        if (cfg.get("schedule") or {}).get("background_refresh", True) and _refresh_due():
             try:
                 run_refresh_cycle(cfg)
             except Exception:
                 logger.exception("Background refresh failed")
-        # Actively search the next few Telex List terms on search-based sites,
-        # then alert on any listing below the lowest price for its term.
+        # Search every Wanted (Telex List) term directly — fast sites every
+        # 30 min, eBay every 2 h, Facebook in rotation — then push anything
+        # new that matches, and alert on new lowest prices.
         try:
-            from scrapers.telex import check_telex_lowest, run_sweep
-            run_sweep(cfg)
+            from scrapers.telex import check_telex_lowest, run_wanted_sweep
+            from scrapers.wanted import alert_new
+            alert_new(cfg)  # what the refresh found, without waiting for the sweep
+            run_wanted_sweep(cfg)
+            alert_new(cfg)
             check_telex_lowest(cfg)
         except Exception:
-            logger.exception("Telex sweep / lowest-price check failed")
+            logger.exception("Wanted sweep / alerts failed")
         try:
             from scrapers import board
             board.build(cfg)
@@ -539,7 +556,7 @@ def run_schedule():
 
     # Saved searches run on their own, more frequent timer so a hit can be
     # pushed to the phone within the hour instead of waiting for the digest.
-    interval = int((cfg.get("notifications") or {}).get("watch_interval_minutes", 60) or 60)
+    interval = int((cfg.get("notifications") or {}).get("watch_interval_minutes", 30) or 30)
     interval = max(15, interval)
     scheduler.add_job(
         run_watch_cycle,

@@ -28,6 +28,7 @@
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
       {% endif %}
       {% if l.source_detail %}<div class="listing-source">{{ l.source_detail }}</div>{% endif %}
+      {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}
@@ -54,6 +55,7 @@
           {% if l.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
         </div>
       {% endif %}
+      {% if l.checked_label %}<div class="listing-checked" title="When Gear Scout last checked the ad is still up">✓ still listed · checked {{ l.checked_label }}</div>{% endif %}
     </div>
   {% endset %}
   {% if l.url %}

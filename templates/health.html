@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Health{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>🩺 Is everything being searched?</h2>
+    <ul class="health-summary">
+      <li><strong>Every site's feed</strong> re-read: {{ refresh.ago if refresh else 'not yet' }}{% if refresh %} ({{ refresh.new }} new){% endif %} — hourly.</li>
+      <li><strong>Your Wanted terms</strong> searched directly: {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} —
+        Reverb, Craigslist &amp; other quick sites every {{ fast_every }} min, eBay every {{ ebay_every // 60 }} h, Facebook in rotation.</li>
+      <li><strong>How fast new ads reach you</strong> (last 24 h, ads with a posting time):
+        {% if lag.n %}half within {{ lag.median }} h of being posted · {{ lag.within_1h }} of {{ lag.n }} within an hour · {{ lag.within_6h }} within 6 h{% else %}no data yet{% endif %}.</li>
+      <li><strong>Still for sale?</strong> {{ checks.fresh }} of {{ checks.total }} Feed listings re-checked in the last 6 hours.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Your Wanted terms</h2>
+    <p class="muted">When each term was last searched on each kind of site (and how many new ads that search found).</p>
+    <div class="table-scroll">
+    <table class="health-table">
+      <tr><th>Term</th><th>Quick sites</th><th>eBay</th><th>Facebook</th></tr>
+      {% for r in term_rows %}
+      <tr>
+        <td>{{ r.term }}</td>
+        <td>{{ r.fast or '—' }}{% if r.fast_new %} · <strong>{{ r.fast_new }} new</strong>{% endif %}</td>
+        <td>{{ r.ebay or '—' }}{% if r.ebay_new %} · <strong>{{ r.ebay_new }} new</strong>{% endif %}</td>
+        <td>{{ r.fb or '—' }}{% if r.fb_new %} · <strong>{{ r.fb_new }} new</strong>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Sites (last full scrape)</h2>
+    <div class="table-scroll">
+    <table class="health-table">
+      <tr><th>Site</th><th>Status</th><th>Read</th><th>New today</th><th>Last new ad</th></tr>
+      {% for s in sites %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{% if s.ok %}✅{% elif s.blocked %}🚫 blocks robots{% else %}❌ {{ s.error or 'failed' }}{% endif %}</td>
+        <td>{{ s.count if s.count is not none else '—' }}</td>
+        <td>{{ s.new_24h }}</td>
+        <td>{{ s.last_new or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </section>
+{% endblock %}

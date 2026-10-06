@@ -136,7 +136,7 @@ def check_url(url: str) -> Optional[bool]:
     return bool(_GONE_TEXT.search(html))
 
 
-SHOWN_FILES = ("/data/shown_dashboard.txt", "/data/shown_steals.txt", "/data/shown_telex.txt",
+SHOWN_FILES = ("/data/shown_feed.txt", "/data/shown_dashboard.txt", "/data/shown_steals.txt", "/data/shown_telex.txt",
                "/data/shown_telex_groups.txt")
 SHOWN_RECHECK_HOURS = 4
 
@@ -169,8 +169,13 @@ def _shown_first(limit: int, include_fb: bool) -> list[str]:
                 " AND (sold_checked_at IS NULL OR sold_checked_at < ?) GROUP BY url", (*chunk, cutoff)).fetchall()
     # Never-checked first, then the longest since a check — so nothing far
     # down the page waits forever behind the top listings.
+    # Your Feed comes before the other pages.
     order = {u: i for i, u in enumerate(shown)}
-    return [u for u, _ in sorted(set(due), key=lambda r: (r[1], order.get(r[0], 0)))][:limit]
+    try:
+        feed = set(open(SHOWN_FILES[0]).read().split("\n"))
+    except OSError:
+        feed = set()
+    return [u for u, _ in sorted(set(due), key=lambda r: (r[0] not in feed, r[1], order.get(r[0], 0)))][:limit]
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
@@ -219,6 +224,10 @@ def fb_listed_at(text: str):
     return datetime.now(timezone.utc) - timedelta(days=n * days)
 
 
+_FB_AD_SHOWN = re.compile(r"(?m)^Listed .{1,40} ago|send seller a message|message seller", re.I)
+_FB_LOGIN = re.compile(r"forgot (?:password|account)|create new account|log in to continue", re.I)
+
+
 def check_fb(urls: list[str]):
     """Opens each Facebook listing in one paced browser and yields
     (url, gone) — gone is None when the page couldn't be read. Also notes
@@ -235,19 +244,27 @@ def check_fb(urls: list[str]):
                 gone = None
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=40000)
-                    # Wait only until the item (its title) or a "gone" notice shows,
-                    # instead of a fixed 2 seconds.
+                    # Wait until the ad's "Listed … ago" line or a "gone" notice
+                    # shows. (The page's first <h1> is often just "Notifications",
+                    # so it can't be used to tell the ad has loaded.)
                     try:
                         page.wait_for_function(
-                            "() => document.querySelector('h1') || /no longer available|isn't available|this listing/i"
-                            ".test(document.body.innerText.slice(0, 3000))", timeout=3500, polling=200)
+                            "() => /\\nListed .{1,40} ago|no longer available|isn't available|this listing/i"
+                            ".test(document.body.innerText.slice(0, 8000))", timeout=8000, polling=250)
                     except Exception:
                         pass
                     page.wait_for_timeout(300)
-                    text = page.inner_text("body")[:5000]
+                    text = page.inner_text("body")[:8000]
                     gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
                                 or "/marketplace/item/" not in page.url)
-                    if not gone:
+                    if not gone and not _FB_AD_SHOWN.search(text):
+                        # A deleted or sold ad usually doesn't say so: Facebook
+                        # just shows Marketplace with no ad on it. Count that as
+                        # gone — but only when the page clearly loaded logged in
+                        # (a login wall or half-loaded page means "can't tell").
+                        logged_in = "Marketplace" in text and not _FB_LOGIN.search(text)
+                        gone = True if logged_in and len(text) > 500 else None
+                    if gone is False:
                         from scrapers.store import set_pending
                         set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
                         posted = fb_listed_at(text)
