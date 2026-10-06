@@ -1,0 +1,27 @@
+GEAR SCOUT — MOVING TO A NEW COMPUTER
+=====================================
+
+This folder is everything: the program, your settings, passwords and keys
+(config.yaml, .env), your Telex List, favorites, hidden listings, price
+history, saved photos and your Facebook login. Keep it private — don't share
+it with anyone.
+
+ON THE NEW COMPUTER (a Mac):
+1. Install Docker Desktop (free): https://www.docker.com/products/docker-desktop/
+   Open it once and let it finish starting.
+2. Put this "gear-scout" folder somewhere you'll keep it (for example your
+   Documents or Downloads folder). Don't move it again afterwards.
+3. Double-click "Start Gear Scout.command".
+   If the Mac says it can't be opened: right-click it → Open → Open.
+   The first start takes about 5–10 minutes; then Gear Scout opens in your
+   browser at http://localhost:8420.
+4. Turn Gear Scout off on the OLD computer (quit Docker Desktop there, or ask
+   Claude to stop it). Only one computer can use your phone link (ngrok) at
+   a time, and two copies would both be scraping Facebook with your account.
+
+AFTERWARDS:
+- Gear Scout starts by itself whenever Docker Desktop is running. In Docker
+  Desktop's settings, turn on "Start Docker Desktop when you sign in".
+- To start it again by hand, double-click "Start Gear Scout.command" (safe to
+  run any time; it never overwrites your data after the first time).
+- To keep improving it with Claude, open this folder in the Claude app's Code tab.

@@ -10,3 +10,6 @@ config.yaml
 __pycache__/
 *.pyc
 .DS_Store
+
+# Moving-to-a-new-computer bundle data (contains your database)
+migration/
