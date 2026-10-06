@@ -7,9 +7,9 @@
       <li><strong>Every site's feed</strong> re-read: {{ refresh.ago if refresh else 'not yet' }}{% if refresh %} ({{ refresh.new }} new){% endif %} — hourly.</li>
       <li><strong>Your Wanted terms</strong> searched directly: {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} —
         Reverb, Craigslist &amp; other quick sites every {{ fast_every }} min, eBay every {{ ebay_every // 60 }} h, Facebook in rotation.</li>
-      <li><strong>How fast new ads reach you</strong> (last 24 h, ads with a posting time):
+      <li><strong>How fast new ads reach you</strong> (ads posted in the last 3 days):
         {% if lag.n %}half within {{ lag.median }} h of being posted · {{ lag.within_1h }} of {{ lag.n }} within an hour · {{ lag.within_6h }} within 6 h{% else %}no data yet{% endif %}.</li>
-      <li><strong>Still for sale?</strong> {{ checks.fresh }} of {{ checks.total }} Feed listings re-checked in the last 6 hours.</li>
+      <li><strong>Still for sale?</strong> {{ checks.fresh }} of the top {{ checks.total }} Feed listings re-checked in the last 6 hours.</li>
     </ul>
   </section>
 

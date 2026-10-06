@@ -1976,16 +1976,21 @@ def health():
                 f = datetime.fromisoformat(l["first_seen"])
                 p = p if p.tzinfo else p.replace(tzinfo=timezone.utc)
                 f = f if f.tzinfo else f.replace(tzinfo=timezone.utc)
-                if datetime.now(timezone.utc) - f < timedelta(days=1):
+                # Ads posted in the last 3 days and found in the last day (an
+                # old ad found late says nothing about how fast new ones arrive).
+                now = datetime.now(timezone.utc)
+                if now - f < timedelta(days=1) and now - p < timedelta(days=3):
                     lags.append(max(0.0, (f - p).total_seconds() / 3600))
             except ValueError:
                 pass
     lags.sort()
     lag = {"n": len(lags), "median": round(lags[len(lags) // 2], 1) if lags else None,
            "within_1h": sum(x <= 1 for x in lags), "within_6h": sum(x <= 6 for x in lags)}
-    checks = {"total": len(items), "fresh": sum(1 for l in items if l.get("checked_label") and
-                                                   (l.get("sold_checked_at") or "") >=
-                                                   (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat())}
+    # The top of the Feed (what you actually scroll through) — the long tail
+    # of older ads is re-checked more slowly.
+    top = items[:200]
+    six_h = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    checks = {"total": len(top), "fresh": sum(1 for l in top if (l.get("sold_checked_at") or "") >= six_h)}
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
