@@ -35,10 +35,10 @@ _PARTS = re.compile(
 _CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type)\b", re.I)
 
 
-def _terms(cfg: dict) -> tuple:
-    from scrapers.learning import keywords_with_learned
-    telex = [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
-    return tuple(dict.fromkeys(list(keywords_with_learned(cfg)) + telex))
+def _terms(cfg: dict):
+    # Your Wanted list (Telex List) only — see scrapers/wanted.py.
+    from scrapers import wanted
+    return wanted.matchers(cfg)
 
 
 def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict:
@@ -61,6 +61,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(sql + " ORDER BY first_seen DESC", args)]
     terms = _terms(cfg)
+    from scrapers.wanted import match as wanted_match
     exclude_words = cfg.get("exclude_words") or []
     pedals_ok = wants_pedals(cfg)
     market, index, similar = load_market(), price_index(), similar_index()
@@ -80,7 +81,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
-        if not is_relevant(title, r.get("price"), terms):
+        if not wanted_match(title, r.get("price"), terms):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)
         if not c or c["ref"] < MIN_REF or c["pct"] < min_pct:

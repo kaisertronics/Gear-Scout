@@ -1397,7 +1397,14 @@ def telex():
     new_items = sorted(new_all.values(), key=lambda x: age(x[0]))
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
-    return render_template("telex.html", groups=groups, terms=terms, view=view, new_items=new_items, sort=sort,
+    # A Telex entry can hold several terms ("lexicon 300, lexicon 480").
+    feed_counts: dict = {}
+    if not request.headers.get("X-Warm"):
+        items = _feed_items(cfg)
+        for entry in terms:
+            parts = {p.strip() for p in entry.split(",") if p.strip()}
+            feed_counts[entry] = sum(1 for l in items if parts & set(l["wanted"]))
+    return render_template("telex.html", feed_counts=feed_counts, groups=groups, terms=terms, view=view, new_items=new_items, sort=sort,
                            total=sum(len(g) for _, g, _ in groups), sweep=telex_state(),
                            model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 
@@ -1865,7 +1872,8 @@ def feed():
                 counts[t] += 1
     view = items
     if term:
-        view = [l for l in view if term in l["wanted"]]
+        parts = {p.strip() for p in term.split(",") if p.strip()}
+        view = [l for l in view if parts & set(l["wanted"])]
     if show == "deals":
         view = [l for l in view if l.get("deal_pct")]
     elif show == "steals":

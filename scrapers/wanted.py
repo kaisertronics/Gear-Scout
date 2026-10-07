@@ -48,6 +48,20 @@ def matchers(cfg: dict) -> list[tuple[str, Callable[[str], bool], Optional[str],
     return [(t, term_matcher(t), item_form(t), _is_specific(t)) for t in terms(cfg)]
 
 
+# Spare vacuum tubes whose ads stuff model names into the title ("4 NOS
+# Telefunken EF804 /Grail Mic Tube /V72 V76") — the tube, not the gear.
+_TUBE_TYPE = re.compile(r"\b(?:ef ?8[0-9]{1,2}s?|ef ?14|ef ?12|vf ?14m?|ac ?701k?|12a[xtu]7|ecc ?8[1-3]|e8[0-9]cc|"
+                        r"6072a?|5751|6sj7|6sn7|el ?34|el ?84|6l6|kt ?88|5ar4|gz ?34|6v6|6au6|6as7)\b", re.I)
+_TUBE_SALE = re.compile(r"\b(?:nos|new old stock|tubes|valves?|matched (?:pair|set|quad)|sealed box|tested|"
+                        r"(?:mic|amp|preamp) tube)\b", re.I)
+_WHOLE_UNIT = re.compile(r"\b(?:amplifier|preamp(?:lifier)?|microphone|compressor|limiter|equali[sz]er|module|"
+                         r"channel strip|console|mixer|rack)\b", re.I)
+
+
+def is_spare_tube(title: str) -> bool:
+    return bool(_TUBE_TYPE.search(title) and _TUBE_SALE.search(title) and not _WHOLE_UNIT.search(title))
+
+
 def match(title: Optional[str], price: Optional[str], ms) -> list[str]:
     """Wanted terms a listing title matches (empty = not wanted). Parts,
     accessories, and pedal/plugin versions (unless the term asks) never
@@ -58,7 +72,7 @@ def match(title: Optional[str], price: Optional[str], ms) -> list[str]:
         return []
     text = fix_brand_spelling(title.lower())
     hits = [m for m in ms if m[1](text)]
-    if not hits or is_partial(title) or is_accessory_only(title):
+    if not hits or is_partial(title) or is_accessory_only(title) or is_spare_tube(title):
         return []
     form = item_form(title)
     value = parse_price(price) or 0

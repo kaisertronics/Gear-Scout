@@ -293,7 +293,7 @@ def build_email_html(
           border-radius:8px;display:flex;align-items:center;justify-content:space-between;
           flex-wrap:wrap;gap:10px;">
         <span style="color:#ffffff;font-size:13px;">
-          Only listings at least <strong>10% under their comp</strong> are listed here{no_comp_note}.
+          New listings matching your <strong>Wanted list</strong> (Telex List), at any price — deals are marked “% under”{no_comp_note}.
         </span>
         <a href="{dashboard_url}" target="_blank" rel="noopener"
            style="display:inline-block;padding:8px 18px;background:#ffffff;

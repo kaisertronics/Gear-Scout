@@ -31,9 +31,13 @@ def recent_drops(cfg: dict, hours: int = 24, min_pct: int = MIN_PCT) -> list[dic
             " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND previous_price IS NOT NULL", (since,))]
     exclude = cfg.get("exclude_words") or []
     market, index, similar = load_market(), price_index(), similar_index()
+    from scrapers import wanted
+    ms = wanted.matchers(cfg)
     out, seen = [], set()
     for r in rows:
         title = r.get("title") or ""
+        if not wanted.match(title, r.get("price"), ms):
+            continue  # your Wanted list (Telex List) only
         if r["url"] in seen or exclude_match(title, exclude) or is_not_audio(title) or is_accessory_only(title) \
                 or is_partial(title) or title_says_sold(title) or item_form(title) in ("pedal", "plugin") \
                 or needs_repair(title, r.get("description")) or (r.get("description") or "").startswith("Auction"):

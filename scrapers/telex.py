@@ -284,7 +284,10 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
         last = (st.get((term, site)) or {}).get("searched_at")
         if not last:
             return True
-        return (now - datetime.fromisoformat(last)).total_seconds() >= minutes * 60 - 120
+        # Cycles start every 30 minutes but a term is searched partway
+        # through one, so allow 15 minutes of slack — otherwise every other
+        # cycle finds it "not quite due" and it's really searched hourly.
+        return (now - datetime.fromisoformat(last)).total_seconds() >= (minutes - 15) * 60
 
     def run(term, sites, label):
         t0 = time.time()

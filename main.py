@@ -99,24 +99,30 @@ def _found_since_last_digest(exclude: set[str]) -> list:
     return out
 
 
-def _worth_only(listings: list) -> tuple[list, int]:
+def _wanted_only(listings: list, cfg: dict) -> list:
+    """The digest lists what the Feed shows: new listings matching your
+    Wanted list (Telex List), at any price — with "N% under" when the
+    listing is 10%+ under its comp. Auctions have their own alerts."""
+    from scrapers import wanted
     from scrapers.comps import evaluate, price_index, similar_index
+    from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
     from scrapers.market import load_market
     market, index, similar = load_market(), price_index(), similar_index()
-    keep, no_comp = [], 0
+    ms, exclude = wanted.matchers(cfg), cfg.get("exclude_words") or []
+    keep, seen = [], set()
     for l in listings:
-        if (l.description or "").startswith("Auction"):
-            no_comp += 1
+        if (l.description or "").startswith("Auction") or exclude_match(l.title, exclude) \
+                or is_not_audio(l.title) or title_says_sold(l.title) or not wanted.match(l.title, l.price, ms):
             continue
+        ad = ((l.title or "").lower().strip(), l.price)
+        if ad in seen:
+            continue
+        seen.add(ad)
         c = evaluate(l.title, l.price, l.description, l.url, market, index, similar)
-        if not c:
-            no_comp += 1
-        elif c["worth"]:
-            l.comp = c
-            keep.append(l)
-    logger.info("Digest: %d of %d new listings are 10%%+ under their comp (%d without a comp)",
-                len(keep), len(listings), no_comp)
-    return keep, no_comp
+        l.comp = c if c and c["worth"] else None
+        keep.append(l)
+    logger.info("Digest: %d of %d new listings match your Wanted list", len(keep), len(listings))
+    return keep
 
 
 def run_refresh_cycle(cfg: dict):
@@ -140,6 +146,12 @@ def run_refresh_cycle(cfg: dict):
     new_listings = filter_new(all_listings)
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
+    try:
+        # New Wanted matches to your phone now, not after the sold check below.
+        from scrapers.wanted import alert_new
+        alert_new(cfg)
+    except Exception:
+        logger.exception("Wanted alert failed")
     try:
         Path("/data/last_refresh.json").write_text(json.dumps({
             "finished": datetime.now(timezone.utc).isoformat(), "new_count": len(new_listings)}))
@@ -293,7 +305,7 @@ def _run_scrape_cycle():
                               max_lookups=60, pause=0.2, cfg=cfg)
     except Exception:
         logger.exception("Market price lookup for new listings failed")
-    new_listings, no_comp_count = _worth_only(new_listings)
+    new_listings, no_comp_count = _wanted_only(new_listings, cfg), 0
 
     # Sites known to block automated access (shown as "check manually") and
     # eBay pausing for its daily limit are expected, not errors.
