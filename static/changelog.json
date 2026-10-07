@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-10-06",
+    "title": "Everything now follows your Wanted list",
+    "items": [
+      "Auction alerts, the digest email, steal and price-drop alerts, the AI briefing and the Deals/Steals pages now only cover your Telex List — no more irrelevant gear (e.g. this week's auction alerts: 16 random items before, 2 on your list now).",
+      "The regular scrapes no longer throw away gear you want: “lexicon 960” now keeps “Lexicon 960L”, “Avalon 737” keeps “VT-737sp”, Eventide H9000s etc. (hundreds a month were being dropped).",
+      "Fewer junk matches: “link audio”, “Coil audio” and similar brand terms need the brand name together (no more PS Audio Digital Link or moving-coil phono cartridges); spare tubes with “V72 V76” stuffed in the title are filtered.",
+      "Your terms are really searched every 30 minutes now (a timing slip made it hourly), and new matches are pushed before the slower sold check runs.",
+      "Telex page explains what the list does and links every term to all its listings on the Feed. The old Dashboard is now “Browse all” (everything collected, not just your list).",
+      "“New since you last looked” only shows ads posted in the last 2 weeks; old ads Gear Scout just dug up go to “Older ads”, tagged NEW."
+    ]
+  },
+  {
+    "date": "2026-10-06",
     "title": "New home page: one Feed for your Wanted list",
     "items": [
       "📬 Feed is the new home page: everything for sale that matches your Telex List — at any price, newest post first. The Telex page only showed listings 10%+ under their comp, so normally priced gear never reached you.",

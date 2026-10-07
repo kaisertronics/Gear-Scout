@@ -1882,10 +1882,12 @@ def feed():
         view = [l for l in view if l.get("distance") is None or l["distance"] <= within]
     for l in view:
         l["is_new"] = bool(since and (l.get("first_seen") or "") > since)
-    new = [l for l in view if l["is_new"]]
+    # "New" = new to you AND recently posted; an old ad Gear Scout only just
+    # dug up goes with the older ads (still tagged NEW there).
     age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
+    new = [l for l in view if l["is_new"] and age(l) <= FEED_RECENT_DAYS]
     recent = [l for l in view if not l["is_new"] and age(l) <= FEED_RECENT_DAYS]
-    older = [l for l in view if not l["is_new"] and age(l) > FEED_RECENT_DAYS]
+    older = [l for l in view if age(l) > FEED_RECENT_DAYS]
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
