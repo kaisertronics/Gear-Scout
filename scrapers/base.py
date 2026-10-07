@@ -124,6 +124,13 @@ def fix_brand_spelling(text_lower: str) -> str:
     return text_lower
 
 
+# Your Wanted list's own matchers (set by learning.keywords_with_learned):
+# a scrape keeps a listing when the keyword list OR the Wanted list matches,
+# so model variants the plain phrase misses ("Lexicon 960L" for the term
+# "lexicon 960", "Avalon VT-737sp" for "Avalon 737") are never thrown away.
+WANTED_MATCHERS: list = []
+
+
 def keyword_match(text: str, keywords: list[str]) -> bool:
     """Return True if any keyword is found in text as a whole word/phrase
     (case-insensitive). Word-boundary matching keeps short keywords like "mic"
@@ -135,7 +142,9 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
         # 1,000+ search terms the loop made pages like Settings take seconds.
         # Same rule per keyword (whole word/phrase, optional plural "s").
         combined = _combined_pattern(keywords)
-        return bool(combined and combined.search(text_lower))
+        if combined and combined.search(text_lower):
+            return True
+        return any(m(text_lower) for m in WANTED_MATCHERS)
     for kw in keywords:
         pattern = _keyword_pattern(str(kw))
         if pattern and pattern.search(text_lower):

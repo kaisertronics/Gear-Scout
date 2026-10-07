@@ -334,7 +334,16 @@ def term_matcher(term: str):
         words = key if len(key) >= 2 else words
     exact = _keyword_pattern(term.lower())
     plain = max((w for w in words if w.isalpha() and len(w) >= 3), key=len, default=None)
-    return lambda t: (plain is None or plain in t) and (
+    # "<name> audio" is a brand ("Link Audio", "Coil Audio", "Purple Audio"):
+    # those two words must be together, or "PS Audio Digital Link" and
+    # "Moving Coil phono cartridge … audio" match.
+    low = term.lower().split()
+    brand = None
+    if "audio" in low[1:]:
+        i = low.index("audio", 1)
+        if low[i - 1].isalpha():
+            brand = re.compile(r"(?<![a-z0-9])" + re.escape(low[i - 1]) + r"[\s-]*audio\b")
+    return lambda t: (plain is None or plain in t) and (brand is None or bool(brand.search(t))) and (
         bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
 
 
