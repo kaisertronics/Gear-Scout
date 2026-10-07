@@ -1333,14 +1333,18 @@ def telex():
     age = lambda r: r.get("age_days") if r.get("age_days") is not None else 999
     unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
     items = _feed_items(cfg)
+    _mark_lowest(items)
     view, new_all, feed_counts = [], {}, {}
     for entry in terms:
         parts = {p.strip() for p in entry.split(",") if p.strip()}
         its = [l for l in items if parts & set(l["wanted"])]  # already newest first
         if sort == "cheap":
             its = sorted(its, key=unit)
-        fresh = [r for r in its if age(r) <= FRESH_DAYS]
-        old = [r for r in its if age(r) > FRESH_DAYS]
+        # The cheapest working one (pulsing gold) goes first, however old.
+        lowest = [r for r in its if parts & set(r.get("lowest_for") or [])]
+        rest = [r for r in its if r not in lowest]
+        fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
+        old = [r for r in rest if age(r) > FRESH_DAYS]
         new = [r for r in fresh if age(r) <= 2]
         for r in new:
             new_all.setdefault(r["url"], (r, entry))
@@ -1756,6 +1760,19 @@ def _ago(iso: Optional[str]) -> Optional[str]:
     return f"{mins // 1440}d ago"
 
 
+def _mark_lowest(items: list[dict]) -> None:
+    """Marks the cheapest working listing for each term — the Price Board's
+    "cheapest anywhere" — so it stands out (pulses) wherever it's listed."""
+    from scrapers import board
+    lowest: dict[str, list[str]] = {}
+    for row in board.load().get("rows") or []:
+        ch = row.get("cheapest")
+        if ch and ch.get("url"):
+            lowest.setdefault(ch["url"], []).append(row["term"])
+    for l in items:
+        l["lowest_for"] = lowest.get(l.get("url"))
+
+
 def _feed_items(cfg) -> list[dict]:
     """Every Wanted match still for sale, decorated for display, newest post
     first. Rebuilt when a scrape or sweep finishes, or every 3 minutes."""
@@ -1845,9 +1862,13 @@ def feed():
             if t in counts:
                 counts[t] += 1
     view = items
+    _mark_lowest(items)
+    pinned = []
     if term:
         parts = {p.strip() for p in term.split(",") if p.strip()}
         view = [l for l in view if parts & set(l["wanted"])]
+        # Filtering by a term: its cheapest working one (pulsing gold) on top.
+        pinned = [l for l in view if parts & set(l.get("lowest_for") or [])]
     if show == "deals":
         view = [l for l in view if l.get("deal_pct")]
     elif show == "steals":
@@ -1862,6 +1883,10 @@ def feed():
     new = [l for l in view if l["is_new"] and age(l) <= FEED_RECENT_DAYS]
     recent = [l for l in view if not l["is_new"] and age(l) <= FEED_RECENT_DAYS]
     older = [l for l in view if age(l) > FEED_RECENT_DAYS]
+    if pinned:
+        new = [l for l in new if l not in pinned]
+        older = [l for l in older if l not in pinned]
+        recent = pinned + [l for l in recent if l not in pinned]
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
