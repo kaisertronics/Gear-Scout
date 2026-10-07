@@ -12,7 +12,8 @@
       alerts cover. Each term is searched directly on Reverb, Craigslist, Kijiji, ShopGoodwill, Long &amp; McQuade and
       OfferUp every 30 minutes, on eBay every 2 hours, and on Facebook Marketplace, your groups and group posts in
       rotation all day (see <a href="{{ url_for('health') }}">Health</a>). New terms go first.
-      Below each term: only the listings at least 10% under their comp, cheapest first — tap “all on the Feed” for every one.
+      Below each term: every listing for sale that matches it, at any price — newest post first (or cheapest
+      first) — with deals marked. Same listings as the Feed.
     </p>
     <div class="telex-actions">
       <form method="post" action="{{ url_for('telex_scrape') }}">
@@ -87,7 +88,7 @@
       <div class="listing-grid">
         {% for l in fresh[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
-      {% else %}<p class="muted">Nothing posted in the last week that's 10%+ under its comp.</p>{% endif %}
+      {% else %}<p class="muted">Nothing posted in the last week.</p>{% endif %}
       {% if fresh|length > 24 %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(fresh[24:])) }}">
           <summary>Show all {{ fresh|length }} ({{ 'newest' if sort == 'new' else 'cheapest' }} first)</summary>
@@ -101,7 +102,7 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">Nothing 10%+ under its comp right now.</p>
+      <p class="muted">Nothing for sale right now.</p>
     {% endif %}
     {% if unpriced %}
       <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(unpriced)) }}">

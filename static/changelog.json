@@ -3,6 +3,7 @@
     "date": "2026-10-06",
     "title": "Code review fixes",
     "items": [
+      "Telex page shows every new ad on your list, at any price (it only showed ones 10%+ under their usual price — about two-thirds of new ads never appeared there: 31 shown vs. 126 posted in the last 2 days). It now uses the same listings as the Feed, newest first, deals marked.",
       "Scrape now (also on the Feed) re-reads every site and then searches every one of your terms; it reports how many new ads are on your list. It no longer deletes listings older than 30 days.",
       "Listings are cleaned up by when a site last showed them, not when they were first found — long-running ads no longer come back as “new”, and ones still listed stay on the Feed.",
       "Price increases are shown; an ad wrongly marked sold comes back when a site shows it again; “✓ still listed” only appears when a check actually confirmed it.",

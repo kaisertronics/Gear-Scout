@@ -1323,90 +1323,36 @@ def telex_group_remove():
 
 @app.route("/telex")
 def telex():
+    """Your Telex List (= Wanted list) term by term. Built from the same
+    listings as the Feed — every match at any price, newest post first (or
+    cheapest first), deals marked — so the two pages always agree."""
     cfg = load_config_raw()
-    terms = _telex_terms(cfg)
-    # Matching thousands of listings against every term takes a few seconds
-    # (much longer while a scrape runs); reuse it for 3 minutes unless
-    # something changed.
-    key = (tuple(terms), _data_version[0])  # ?sort= only changes the display
-    if _telex_cache["groups"] is None:
-        snap = _snapshot_load("telex")
-        if snap is not None:  # terms changed since? only the differences get worked out below
-            _telex_cache.update(key=None, at=0.0, groups=snap)
-    fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < PAGE_REFRESH
-    cached = _telex_cache["groups"]
-    if (not fresh and cached is not None and not request.headers.get("X-Warm")
-            and [t for t, _, _ in cached] != terms):
-        # You added or removed a term: work out only the new one(s) — a few
-        # seconds — instead of all ~45 terms (a minute), then refresh the
-        # rest in the background.
-        have = {t: g for g in cached for t in [g[0]]}
-        missing = [t for t in terms if t not in have]
-        if len(missing) <= 5:
-            if missing:
-                have.update({g[0]: g for g in _telex_matches(missing, note=False)})
-            cached = [have[t] for t in terms]
-            _telex_cache.update(key=None, at=0.0, groups=cached)
-    if fresh:
-        groups = _telex_cache["groups"]
-    elif (_telex_cache["groups"] is not None
-          and [t for t, _, _ in _telex_cache["groups"]] == terms and not request.headers.get("X-Warm")):
-        # Show the last list right away and refresh it in the background.
-        groups = _telex_cache["groups"]
-        if not _telex_state["running"]:
-            def rebuild():
-                _telex_state["running"] = True
-                try:
-                    with app.test_request_context("/telex", headers={"X-Warm": "1"}):
-                        telex()
-                except Exception:
-                    logging.exception("Telex rebuild failed")
-                finally:
-                    _telex_state["running"] = False
-            threading.Thread(target=rebuild, name="telex-rebuild", daemon=True).start()
-    else:
-        groups = _telex_matches(terms)
-        _telex_cache.update(key=key, at=time.time(), groups=groups)
-        _snapshot_save("telex", groups)
-        _verify_top_listings()
-    # What changed since you last looked: newest posts first inside each
-    # term (or cheapest first, one tap), terms with something new on top,
-    # and everything posted in the last 2 days collected at the top.
+    terms = _telex_terms(cfg)  # entries as you typed them (a few hold several terms)
+    from scrapers.enrich import parse_price
     sort = "cheap" if request.args.get("sort") == "cheap" else "new"
     age = lambda r: r.get("age_days") if r.get("age_days") is not None else 999
-    view, new_all = [], {}
-    from scrapers.board import _is_specific
-    from scrapers.enrich import parse_price
-    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 0
-    for term, items, unpriced in groups:
-        # Broad terms ("vintage microphone", "tube mic", "stam") match lots of
-        # cheap odds and ends: nothing under $150 there, and only $300+ (near
-        # your budget) in the "New" section. Specific models: any price.
-        specific = _is_specific(term)
-        if not specific:
-            items = [r for r in items if unit(r) >= 150]
-        fresh = [r for r in items if not r.get("is_old")]
-        old = [r for r in items if r.get("is_old")]
-        if sort == "new":
-            fresh = sorted(fresh, key=age)
-        new = [r for r in fresh if age(r) <= 2 and (specific or unit(r) >= 300)]
+    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
+    items = _feed_items(cfg)
+    view, new_all, feed_counts = [], {}, {}
+    for entry in terms:
+        parts = {p.strip() for p in entry.split(",") if p.strip()}
+        its = [l for l in items if parts & set(l["wanted"])]  # already newest first
+        if sort == "cheap":
+            its = sorted(its, key=unit)
+        fresh = [r for r in its if age(r) <= FRESH_DAYS]
+        old = [r for r in its if age(r) > FRESH_DAYS]
+        new = [r for r in fresh if age(r) <= 2]
         for r in new:
-            new_all.setdefault(r["url"], (r, term))
-        view.append({"term": term, "all_items": items, "fresh": fresh, "old": old, "unpriced": unpriced,
+            new_all.setdefault(r["url"], (r, entry))
+        feed_counts[entry] = len(its)
+        view.append({"term": entry, "all_items": its, "fresh": fresh, "old": old, "unpriced": [],
                      "new_count": len(new)})
     view.sort(key=lambda v: v["new_count"] == 0)  # stable: keeps your order otherwise
     new_items = sorted(new_all.values(), key=lambda x: age(x[0]))
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
-    # A Telex entry can hold several terms ("lexicon 300, lexicon 480").
-    feed_counts: dict = {}
-    if not request.headers.get("X-Warm"):
-        items = _feed_items(cfg)
-        for entry in terms:
-            parts = {p.strip() for p in entry.split(",") if p.strip()}
-            feed_counts[entry] = sum(1 for l in items if parts & set(l["wanted"]))
-    return render_template("telex.html", feed_counts=feed_counts, groups=groups, terms=terms, view=view, new_items=new_items, sort=sort,
-                           total=sum(len(g) for _, g, _ in groups), sweep=telex_state(),
+    return render_template("telex.html", feed_counts=feed_counts, terms=terms, view=view, new_items=new_items,
+                           sort=sort, total=sum(feed_counts.values()), sweep=telex_state(),
                            model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 
 
@@ -1482,8 +1428,10 @@ def telex_status():
 def _terms_changed(added: list[str] | None = None) -> None:
     """After a Telex term is added or removed: update only what that term
     touches — its Price Board row (in the background, a few seconds) — instead
-    of recalculating everything. The Telex page itself works out just the new
-    term on its next load."""
+    of recalculating everything. The Feed, the Telex page and the deals
+    (which follow the Wanted list) refresh on their next load."""
+    _data_changed()
+
     def run():
         try:
             from scrapers import board
@@ -1867,6 +1815,11 @@ def _feed_items(cfg) -> list[dict]:
     out.sort(key=lambda l: l["age_days"] if l.get("age_days") is not None else 999)
     try:
         Path("/data/shown_feed.txt").write_text("\n".join(l["url"] for l in out[:400] if l.get("url")))
+        # Tell the hourly refresh which of your listings still have no usual
+        # price, so it looks those up first (Reverb, eBay when allowed).
+        Path("/data/nocomp_titles.txt").write_text("\n".join(dict.fromkeys(
+            l["title"] for l in out if l.get("title") and not (l.get("price_ctx") or {}).get("typical")
+            and not l.get("comp"))))
     except OSError:
         pass
     c.update(key=key, at=time.time(), data=out)
