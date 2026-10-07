@@ -360,6 +360,16 @@ def is_accessory_only(title: Optional[str]) -> bool:
     return not gear_after
 
 
+_OFF_TOPIC = re.compile(
+    r"\b(?:tractors?|backhoes?|skid[\s-]?steers?|track loaders?|loaders?|excavators?|mulchers?|bulldozers?|"
+    r"forklifts?|trailers?|semi[\s-]?trucks?|pickup trucks?|4wd|awd|\d+\s?hrs|mowers?|(?<![\w-])(?:atvs?|utvs?)(?![\w-])|snowmobiles?|"
+    r"kubota|john deere|bobcat|caterpillar|great dane|"
+    r"stratocaster|telecaster|jazzmaster|jazz bass|precision bass|les paul|(?<![\w-])strat(?![\w-])|"
+    r"(?:guitar |bass |strat(?:ocaster)? |tele(?:caster)? |single[\s-]?coil |humbucker )?pick-?ups? set|"
+    r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"
+    r"t-?shirts?|shirts?|hoodies?|sweatshirts?|(?<!new )jerseys?|hats?|caps? \(clothing\))\b", re.I)
+
+
 @functools.lru_cache(maxsize=100_000)
 def is_not_audio(title: Optional[str]) -> bool:
     """True for listings that only share a word with audio gear (air
@@ -369,6 +379,11 @@ def is_not_audio(title: Optional[str]) -> bool:
         return True
     # "Viair compressors", "aAir Compressor": "air compressor" even inside a word.
     if _NOT_AUDIO.search(t) or re.search(r"air[\s-]?compressor|air tank|viair", t, re.I):
+        return True
+    # Farm / construction / vehicles ("Kubota … Loader, SSL attach", a
+    # "7411T-SSL trailer"), guitar pickups and pickguards (Seymour Duncan
+    # SSL-1), and clothing — they share letters with studio gear names.
+    if _OFF_TOPIC.search(t):
         return True
     # Guitars themselves ("Vintage V72 Reissued Electric Guitar") — but not a
     # mic or preamp that mentions recording guitar.
