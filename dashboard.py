@@ -1839,7 +1839,7 @@ def _feed_items(cfg) -> list[dict]:
         pct = ctx.get("pct_under") if ctx.get("deal") else None
         l["deal_pct"] = pct
         l["is_steal"] = bool(pct and pct >= FEED_STEAL_PCT and not ctx.get("rough"))
-        l["checked_label"] = _ago(l.get("sold_checked_at"))
+        l["checked_label"] = _ago(l.get("confirmed_live_at"))
         out.append(l)
     # Newest post first; ties (same posting time, or no posting time) go to
     # the one Gear Scout found most recently.
@@ -2001,7 +2001,7 @@ def health():
     # of older ads is re-checked more slowly.
     top = items[:200]
     six_h = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
-    checks = {"total": len(top), "fresh": sum(1 for l in top if (l.get("sold_checked_at") or "") >= six_h)}
+    checks = {"total": len(top), "fresh": sum(1 for l in top if (l.get("confirmed_live_at") or "") >= six_h)}
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())

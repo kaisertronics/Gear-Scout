@@ -47,6 +47,11 @@ def _ensure(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(seen)")}
     if "sold_checked_at" not in cols:
         conn.execute("ALTER TABLE seen ADD COLUMN sold_checked_at TEXT")
+    # When a check last actually confirmed the ad is still up (a page that
+    # couldn't be read counts as checked, so it isn't retried every run, but
+    # doesn't count as "still listed").
+    if "confirmed_live_at" not in cols:
+        conn.execute("ALTER TABLE seen ADD COLUMN confirmed_live_at TEXT")
 
 
 def _ebay_gone(url: str) -> Optional[bool]:
@@ -189,7 +194,7 @@ def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
         rows = conn.execute(
             f"""SELECT url, MAX(favorite) AS fav, MAX(first_seen) AS seen FROM seen
                 WHERE url LIKE 'http%' AND sold = 0 AND hidden = 0 AND duplicate = 0
-                AND (first_seen >= ? OR favorite = 1)
+                AND (COALESCE(last_seen, first_seen) >= ? OR favorite = 1)
                 AND (sold_checked_at IS NULL OR sold_checked_at < ?
                      OR (COALESCE(pending, 0) = 1 AND sold_checked_at < ?))
                 AND url NOT LIKE '%shopgoodwill.com%' AND url NOT LIKE '%search/posts%'
@@ -203,10 +208,12 @@ def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
 
 
 def _record(url: str, gone: Optional[bool]) -> None:
+    now = datetime.now(timezone.utc).isoformat()
     with _conn() as conn:
         _ensure(conn)
-        conn.execute("UPDATE seen SET sold_checked_at = ? WHERE url = ?",
-                     (datetime.now(timezone.utc).isoformat(), url))
+        conn.execute("UPDATE seen SET sold_checked_at = ? WHERE url = ?", (now, url))
+        if gone is False:
+            conn.execute("UPDATE seen SET confirmed_live_at = ? WHERE url = ?", (now, url))
         conn.commit()
     if gone:
         mark_sold(url)

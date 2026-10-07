@@ -61,7 +61,9 @@ def scrape_reverb_api(source: dict, keywords: list[str]) -> ScrapeResult:
     start = time.time()
     term = keywords[0].strip() if len(keywords) == 1 and keywords[0].strip() else ""
     if term:
-        params = {"query": term, "condition": "used", "per_page": 50}
+        # Newest first: by "best match", a brand-new ad for a broad term
+        # ("ssl") can sit beyond the 150 results read.
+        params = {"query": term, "condition": "used", "sort": "published_at|desc", "per_page": 50}
         manual_url = f"https://reverb.com/marketplace?query={quote_plus(term)}&condition=used"
         pages = 3
     else:

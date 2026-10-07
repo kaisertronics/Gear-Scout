@@ -128,7 +128,14 @@ def fix_brand_spelling(text_lower: str) -> str:
 # a scrape keeps a listing when the keyword list OR the Wanted list matches,
 # so model variants the plain phrase misses ("Lexicon 960L" for the term
 # "lexicon 960", "Avalon VT-737sp" for "Avalon 737") are never thrown away.
+# Only for the scrape keyword list itself (a ScrapeKeywords) — never for
+# other word lists like exclude words.
 WANTED_MATCHERS: list = []
+
+
+class ScrapeKeywords(list):
+    """The scrape keyword list (keywords_with_learned): keyword_match also
+    accepts anything your Wanted list matches."""
 
 
 def keyword_match(text: str, keywords: list[str]) -> bool:
@@ -144,7 +151,7 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
         combined = _combined_pattern(keywords)
         if combined and combined.search(text_lower):
             return True
-        return any(m(text_lower) for m in WANTED_MATCHERS)
+        return isinstance(keywords, ScrapeKeywords) and any(m(text_lower) for m in WANTED_MATCHERS)
     for kw in keywords:
         pattern = _keyword_pattern(str(kw))
         if pattern and pattern.search(text_lower):

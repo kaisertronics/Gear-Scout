@@ -450,6 +450,9 @@ def is_relevant(title: Optional[str], price: Optional[str], terms: tuple) -> boo
     specific = _specific_terms(terms)
     if specific and keyword_match(t, specific):
         return True
+    from scrapers.base import WANTED_MATCHERS, fix_brand_spelling
+    if WANTED_MATCHERS and any(m(fix_brand_spelling(t.lower())) for m in WANTED_MATCHERS):
+        return True  # on your Wanted list (Telex List)
     if _HIFI.search(t):
         return False
     brand = canonical_brand(t)

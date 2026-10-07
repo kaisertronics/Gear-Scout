@@ -70,6 +70,9 @@ def _conn() -> sqlite3.Connection:
         ("sold", "INTEGER NOT NULL DEFAULT 0"),
         ("pending", "INTEGER NOT NULL DEFAULT 0"),
         ("sold_at", "TEXT"),
+        ("last_seen", "TEXT"),
+        ("sold_checked_at", "TEXT"),
+        ("confirmed_live_at", "TEXT"),
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -178,6 +181,15 @@ def mark_seen(listing, live_only: bool = False) -> str:
         ).fetchone()
         if existing:
             status = "seen"
+            # Still in a site's results, so still up: remember that (old ads
+            # aren't purged while they're live), and undo a "sold" mark from a
+            # sold check that got it wrong. A sold label on the card itself is
+            # applied again just below (_record_status).
+            conn.execute("UPDATE seen SET last_seen = ?, confirmed_live_at = ? WHERE global_id = ?",
+                         (now, now, listing.global_id))
+            if not getattr(listing, "sold", None):
+                conn.execute("UPDATE seen SET sold = 0, sold_at = NULL WHERE global_id = ? AND sold = 1",
+                             (listing.global_id,))
             # Facebook picture links expire after a few days; a listing seen
             # again comes with a fresh one.
             if getattr(listing, "image_url", None):
@@ -196,6 +208,10 @@ def mark_seen(listing, live_only: bool = False) -> str:
                     (listing.price, existing[0], now, listing.global_id),
                 )
                 status = "price_drop"
+            elif old_value and new_value and new_value > old_value * 1.01:
+                # Price went up: show the current price (no "was" price).
+                conn.execute("UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
+                             (listing.price, listing.global_id))
             _record_status(conn, listing)
             if not live_only:
                 # A standing-keyword scrape found something a live search
@@ -216,8 +232,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -232,9 +248,15 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 key,
                 1 if duplicate else 0,
                 getattr(listing, "location", None),
+                now,
             ),
         )
         _record_status(conn, listing)
+        if duplicate and listing.url:
+            # Seen again through another source (another Facebook region, a
+            # Telex search): the original row is what's shown, so it's the one
+            # that must count as still listed.
+            conn.execute("UPDATE seen SET last_seen = ? WHERE url = ? AND duplicate = 0", (now, listing.url))
         conn.commit()
         return "duplicate" if duplicate else "new"
 
@@ -338,11 +360,13 @@ def all_priced_rows() -> list[dict]:
         )]
 
 
-def purge_old(days: int = 30):
-    """Remove entries older than `days` to keep the DB small."""
+def purge_old(days: int = 90):
+    """Remove listings no site has shown for `days` days, to keep the DB
+    small. (By last sighting, not first: deleting a long-running ad that's
+    still up made it come back as "new" the next time it was scraped.)"""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
-        conn.execute("DELETE FROM seen WHERE first_seen < ? AND favorite = 0", (cutoff,))
+        conn.execute("DELETE FROM seen WHERE COALESCE(last_seen, first_seen) < ? AND favorite = 0", (cutoff,))
         conn.commit()
     logger.info("Purged seen entries older than %d days", days)
 

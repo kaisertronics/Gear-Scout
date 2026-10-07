@@ -663,12 +663,19 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
             collected: dict[str, dict] = {}
             _collect_marketplace_cards(page, collected, scrolls=(8 if is_live else FEED_SCROLLS))
 
-            # Scheduled runs also search a few broad words newest-first in
-            # each region — the browse feed alone is a small, personalized
-            # sample. Skipped on the lighter hourly refresh runs.
+            # Also search broad words newest-first in each region — the browse
+            # feed alone is a small, personalized sample. Scheduled runs: all
+            # of them; the hourly refresh: one, taking turns.
             loc_id = re.search(r'/marketplace/(\d+)', source["url"])
-            if not is_live and not source.get("_light") and loc_id:
-                for term in source.get("_broad_terms") or DEFAULT_BROAD_TERMS:
+            broad = list(source.get("_broad_terms") or DEFAULT_BROAD_TERMS)
+            if source.get("_light") and broad:
+                # The hourly refresh: one of the words, newest first, taking
+                # turns hour by hour (the browse feed alone isn't sorted by
+                # newest, so fresh ads could wait for a full scheduled run).
+                hour = int(time.time() // 3600)
+                broad = [broad[(hour + int(loc_id.group(1)[-3:]) if loc_id else hour) % len(broad)]]
+            if not is_live and loc_id:
+                for term in broad:
                     # A time budget per region, so one slow page can't stall the run.
                     if time.time() - start > REGION_BUDGET_SECONDS:
                         logger.info("%s: time budget reached, skipping remaining broad searches", name)

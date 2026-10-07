@@ -87,14 +87,15 @@ def match(title: Optional[str], price: Optional[str], ms) -> list[str]:
 
 
 def recent_rows(days: int = FEED_DAYS) -> list[dict]:
-    """Every stored listing still for sale found in the last `days` days."""
+    """Every stored listing still for sale that a site has shown in the last
+    `days` days (an ad up for months stays, as long as it's still listed)."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
         return [dict(r) for r in conn.execute(
             """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND COALESCE(hidden, 0) = 0
                AND COALESCE(duplicate, 0) = 0 AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0
-               AND first_seen >= ? ORDER BY first_seen DESC""", (since,)).fetchall()]
+               AND COALESCE(last_seen, first_seen) >= ? ORDER BY first_seen DESC""", (since,)).fetchall()]
 
 
 def posted_age_days(row: dict) -> Optional[float]:

@@ -119,6 +119,13 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
     }
     if is_live_search:
         params["q"] = keywords[0].strip()
+        # A specific model ("Avalon 737", "V76") is searched on all of eBay:
+        # gear is often listed outside Pro Audio (vintage electronics,
+        # collectibles, other instruments). A broad term ("ssl", "maag") stays
+        # in Pro Audio, or it brings back football jerseys and water skis.
+        from scrapers.board import _is_specific
+        if _is_specific(keywords[0].strip()):
+            del params["category_ids"]
     manual_url = (
         "https://www.ebay.com/sch/i.html?_sacat=180014"
         "&LH_ItemCondition=1500%7C2500%7C3000&_sop=10"

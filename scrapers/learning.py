@@ -258,7 +258,8 @@ def keywords_with_learned(cfg: dict) -> list[str]:
         if t and t.lower() not in lower:
             base.append(t)
             lower.add(t.lower())
-    return base
+    from scrapers.base import ScrapeKeywords
+    return ScrapeKeywords(base)
 
 
 # ---------------------------------------------------------------------------
