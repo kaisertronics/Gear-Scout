@@ -100,3 +100,43 @@ def _wanted_new_since(cfg: dict, since: str) -> dict:
     hits = sum(1 for t, p, src in rows if t and not exclude_match(t, exclude) and not is_not_audio(t)
                and not title_says_sold(t) and wanted.match(t, p, ms, src))
     return {"all": len(rows), "wanted": hits}
+
+
+STATUS_PATH = "/data/manual_scrape_status.json"
+
+
+def main() -> None:
+    """Runs "Scrape now" as its own lower-priority process (the dashboard
+    starts it), so a scrape never starves the web pages of CPU. Writes the
+    progress file the pages poll."""
+    import json
+    import yaml
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    started = time.time()
+
+    def write(status: dict) -> None:
+        try:
+            with open(STATUS_PATH, "w") as f:
+                json.dump(status, f)
+        except OSError:
+            pass
+
+    def on_progress(done, total, current_source):
+        write({"state": "running", "started": started, "done": done, "total": total,
+               "current_source": current_source})
+    try:
+        with open("/config/config.yaml") as f:
+            cfg = yaml.safe_load(f) or {}
+        results, _new, found = run_manual_scrape(cfg, on_progress=on_progress)
+        open("/data/manual_scrape_finished", "a").close()
+        import os
+        os.utime("/data/manual_scrape_finished")  # pages rebuild once, now
+        write({"state": "done", "new_count": found["all"], "wanted_new": found["wanted"],
+               "sources_ok": sum(1 for r in results if r.success or r.blocked), "sources_total": len(results)})
+    except Exception as e:
+        logger.exception("Manual scrape failed")
+        write({"state": "failed", "reason": str(e)})
+
+
+if __name__ == "__main__":
+    main()

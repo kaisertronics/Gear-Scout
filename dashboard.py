@@ -387,28 +387,16 @@ def _write_manual_scrape_status(status: dict):
 
 
 def _run_manual_scrape_job():
-    from scrapers.manual_scrape import run_manual_scrape
-    started = time.time()
-
-    def on_progress(done, total, current_source):
-        _write_manual_scrape_status({
-            "state": "running", "started": started,
-            "done": done,
-            "total": total,
-            "current_source": current_source,
-        })
-
+    """"Scrape now" runs as its own lower-priority process (nice 10), not
+    inside the web server: it uses several CPUs for minutes, and in the same
+    process it starved the pages (the site hung). This thread just waits for
+    it; the process writes the progress file itself."""
+    import subprocess
     try:
-        cfg = load_config_raw()
-        results, new_listings, found = run_manual_scrape(cfg, on_progress=on_progress)
-        Path("/data/manual_scrape_finished").touch()  # pages rebuild once, now
-        _write_manual_scrape_status({
-            "state": "done",
-            "new_count": found["all"],
-            "wanted_new": found["wanted"],
-            "sources_ok": sum(1 for r in results if r.success or r.blocked),
-            "sources_total": len(results),
-        })
+        proc = subprocess.run(["nice", "-n", "10", sys.executable, "-m", "scrapers.manual_scrape"],
+                              cwd=str(Path(__file__).parent), timeout=3600)
+        if proc.returncode != 0 and _load_manual_scrape_status().get("state") == "running":
+            _write_manual_scrape_status({"state": "failed", "reason": f"scrape process exited ({proc.returncode})"})
     except Exception as e:
         logging.exception("Manual scrape failed")
         _write_manual_scrape_status({"state": "failed", "reason": str(e)})
@@ -1785,8 +1773,40 @@ def _feed_items(cfg) -> list[dict]:
         pass
     key = (_data_version[0], marker, tuple(wanted.terms(cfg)))
     c = _feed_cache
+    if c["data"] is None:
+        snap = _snapshot_load("feed")  # right after a restart: the saved copy, instantly
+        if snap is not None:
+            c.update(key=None, at=0.0, data=snap)
     if c["data"] is not None and c["key"] == key and time.time() - c["at"] < 180:
         return c["data"]
+    if c["data"] is not None and not _feed_state.get("rebuilding"):
+        # Something changed: show the current list right away and rebuild in
+        # the background — rebuilding inside the request made the page hang
+        # for a minute while a scrape was using the CPU.
+        same_terms = c["key"] is None or c["key"][2] == key[2]
+        if same_terms:
+            def rebuild():
+                _feed_state["rebuilding"] = True
+                try:
+                    _build_feed(cfg, key)
+                except Exception:
+                    logging.exception("Feed rebuild failed")
+                finally:
+                    _feed_state["rebuilding"] = False
+            threading.Thread(target=rebuild, name="feed-rebuild", daemon=True).start()
+            return c["data"]
+    elif c["data"] is not None and _feed_state.get("rebuilding"):
+        return c["data"]
+    return _build_feed(cfg, key)
+
+
+_feed_state: dict = {"rebuilding": False}
+
+
+def _build_feed(cfg, key) -> list[dict]:
+    from scrapers import wanted
+    from scrapers.enrich import parse_price
+    c = _feed_cache
     ms = wanted.matchers(cfg)
     items, seen_ads = [], set()
     for r in wanted.recent_rows():
@@ -1840,6 +1860,7 @@ def _feed_items(cfg) -> list[dict]:
     except OSError:
         pass
     c.update(key=key, at=time.time(), data=out)
+    _snapshot_save("feed", out)
     return out
 
 
@@ -3070,7 +3091,7 @@ if __name__ == "__main__":
 
     # Every other background search: a "running" left over from before the
     # restart can't still be running.
-    for path in (TELEX_STATUS_PATH, LOWEST_STATUS_PATH, FBPOSTS_STATUS_PATH):
+    for path in (TELEX_STATUS_PATH, LOWEST_STATUS_PATH, FBPOSTS_STATUS_PATH, MANUAL_SCRAPE_STATUS_PATH):
         try:
             st = json.loads(path.read_text())
             if st.get("state") == "running":
