@@ -32,7 +32,7 @@
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}
-      {% if l.price_ctx and l.price_ctx.typical %}
+      {% if l.price_ctx and l.price_ctx.typical and not l.comp %}
         <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
       {% if l.comp %}

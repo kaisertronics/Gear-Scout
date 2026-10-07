@@ -103,12 +103,15 @@ def _wanted_only(listings: list, cfg: dict) -> list:
     """The digest lists what the Feed shows: new listings matching your
     Wanted list (Telex List), at any price — with "N% under" when the
     listing is 10%+ under its comp. Auctions have their own alerts."""
+    from datetime import timedelta
     from scrapers import wanted
-    from scrapers.comps import evaluate, price_index, similar_index
     from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
-    from scrapers.market import load_market
-    market, index, similar = load_market(), price_index(), similar_index()
+    from scrapers.steals import find
     ms, exclude = wanted.matchers(cfg), cfg.get("exclude_words") or []
+    # "% under" from the same check as the Feed, the Deals/Steals pages and
+    # the steal alerts, so the email never disagrees with them.
+    since = (_last_digest_time() - timedelta(hours=1)).isoformat()
+    deals = {r["url"]: r["steal"] for r in find(cfg, since=since, min_pct=10)["trusted"]}
     keep, seen = [], set()
     for l in listings:
         if (l.description or "").startswith("Auction") or exclude_match(l.title, exclude) \
@@ -118,8 +121,8 @@ def _wanted_only(listings: list, cfg: dict) -> list:
         if ad in seen:
             continue
         seen.add(ad)
-        c = evaluate(l.title, l.price, l.description, l.url, market, index, similar)
-        l.comp = c if c and c["worth"] else None
+        s = deals.get(l.url)
+        l.comp = {"pct": s["pct"], "ref": s["ref"], "label": s["label"], "est": s["est"]} if s else None
         keep.append(l)
     logger.info("Digest: %d of %d new listings match your Wanted list", len(keep), len(listings))
     return keep

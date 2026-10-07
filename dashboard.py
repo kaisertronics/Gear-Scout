@@ -1768,7 +1768,7 @@ def learning_dismiss():
 
 FEED_VISIT_FILE = Path("/data/feed_visit.json")
 FEED_RECENT_DAYS = 14   # posted within this → main list; older → collapsed section
-FEED_STEAL_PCT = 50
+FEED_STEAL_PCT = 60  # same as steal alerts (scrapers/steals.py MIN_PCT)
 _feed_cache: dict = {"key": None, "at": 0.0, "data": None}
 
 
@@ -1838,6 +1838,13 @@ def _feed_items(cfg) -> list[dict]:
     # request's own filters (those are applied afterwards).
     with app.test_request_context("/", headers={"X-Warm": "1"}):
         items = _decorate(items)
+    # Deals and steals: the same calculation the Deals and Steals pages, the
+    # digest and the steal alerts use (scrapers/steals.py: 10%+ under the most
+    # trustworthy comp, double-checked against other listings of the same
+    # gear) — so a listing shows the same "% under" everywhere.
+    with app.test_request_context("/deals"):
+        deals = _all_deals() or {}
+    comp_by_url = {d["url"]: d["comp"] for d in deals.get("trusted") or []}
     out = []
     for l in items:
         ctx = l.get("price_ctx") or {}
@@ -1845,9 +1852,13 @@ def _feed_items(cfg) -> list[dict]:
         value = ctx.get("unit_value") or parse_price(l.get("price"))
         if typical and value and value < typical * 0.15:
             continue  # a part or plugin with a vague title
-        pct = ctx.get("pct_under") if ctx.get("deal") else None
-        l["deal_pct"] = pct
-        l["is_steal"] = bool(pct and pct >= FEED_STEAL_PCT and not ctx.get("rough"))
+        comp = comp_by_url.get(l["url"])
+        l["comp"] = comp
+        l["is_deal"] = bool(comp)
+        l["deal_pct"] = comp["pct"] if comp else None
+        l["is_steal"] = bool(comp and comp["pct"] >= FEED_STEAL_PCT and not comp["est"])
+        if ctx:
+            ctx["deal"] = False  # the card's "% under" comes from l.comp, as everywhere else
         l["checked_label"] = _ago(l.get("confirmed_live_at"))
         out.append(l)
     # Newest post first; ties (same posting time, or no posting time) go to
