@@ -147,7 +147,10 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # fifth of the item's own comp) are skipped.
         cheapest = comp = None
         checked = []
-        for unit, n, r in cands[:12]:
+        from scrapers.enrich import needs_repair
+        # Working units only: a "Non Functioning" / "for parts" ad isn't the
+        # cheapest way to own one.
+        for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))][:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             unit, n = _unit(r, unit, n, c)
             if c and unit < c["ref"] * 0.2:
