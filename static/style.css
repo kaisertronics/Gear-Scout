@@ -933,3 +933,8 @@ button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; f
 @media (prefers-color-scheme: dark) {
   .listing-card:has(.fav-star.is-favorite) .listing-title { color: #f472b6; }
 }
+
+/* Favorites link in the top bar: pink so it's easy to spot. */
+.topbar nav a.nav-favorites { color: #f9a8d4; }
+.topbar nav a.nav-favorites.active,
+.topbar nav a.nav-favorites:hover { color: #fbcfe8; border-bottom-color: #f472b6; }

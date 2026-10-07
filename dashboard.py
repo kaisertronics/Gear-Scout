@@ -400,11 +400,12 @@ def _run_manual_scrape_job():
 
     try:
         cfg = load_config_raw()
-        results, new_listings = run_manual_scrape(cfg, on_progress=on_progress)
+        results, new_listings, found = run_manual_scrape(cfg, on_progress=on_progress)
         Path("/data/manual_scrape_finished").touch()  # pages rebuild once, now
         _write_manual_scrape_status({
             "state": "done",
-            "new_count": len(new_listings),
+            "new_count": found["all"],
+            "wanted_new": found["wanted"],
             "sources_ok": sum(1 for r in results if r.success or r.blocked),
             "sources_total": len(results),
         })

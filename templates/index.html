@@ -8,7 +8,7 @@
     <form method="post" action="{{ url_for('scrape_start') }}" id="scrape-now-form">
       <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
     </form>
-    <span class="muted">Quick scrape of every source right now (about 5 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.</span>
+    <span class="muted">Re-reads every site, then searches each of your terms (about 5–8 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.</span>
   </div>
   {{ last_searched(['manual', 'auto']) }}
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>

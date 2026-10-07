@@ -29,17 +29,37 @@ def run_manual_scrape(
     scheduled run would — so the Dashboard tab reflects it immediately —
     but never touches email."""
     from scrapers.learning import keywords_with_learned
+    from scrapers.telex import _search_sites
+    from scrapers.wanted import terms as wanted_terms
+    started = datetime.now(timezone.utc).isoformat()
     keywords = keywords_with_learned(cfg)
+    terms = wanted_terms(cfg)
     # The quick version (like the hourly refresh): Facebook Marketplace reads
     # each region's feed without the extra broad searches, and the slow
     # Facebook post search (which runs all day in the background) is left out
     # — a full scheduled-style pass takes 15–20 minutes.
     sources = [{**s, "_light": True} for s in cfg.get("sources", [])
                if s.get("enabled", True) and s.get("type") != "facebook_posts"]
-    results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=on_progress)
+    total = len(sources) + len(terms)
+
+    def feed_progress(done, _total, current):
+        if on_progress:
+            on_progress(done, total, current)
+    results: list[ScrapeResult] = run_sources(sources, keywords, cfg, on_progress=feed_progress)
 
     all_listings = drop_excluded([l for r in results for l in r.listings], cfg, keywords)
     new_listings = filter_new(all_listings)
+
+    # Then every Wanted (Telex List) term searched directly on Reverb, eBay,
+    # Craigslist, Kijiji, ShopGoodwill, Long & McQuade and OfferUp — that's
+    # where most of your ads come from. (Facebook: the all-day rotation.)
+    for i, term in enumerate(terms):
+        if on_progress:
+            on_progress(len(sources) + i, total, f"Searching “{term}”")
+        try:
+            _search_sites(term, cfg, {"fast", "ebay"})
+        except Exception:
+            logger.exception("Scrape now: search failed for %r", term)
 
     try:
         from scrapers.enrich import build_price_index
@@ -59,9 +79,24 @@ def run_manual_scrape(
         new_listings=new_listings,
         manual=True,
     )
-    purge_old(days=30)
+    purge_old(days=90)  # same as scheduled runs (this used to drop everything over 30 days)
 
     if on_progress:
-        on_progress(len(sources), len(sources), None)
+        on_progress(total, total, None)
 
-    return results, new_listings
+    return results, new_listings, _wanted_new_since(cfg, started)
+
+
+def _wanted_new_since(cfg: dict, since: str) -> dict:
+    """How many listings found since `since` match your Wanted list (what
+    shows up on the Feed), and how many were found in all."""
+    from scrapers import wanted
+    from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
+    from scrapers.store import _conn
+    with _conn() as conn:
+        rows = conn.execute("SELECT title, price FROM seen WHERE first_seen >= ? AND COALESCE(hidden, 0) = 0"
+                            " AND COALESCE(duplicate, 0) = 0", (since,)).fetchall()
+    ms, exclude = wanted.matchers(cfg), cfg.get("exclude_words") or []
+    hits = sum(1 for t, p in rows if t and not exclude_match(t, exclude) and not is_not_audio(t)
+               and not title_says_sold(t) and wanted.match(t, p, ms))
+    return {"all": len(rows), "wanted": hits}

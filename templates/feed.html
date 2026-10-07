@@ -11,6 +11,15 @@
       {% if sweep %}Last searched {{ sweep.ago }}.{% endif %}
       <a href="{{ url_for('health') }}">Is everything being searched?</a>
     </p>
+    <div class="scrape-now-row">
+      <form method="post" action="{{ url_for('scrape_start') }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
+      </form>
+      <span class="muted">Re-reads every site, then searches each of your terms on Reverb, eBay, Craigslist and the
+        other quick sites (about 5–8 minutes). Facebook is covered by the all-day rotation.</span>
+    </div>
+    <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     <div class="feed-filters">
       {% set base = {'term': term} if term else {} %}
       <a href="{{ url_for('feed', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'all' else '' }}">All</a>
@@ -74,4 +83,30 @@
     </details>
   </section>
   {% endif %}
+<script>
+  (function () {
+    const banner = document.getElementById('scrape-status-banner');
+    const btn = document.getElementById('scrape-now-btn');
+    let sawRunning = false;
+    async function poll() {
+      let data;
+      try { data = await (await fetch("{{ url_for('scrape_status') }}")).json(); } catch (e) { return setTimeout(poll, 3000); }
+      if (data.state === 'running') {
+        sawRunning = true;
+        btn.disabled = true;
+        const what = data.current_source && data.current_source.startsWith('Searching') ? data.current_source + '…' : 'Reading every site…';
+        gsProgress(banner, data.total ? what : 'Starting scrape…', data);
+        setTimeout(poll, 1000);
+      } else if (data.state === 'done' && sawRunning) {
+        const w = data.wanted_new || 0;
+        gsProgress(banner, `Done — ${w} new on your Wanted list (${data.new_count} new listings found in all). Reloading…`, null);
+        setTimeout(() => window.location.reload(), 2500);
+      } else if (data.state === 'failed' && sawRunning) {
+        btn.disabled = false;
+        gsProgressText(banner, '⚠️ Scrape failed: ' + (data.reason || 'unknown error'));
+      }
+    }
+    poll();
+  })();
+</script>
 {% endblock %}
