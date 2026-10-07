@@ -94,33 +94,40 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
     if only is not None:
         all_terms = [(t, k) for t, k in all_terms if t in only]
     exclude = cfg.get("exclude_words") or []
+    # The same listings the Feed shows: still for sale, shown by a site in
+    # the last 45 days, the same ad stored twice counted once.
+    from scrapers.wanted import recent_rows
+    rows, seen_ads = [], set()
+    for r in recent_rows():
+        ad = ((r.get("title") or "").lower().strip(), r.get("price"))
+        if r.get("price") and r["url"].startswith("http") and ad not in seen_ads:
+            seen_ads.add(ad)
+            rows.append(r)
     with _conn() as conn:
-        conn.row_factory = sqlite3.Row
-        rows = [dict(r) for r in conn.execute(
-            """SELECT title, price, url, source_name, image_url, location, description, posted_at, first_seen
-               FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0 AND COALESCE(sold, 0) = 0
-               AND COALESCE(pending, 0) = 0 AND price IS NOT NULL""")]
         conn.execute("CREATE TABLE IF NOT EXISTS board_history (term TEXT, day TEXT, lowest REAL, PRIMARY KEY (term, day))")
         history = {}
         for term, day, low in conn.execute("SELECT term, day, lowest FROM board_history"):
             history.setdefault(term, {})[day] = low
-    texts = [fix_brand_spelling((r["title"] or "").lower()) for r in rows]
     market, index, similar = load_market(), price_index(), similar_index()
+    # Same rules as the Feed: which listings count for a term (scrapers/wanted.py)
+    # and what counts as a deal (scrapers/steals.py, as on the Deals page and
+    # in the steal alerts) — so the board's numbers match everywhere else.
+    from scrapers import wanted
+    from scrapers.steals import find as find_deals
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=FRESH_DAYS)).isoformat()
+    deals = {d["url"]: d["steal"] for d in find_deals(cfg, since=week_ago, min_pct=10)["trusted"]}
     today = datetime.now(timezone.utc).date()
     board = []
     for term, kind in all_terms:
         # Specific models match brand + exact model number ("v72" isn't a
         # guitar pick with "V72" somewhere in the title).
-        match = model_matcher(term) if _is_specific(term) and re.search(r"\d", term) else term_matcher(term)
-        form_wanted = item_form(term)
+        one = [(term, term_matcher(term), item_form(term), _is_specific(term))]
         cands = []
-        for r, text in zip(rows, texts):
-            if not match(text):
-                continue
+        for r in rows:
             title = r["title"] or ""
-            form = item_form(title)
-            if ((form in ("pedal", "plugin") and form != form_wanted) or is_partial(title) or is_accessory_only(title)
-                    or title_says_sold(title)
+            if not wanted.match(title, r["price"], one):
+                continue
+            if (title_says_sold(title)
                     or is_not_audio(title) or exclude_match(title, exclude)
                     or (r.get("description") or "").startswith("Auction")):
                 continue
@@ -149,18 +156,16 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # always a mismatch or a scam).
         best = None
         specific = _is_specific(term)
-        for unit, n, r in fresh[:400]:
+        for unit, n, r in fresh:
             # Brand / category terms ("tube mic", "stam"): only gear near the
             # owner's budget ($500–$2,000), not $30 mics.
             if not specific and unit < MIN_GENERIC:
                 continue
-            c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
-            if not c or c["est"] or c["ref"] < 100:
+            s = deals.get(r["url"])
+            if not s or s["est"]:
                 continue
-            unit, n = _unit(r, unit, n, c)
-            pct = round((1 - unit / c["ref"]) * 100)
-            if 10 <= pct <= 80 and (best is None or pct > best[0]):
-                best = (pct, _brief(r, unit, n), c)
+            if best is None or s["pct"] > best[0]:
+                best = (s["pct"], _brief(r, s["unit"], n), {"ref": s["ref"], "label": s["label"]})
         best_deal = ({**best[1], "pct": best[0], "ref": best[2]["ref"], "label": best[2]["label"]} if best else None)
         units = [u for u, _, _ in cands]
         # "Cheapest anywhere" only means something for a specific model

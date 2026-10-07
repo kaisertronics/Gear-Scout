@@ -463,7 +463,9 @@ def run_watch_cycle():
             logger.exception("Wanted sweep / alerts failed")
         try:
             from scrapers import board
-            board.build(cfg)
+            built = board.load().get("built")
+            if not built or (datetime.now(timezone.utc) - datetime.fromisoformat(built)).total_seconds() > 55 * 60:
+                board.build(cfg)  # hourly: it takes most of a minute
         except Exception:
             logger.exception("Price Board build failed")
         # Auctions: eBay's ending-soonest pro-audio auctions, then daytime
