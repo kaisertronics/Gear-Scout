@@ -466,6 +466,7 @@ def run_watch_cycle():
             built = board.load().get("built")
             if not built or (datetime.now(timezone.utc) - datetime.fromisoformat(built)).total_seconds() > 55 * 60:
                 board.build(cfg)  # hourly: it takes most of a minute
+            board.verify_cheapest(cfg)  # each term's cheapest really still for sale
         except Exception:
             logger.exception("Price Board build failed")
         # Auctions: eBay's ending-soonest pro-audio auctions, then daytime

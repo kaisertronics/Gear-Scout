@@ -24,7 +24,7 @@ ALERT_STATE = Path("/data/wanted_alert.json")
 # Broad terms (a bare brand, "ribbon mic") match lots of cheap odds and ends:
 # those need at least this price to count. Specific models match at any price.
 BROAD_MIN_PRICE = 150
-FEED_DAYS = 45  # how far back (found by Gear Scout) the feed looks
+FEED_DAYS = 90  # still shown by a site within this many days (same as the database keeps them)
 
 
 def terms(cfg: dict) -> list[str]:

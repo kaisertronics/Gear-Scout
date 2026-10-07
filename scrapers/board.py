@@ -21,6 +21,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 BOARD_PATH = Path("/data/price_board.json")
 FRESH_DAYS = 7
+CHEAPEST_MAX_AGE_DAYS = 90  # "cheapest anywhere": ads posted up to 90 days ago
+VERIFY_HOURS = 3            # re-check the cheapest is still up if not confirmed this recently
 MIN_GENERIC = 300  # owner's budget is $500–$2,000; a little room below
 
 
@@ -112,7 +114,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
     # Same rules as the Feed: which listings count for a term (scrapers/wanted.py)
     # and what counts as a deal (scrapers/steals.py, as on the Deals page and
     # in the steal alerts) — so the board's numbers match everywhere else.
-    from scrapers import wanted
+    from scrapers import wanted as wanted_list
     from scrapers.steals import find as find_deals
     week_ago = (datetime.now(timezone.utc) - timedelta(days=FRESH_DAYS)).isoformat()
     deals = {d["url"]: d["steal"] for d in find_deals(cfg, since=week_ago, min_pct=10)["trusted"]}
@@ -125,7 +127,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         cands = []
         for r in rows:
             title = r["title"] or ""
-            if not wanted.match(title, r["price"], one, r.get("source_name")):
+            if not wanted_list.match(title, r["price"], one, r.get("source_name")):
                 continue
             if (title_says_sold(title)
                     or is_not_audio(title) or exclude_match(title, exclude)
@@ -150,7 +152,8 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         from scrapers.enrich import needs_repair
         # Working units only: a "Non Functioning" / "for parts" ad isn't the
         # cheapest way to own one.
-        for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))][:12]:
+        for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))
+                           and (_age_days(c[2]) or 0) <= CHEAPEST_MAX_AGE_DAYS][:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             unit, n = _unit(r, unit, n, c)
             if c and unit < c["ref"] * 0.2:
@@ -213,6 +216,49 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
     BOARD_PATH.write_text(json.dumps({"built": datetime.now(timezone.utc).isoformat(), "rows": board}))
     logger.info("Price Board: %d rows", len(board))
     return board
+
+
+def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
+    """Makes sure each term's "cheapest anywhere" is still for sale: any not
+    confirmed in the last few hours is checked now (sites directly, Facebook
+    in its browser); gone ones are marked sold and those terms rebuilt, so
+    the next cheapest takes over. Returns how many were gone."""
+    from scrapers.sold_check import _record, check_fb, check_url
+    from scrapers.store import _conn
+    gone_total = 0
+    for _ in range(rounds):
+        rows = load().get("rows") or []
+        cheapest = {r["cheapest"]["url"]: r["term"] for r in rows if r.get("cheapest") and r["cheapest"].get("url")}
+        if not cheapest:
+            return gone_total
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=VERIFY_HOURS)).isoformat()
+        urls = list(cheapest)
+        with _conn() as conn:
+            fresh = {u for (u,) in conn.execute(
+                f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(urls))}) AND confirmed_live_at >= ?",
+                (*urls, cutoff))}
+        todo = [u for u in urls if u not in fresh]
+        if not todo:
+            return gone_total
+        gone = []
+        for u in [u for u in todo if "facebook.com" not in u]:
+            try:
+                g = check_url(u)
+            except Exception:
+                g = None
+            _record(u, g)
+            if g:
+                gone.append(u)
+        for u, g in check_fb([u for u in todo if "facebook.com/marketplace/item" in u]):
+            _record(u, g)
+            if g:
+                gone.append(u)
+        if not gone:
+            return gone_total
+        gone_total += len(gone)
+        logger.info("Price Board: %d cheapest listings were gone — picking the next cheapest", len(gone))
+        build(cfg, only=[cheapest[u] for u in gone])
+    return gone_total
 
 
 def load() -> dict:
