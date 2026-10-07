@@ -94,9 +94,9 @@ def _wanted_new_since(cfg: dict, since: str) -> dict:
     from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
     from scrapers.store import _conn
     with _conn() as conn:
-        rows = conn.execute("SELECT title, price FROM seen WHERE first_seen >= ? AND COALESCE(hidden, 0) = 0"
+        rows = conn.execute("SELECT title, price, source_name FROM seen WHERE first_seen >= ? AND COALESCE(hidden, 0) = 0"
                             " AND COALESCE(duplicate, 0) = 0", (since,)).fetchall()
     ms, exclude = wanted.matchers(cfg), cfg.get("exclude_words") or []
-    hits = sum(1 for t, p in rows if t and not exclude_match(t, exclude) and not is_not_audio(t)
-               and not title_says_sold(t) and wanted.match(t, p, ms))
+    hits = sum(1 for t, p, src in rows if t and not exclude_match(t, exclude) and not is_not_audio(t)
+               and not title_says_sold(t) and wanted.match(t, p, ms, src))
     return {"all": len(rows), "wanted": hits}

@@ -81,7 +81,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
-        if not wanted_match(title, r.get("price"), terms):
+        if not wanted_match(title, r.get("price"), terms, r.get("source_name")):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)
         if not c or c["ref"] < MIN_REF or c["pct"] < min_pct:

@@ -48,6 +48,43 @@ def matchers(cfg: dict) -> list[tuple[str, Callable[[str], bool], Optional[str],
     return [(t, term_matcher(t), item_form(t), _is_specific(t)) for t in terms(cfg)]
 
 
+# Words that make a listing audio gear. A broad term ("DIY", "Golden age")
+# or a short model code with no brand ("se8") only matches listings that
+# look like gear — otherwise "DIY" brings tiny homes and "Golden age" die-cast
+# cars, and "se8" a network switch.
+_GEAR_WORD = re.compile(
+    r"\b(?:mics?|microphones?|condensers?|ribbons?|dynamic mic|capsules?|pre-?amps?|pre-?amplifiers?|"
+    r"compressors?|limiters?|eqs?|equali[sz]ers?|consoles?|mixers?|mixing|channel ?strips?|modules?|"
+    r"500[\s-]?series|lunchbox|interfaces?|converters?|reverbs?|delays?|effects? processors?|processors?|"
+    r"monitors?|speakers?|recorders?|reel[\s-]to[\s-]reel|tape (?:machine|deck)|amps?|amplifiers?|"
+    r"transformers?|di box|direct box|patch ?bays?|outboard|pro audio|studio|recording|harmonizer|"
+    r"synth(?:esizer)?s?|tube mic|valve mic)\b", re.I)
+_MODEL_CODE = re.compile(r"\b(?=[a-z-]*\d)(?=[\d-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*\b", re.I)
+_NOT_MODEL = re.compile(r"^\d+x\d+$|^\d+(?:in|ft|mm|cm|btu|k|gb|tb|mp|hp|pc|pcs|port|v|w)$", re.I)
+# Dealers that only sell studio gear: anything there is gear. (Not Reverb:
+# it also lists records, guitars and network switches.)
+_GEAR_SITES = ("vintage king", "long & mcquade", "alto music", "rudy", "perfect circuit",
+               "kijiji — pro audio", "groupdiy", "gear page", "fb — pro audio", "fb — vintage pro audio")
+
+
+def _looks_like_gear(title: str, source: Optional[str]) -> bool:
+    from scrapers.enrich import canonical_brand
+    if source and any(s in source.lower() for s in _GEAR_SITES):
+        return True
+    if _GEAR_WORD.search(title) or re.search(r"\bse electronics\b", title, re.I):
+        return True
+    has_model = any(not _NOT_MODEL.match(m.group(0)) for m in _MODEL_CODE.finditer(title))
+    return bool(has_model and canonical_brand(title))
+
+
+def _needs_gear_check(term: str, specific: bool) -> bool:
+    from scrapers.enrich import canonical_brand
+    if not specific:
+        return True
+    compact = re.sub(r"[^a-z0-9]", "", term.lower())
+    return len(compact) <= 4 and not canonical_brand(term)
+
+
 # Spare vacuum tubes whose ads stuff model names into the title ("4 NOS
 # Telefunken EF804 /Grail Mic Tube /V72 V76") — the tube, not the gear.
 _TUBE_TYPE = re.compile(r"\b(?:ef ?8[0-9]{1,2}s?|ef ?14|ef ?12|vf ?14m?|ac ?701k?|12a[xtu]7|ecc ?8[1-3]|e8[0-9]cc|"
@@ -62,7 +99,7 @@ def is_spare_tube(title: str) -> bool:
     return bool(_TUBE_TYPE.search(title) and _TUBE_SALE.search(title) and not _WHOLE_UNIT.search(title))
 
 
-def match(title: Optional[str], price: Optional[str], ms) -> list[str]:
+def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] = None) -> list[str]:
     """Wanted terms a listing title matches (empty = not wanted). Parts,
     accessories, and pedal/plugin versions (unless the term asks) never
     match; broad terms need a real price."""
@@ -81,6 +118,8 @@ def match(title: Optional[str], price: Optional[str], ms) -> list[str]:
         if form in ("pedal", "plugin") and form != term_form:
             continue
         if not specific and value < BROAD_MIN_PRICE:
+            continue
+        if _needs_gear_check(term, specific) and not _looks_like_gear(title, source):
             continue
         out.append(term)
     return out
@@ -146,7 +185,7 @@ def alert_new(cfg: dict) -> int:
         age = posted_age_days(r)
         if age is not None and age > ALERT_MAX_AGE_DAYS:
             continue
-        found = match(title, r.get("price"), ms)
+        found = match(title, r.get("price"), ms, r.get("source_name"))
         ad = (title.lower().strip(), r.get("price"))
         if found and ad not in seen_ads:
             seen_ads.add(ad)

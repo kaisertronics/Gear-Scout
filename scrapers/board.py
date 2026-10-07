@@ -125,7 +125,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         cands = []
         for r in rows:
             title = r["title"] or ""
-            if not wanted.match(title, r["price"], one):
+            if not wanted.match(title, r["price"], one, r.get("source_name")):
                 continue
             if (title_says_sold(title)
                     or is_not_audio(title) or exclude_match(title, exclude)
@@ -137,6 +137,12 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
             n = quantity(title, r.get("description"))
             cands.append((value / max(n, 1), n, r))
         cands.sort(key=lambda c: c[0])
+        # "Cheapest anywhere" is where junk floats up (a record named
+        # "Distressor", a pedal): ignore anything under a quarter of what this
+        # term's listings typically ask.
+        if len(cands) >= 5:
+            typical = statistics.median(u for u, _, _ in cands)
+            cands = [c for c in cands if c[0] >= typical * 0.25]
         # The cheapest believable one: placeholders and mismatches (under a
         # fifth of the item's own comp) are skipped.
         cheapest = comp = None
@@ -147,6 +153,13 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
             if c and unit < c["ref"] * 0.2:
                 continue
             checked.append((unit, n, r, c))
+        # The real model, not a copy: "LA-2A style", "D12 type", clones and
+        # kits don't count as the cheapest LA-2A — unless your term asks for
+        # them ("U47 clone", "API clone").
+        from scrapers.steals import _CLONE
+        if not _CLONE.search(term):
+            real = [x for x in checked if not _CLONE.search(x[2]["title"] or "")]
+            checked = real or checked
         if checked:  # re-sorted after working out per-piece prices
             unit, n, r, c = min(checked, key=lambda x: x[0])
             cheapest, comp = _brief(r, unit, n), c

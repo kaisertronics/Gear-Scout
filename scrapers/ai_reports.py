@@ -85,7 +85,7 @@ def daily_briefing(cfg: dict) -> bool:
     cands = []
     for r in rows:
         title = r["title"] or ""
-        if not wanted.match(title, r.get("price"), ms):
+        if not wanted.match(title, r.get("price"), ms, r.get("source_name")):
             continue  # your Wanted list (Telex List) only
         if is_not_audio(title) or is_accessory_only(title) or item_form(title) == "pedal" \
                 or (r.get("description") or "").startswith("Auction"):

@@ -115,7 +115,7 @@ def _wanted_only(listings: list, cfg: dict) -> list:
     keep, seen = [], set()
     for l in listings:
         if (l.description or "").startswith("Auction") or exclude_match(l.title, exclude) \
-                or is_not_audio(l.title) or title_says_sold(l.title) or not wanted.match(l.title, l.price, ms):
+                or is_not_audio(l.title) or title_says_sold(l.title) or not wanted.match(l.title, l.price, ms, l.source_name):
             continue
         ad = ((l.title or "").lower().strip(), l.price)
         if ad in seen:

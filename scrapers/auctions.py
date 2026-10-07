@@ -92,7 +92,7 @@ def fetch_ebay_ending(cfg: dict) -> int:
             break
         for item in resp.json().get("itemSummaries", []) or []:
             listing = ebay_auction_listing(item, "eBay — Auctions")
-            if not listing or not wanted.match(listing.title, listing.price, ms):
+            if not listing or not wanted.match(listing.title, listing.price, ms, listing.source_name):
                 continue
             mark_seen(listing)
             with _conn() as conn:
@@ -145,7 +145,7 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
         if not (start <= ends <= end):
             continue
         title = r.get("title") or ""
-        found = wanted.match(title, r.get("price"), ms)
+        found = wanted.match(title, r.get("price"), ms, r.get("source_name"))
         if (exclude_match(title, exclude_words) or not found
                 or is_not_audio(title) or is_accessory_only(title) or is_partial(title) or item_form(title) == "pedal"
                 or needs_repair(title, r.get("description"))):

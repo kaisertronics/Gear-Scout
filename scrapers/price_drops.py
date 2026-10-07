@@ -36,7 +36,7 @@ def recent_drops(cfg: dict, hours: int = 24, min_pct: int = MIN_PCT) -> list[dic
     out, seen = [], set()
     for r in rows:
         title = r.get("title") or ""
-        if not wanted.match(title, r.get("price"), ms):
+        if not wanted.match(title, r.get("price"), ms, r.get("source_name")):
             continue  # your Wanted list (Telex List) only
         if r["url"] in seen or exclude_match(title, exclude) or is_not_audio(title) or is_accessory_only(title) \
                 or is_partial(title) or title_says_sold(title) or item_form(title) in ("pedal", "plugin") \

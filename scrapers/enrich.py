@@ -268,7 +268,8 @@ _JUNK = re.compile(
     r"guitar hero|gaming (?:headset|mic|microphone)|webcam|for (?:iphone|android|phone|ipad|laptop|pc)|"
     r"phone (?:mic|microphone)|ham radio|cb radio|two[\s-]way radio|walkie|antennas?|scanner radio|"
     r"(?:reel to reel|cassette|vinyl|8[\s-]?track) (?:tapes?|music|records?)|records? lot|vinyl records?|"
-    r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
+    r"lp records?|album collection|cd collection|vinyl lp|\(lp\)|\[lp\]|lp\]|albums?|compact discs?|cd single|"
+    r"soundtrack|dvds?|blu-?ray|costume|halloween|party speaker|"
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
     r"gift wrap|scrapbook|sewing|craft ribbon|decor|decoration|ornament|prop microphone|"
@@ -496,7 +497,7 @@ _FORMS = (
     # "Golden Reverberator", "Lion '68"…
     ("pedal", re.compile(
         r"\b(?:pedal|stomp ?box|uafx|(?:la-?2a|1176|teletronix)\b.{0,30}\bstudio compressor|"
-        r"golden reverberator|starlight echo|galaxy '?74|astra modulation|max preamp|"
+        r"golden reverberator|starlight echo|mary cries|galaxy '?74|astra modulation|max preamp|"
         r"(?:lion|ruby|dream|woodrow|enigmatic|anti|evermore|knuckles)\s*'?\d{2}|orange \w+ amp emulat\w*|"
         # Guitar/bass effects, named by type or by a pedal maker.
         r"overdrive|fuzz|distortion|wah|chorus|flanger|phaser|looper|tremolo|octaver|tube ?screamer|"

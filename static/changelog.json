@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-10-07",
+    "title": "Fewer wrong matches for broad terms; Price Board cheapest fixed",
+    "items": [
+      "Broad terms (“DIY”, “Golden age”) and short model codes without a brand (“se8”) now only match listings that look like audio gear — no more tiny homes, die-cast cars, Batman art or network switches.",
+      "Records, albums and CDs named like gear (“Whirr – Distressor” LP) are filtered out; the PRS Mary Cries is recognised as a pedal.",
+      "Price Board “cheapest anywhere” skips junk priced far under what the model normally asks, and skips clones / “style” / “type” copies unless your term asks for a clone.",
+      "Tip: for the real thing only, name the maker — “Teletronix LA-2A” or “UA LA-2A” instead of “LA-2A” (which also finds AudioScape and other copies)."
+    ]
+  },
+  {
     "date": "2026-10-06",
     "title": "Code review fixes",
     "items": [

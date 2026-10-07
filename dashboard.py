@@ -1773,7 +1773,7 @@ def _feed_items(cfg) -> list[dict]:
     ms = wanted.matchers(cfg)
     items, seen_ads = [], set()
     for r in wanted.recent_rows():
-        found = wanted.match(r.get("title"), r.get("price"), ms)
+        found = wanted.match(r.get("title"), r.get("price"), ms, r.get("source_name"))
         if not found:
             continue
         ad = ((r.get("title") or "").lower().strip(), r.get("price"))
