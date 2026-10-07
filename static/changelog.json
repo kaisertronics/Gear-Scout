@@ -8,7 +8,11 @@
       "Price increases are shown; an ad wrongly marked sold comes back when a site shows it again; “✓ still listed” only appears when a check actually confirmed it.",
       "Fresher searches: Reverb and Kijiji term searches now sort newest first (they used “best match”), specific models are searched on all of eBay (not just Pro Audio), and Facebook's hourly refresh adds a newest-first search in every region.",
       "Adding a term on the Telex page searches it right away; the comma-joined Lexicon entry now works everywhere (Price Board, lowest-price alerts).",
-      "Phone alerts for a new match now include the listing's photo. Favorites show a pink title, and the ★ Favorites link is pink in the top bar."
+      "Phone alerts for a new match now include the listing's photo. Favorites show a pink title, and the ★ Favorites link is pink in the top bar.",
+      "One deal calculation everywhere: the Feed's badges and Deals/Steals filters, the digest email, the Price Board, the Deals and Steals pages and the steal alerts now all give a listing the same “% under” (the Feed used to use a different, stricter formula). Steals = 60%+ under everywhere.",
+      "Price Board counts the same listings as the Feed (it used to include ads not seen for months), and its “best deal this week” matches the Deals page. It's rebuilt hourly.",
+      "Facebook safety: if Facebook asks your account to slow down, every Facebook search (Marketplace, groups, posts, sold checks) now pauses together for a few hours, and you get a push.",
+      "Digest email lists deals first; the per-site lines say how many listings were read (not “new”)."
     ]
   },
   {
