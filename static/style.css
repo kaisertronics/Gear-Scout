@@ -925,3 +925,11 @@ button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; f
 .table-scroll { overflow-x: auto; }
 .health-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .health-table th, .health-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid rgba(127,127,127,.2); white-space: nowrap; }
+
+/* Favorites: pink title (and a pink edge) so starred gear stands out
+   everywhere — updates the moment you tap the star. */
+.listing-card:has(.fav-star.is-favorite) .listing-title { color: #db2777; font-weight: 700; }
+.listing-card:has(.fav-star.is-favorite) { border-left: 4px solid #ec4899; }
+@media (prefers-color-scheme: dark) {
+  .listing-card:has(.fav-star.is-favorite) .listing-title { color: #f472b6; }
+}
