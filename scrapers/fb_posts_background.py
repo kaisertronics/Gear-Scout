@@ -73,14 +73,44 @@ def all_terms(cfg: dict) -> list[str]:
     # Your Wanted list (Telex List) only — the long keyword list found
     # mostly things you don't want, and each term now comes around about
     # hourly instead of once every day or two.
+    from scrapers.telex import search_query
     from scrapers.wanted import terms as wanted_terms
     seen, out = set(), []
-    for t in wanted_terms(cfg):
+    # Long descriptive terms go in as brand + model ("Warm WA-412"), like
+    # every other search — the whole phrase finds nothing.
+    for t in (search_query(t) for t in wanted_terms(cfg)):
         t = str(t).strip()
         if len(t) >= 3 and t.lower() not in seen:
             seen.add(t.lower())
             out.append(t)
     return out
+
+
+def facebook_paused() -> bool:
+    """True while Facebook searching is paused because Facebook asked the
+    account to slow down (shared by every Facebook search, not just posts)."""
+    with _conn() as conn:
+        until = _state_get(conn, "paused_until")
+    try:
+        return bool(until and datetime.fromisoformat(until) > datetime.now(timezone.utc))
+    except ValueError:
+        return False
+
+
+def pause_facebook(reason: str, cfg: Optional[dict] = None) -> None:
+    until = datetime.now(timezone.utc) + timedelta(hours=BLOCK_PAUSE_HOURS)
+    with _conn() as conn:
+        _state_set(conn, "paused_until", until.isoformat())
+        _state_set(conn, "pause_reason", reason)
+    logger.warning("Facebook searching paused %dh: %s", BLOCK_PAUSE_HOURS, reason)
+    if cfg:
+        try:
+            from scrapers.notify import push_enabled, send_push
+            if push_enabled(cfg):
+                send_push(cfg, "Gear Scout paused Facebook searching",
+                          f"{reason}. It will try again in {BLOCK_PAUSE_HOURS} hours on its own.", tags=["warning"])
+        except Exception:
+            logger.exception("Couldn't send pause notification")
 
 
 def _local_now(cfg: dict) -> datetime:

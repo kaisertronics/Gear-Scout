@@ -9,6 +9,7 @@ Also: the Telex List's new-lowest-price alerts and its imported model groups
 (reference only).
 """
 import logging
+import re
 import time
 from datetime import datetime, timezone
 
@@ -150,9 +151,16 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     """Searches one term on the given site groups and stores what it finds."""
     from scrapers.enrich import drop_excluded
     from scrapers.runner import run_sources
+    from scrapers.fb_posts_background import facebook_paused, pause_facebook
+    if "fb" in sites and facebook_paused():
+        sites = sites - {"fb"}  # Facebook asked to slow down: wait out the pause
     sources = [s for s in sweep_sources(cfg) if _site(s) in sites]
     site_of = {s["name"]: _site(s) for s in sources}
     results = run_sources(sources, [search_query(term)], cfg)
+    if "fb" in sites and any(not r.success and re.search(r"checkpoint|temporarily blocked|slow down|confirm",
+                                                          f"{r.error} {r.fix_hint}", re.I)
+                             for r in results if site_of.get(r.source_name) == "fb"):
+        pause_facebook("Facebook asked to slow down or confirm the account", cfg)
     counts = {s: [0, 0] for s in sites}
     for r in results:
         c = counts.setdefault(site_of.get(r.source_name, "fast"), [0, 0])

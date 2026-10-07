@@ -125,6 +125,8 @@ def _wanted_only(listings: list, cfg: dict) -> list:
         l.comp = {"pct": s["pct"], "ref": s["ref"], "label": s["label"], "est": s["est"]} if s else None
         keep.append(l)
     logger.info("Digest: %d of %d new listings match your Wanted list", len(keep), len(listings))
+    # Deals first (biggest discount first): the email shows at most ~40.
+    keep.sort(key=lambda l: -(l.comp["pct"] if l.comp else -1))
     return keep
 
 
@@ -141,6 +143,9 @@ def run_refresh_cycle(cfg: dict):
         if s.get("enabled", True) and s.get("type") != "facebook_posts"
     ]
     sources, skipped = skip_on_light_runs(sources)
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
     if skipped:
         logger.info("Background refresh skipping (failing or never matching lately): %s", ", ".join(skipped))
     start = time.time()

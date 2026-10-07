@@ -72,7 +72,7 @@ def build_email_html(
         color = _source_status_color(r)
         icon = "✓" if r.success else ("🔗" if r.blocked else "✗")
         if r.success:
-            count = f"{len(r.listings)} new"
+            count = f"{len(r.listings)} read"  # listings read from the site, not new ones
         elif r.blocked:
             count = "manual check only"
         else:

@@ -241,6 +241,9 @@ def check_fb(urls: list[str]):
     "pending" sales."""
     if not urls:
         return
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
+        return
     try:
         from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
         if not SESSION_FILE.exists():

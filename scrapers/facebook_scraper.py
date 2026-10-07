@@ -655,6 +655,23 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     duration_seconds=time.time() - start,
                 )
 
+            # Facebook asking the account to slow down / confirm itself: stop,
+            # and say so in words the sweep recognizes (it pauses Facebook).
+            try:
+                head = page.inner_text("body")[:3000]
+            except Exception:
+                head = ""
+            if "checkpoint" in page.url or re.search(
+                    r"you'?re temporarily blocked|we limit how often|suspicious activity|confirm your identity",
+                    head, re.I):
+                context.close()
+                return ScrapeResult(
+                    source_name=name, source_url=url, success=False,
+                    error="Facebook checkpoint: temporarily blocked / asked to confirm the account.",
+                    fix_hint="Gear Scout pauses Facebook searching for a few hours on its own.",
+                    duration_seconds=time.time() - start,
+                )
+
             # Marketplace item cards are always wrapped in a
             # /marketplace/item/{id}/ anchor — this URL scheme is far more
             # stable than any class name on a React-rendered page. The list
