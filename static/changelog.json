@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-10-06",
+    "title": "Code review fixes",
+    "items": [
+      "Scrape now (also on the Feed) re-reads every site and then searches every one of your terms; it reports how many new ads are on your list. It no longer deletes listings older than 30 days.",
+      "Listings are cleaned up by when a site last showed them, not when they were first found — long-running ads no longer come back as “new”, and ones still listed stay on the Feed.",
+      "Price increases are shown; an ad wrongly marked sold comes back when a site shows it again; “✓ still listed” only appears when a check actually confirmed it.",
+      "Fresher searches: Reverb and Kijiji term searches now sort newest first (they used “best match”), specific models are searched on all of eBay (not just Pro Audio), and Facebook's hourly refresh adds a newest-first search in every region.",
+      "Adding a term on the Telex page searches it right away; the comma-joined Lexicon entry now works everywhere (Price Board, lowest-price alerts).",
+      "Phone alerts for a new match now include the listing's photo. Favorites show a pink title, and the ★ Favorites link is pink in the top bar."
+    ]
+  },
+  {
+    "date": "2026-10-06",
     "title": "Everything now follows your Wanted list",
     "items": [
       "Auction alerts, the digest email, steal and price-drop alerts, the AI briefing and the Deals/Steals pages now only cover your Telex List — no more irrelevant gear (e.g. this week's auction alerts: 16 random items before, 2 on your list now).",

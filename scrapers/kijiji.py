@@ -77,7 +77,10 @@ def scrape_kijiji(source: dict, keywords: list[str]) -> ScrapeResult:
     term = keywords[0].strip() if len(keywords) == 1 and keywords[0].strip() else ""
     if term:
         slug = re.sub(r"[^a-z0-9]+", "-", term.lower()).strip("-")
-        urls = [SEARCH_URL.format(slug=slug, page=""), SEARCH_URL.format(slug=slug, page="page-2/")]
+        # Newest first (Kijiji's search defaults to "relevance", which
+        # buries a brand-new ad among older ones).
+        urls = [SEARCH_URL.format(slug=slug, page="") + "?sort=dateDesc",
+                SEARCH_URL.format(slug=slug, page="page-2/") + "?sort=dateDesc"]
         manual_url = urls[0]
     else:
         urls = [CATEGORY_URL.format(page=""), CATEGORY_URL.format(page="page-2/")]

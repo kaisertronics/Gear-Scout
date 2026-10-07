@@ -158,7 +158,7 @@ def alert_new(cfg: dict) -> int:
                 where = (r.get("location") or "").split(" @")[0] or r.get("source_name") or ""
                 if send_push(cfg, f"New: {r['title'][:80]}",
                              f"{r.get('price') or 'no price'} · {where}\nWanted: {found[0]}",
-                             url=r["url"], tags=["new"]):
+                             url=r["url"], tags=["new"], image=r.get("image_url")):
                     sent += 1
         else:
             lines = [f"• {r['title'][:60]} — {r.get('price') or '?'}" for r, _ in hits[:12]]
