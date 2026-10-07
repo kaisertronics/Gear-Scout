@@ -1509,6 +1509,15 @@ def telex_add():
         cfg["telex_list"] = terms
         save_config_raw(cfg)
         _terms_changed(new)
+        # Search the new term(s) right away on the fast sites and eBay
+        # (Facebook follows in the all-day rotation), so they show up on the
+        # Feed within a minute instead of at the next 30-minute cycle.
+        global _telex_thread
+        if _telex_thread is None or not _telex_thread.is_alive():
+            TELEX_STATUS_PATH.write_text(json.dumps({"state": "running", "started": time.time(),
+                                                     "done": 0, "total": len(new)}))
+            _telex_thread = threading.Thread(target=_run_telex_job, args=(new, True), daemon=True)
+            _telex_thread.start()
     return redirect(url_for("telex"))
 
 

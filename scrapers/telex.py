@@ -1,11 +1,12 @@
 """
-Telex List sweep: actively searches each Telex term on the sites where a
-listing can hide from the regular scrapes — the ones that are browsed as a
-feed rather than read in full (Facebook Marketplace in all 8 regions, your
-Facebook groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb, eBay, Long &
-McQuade). Each hourly cycle searches the next few terms, so the whole list
-comes around several times a day. Finds are stored like any scrape result:
-they show on the Telex page and the Dashboard and go into the next digest.
+Telex List = your Wanted list (see scrapers/wanted.py for what counts as a
+match). This module searches each term directly on the sites that have a
+search box — Reverb, eBay, Craigslist, Kijiji, ShopGoodwill, Long & McQuade,
+OfferUp every 30 minutes (eBay every 2 hours) and Facebook Marketplace (8
+regions) + your groups in rotation — and keeps the per-term, per-site
+search times the Health page shows. Finds are stored like any scrape result.
+Also: the Telex List's new-lowest-price alerts and its imported model groups
+(reference only).
 """
 import logging
 import time
@@ -17,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 SEARCH_TYPES = {"facebook_marketplace_region", "facebook", "offerup", "craigslist_region", "kijiji",
                 "shopgoodwill", "long_mcquade"}
-DEFAULT_PER_HOUR = 4
 
 
 def _ensure(conn):
@@ -26,7 +26,9 @@ def _ensure(conn):
 
 
 def terms(cfg: dict) -> list[str]:
-    return [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
+    # One list everywhere: comma-joined entries split ("lexicon 300, lexicon 480").
+    from scrapers.wanted import terms as wanted_terms
+    return wanted_terms(cfg)
 
 
 def sweep_sources(cfg: dict) -> list[dict]:
@@ -42,57 +44,16 @@ def state() -> dict[str, dict]:
                 for t, a, f, n in conn.execute("SELECT term, searched_at, found, new FROM telex_state")}
 
 
-def next_terms(cfg: dict, n: int) -> list[str]:
-    """Never-searched terms first, then the ones searched longest ago."""
-    st = state()
-    return sorted(terms(cfg), key=lambda t: (st.get(t, {}).get("searched_at") or ""))[:n]
-
-
 FB_TYPES = {"facebook_marketplace_region", "facebook"}
 
 
 def search_term(term: str, cfg: dict, on_progress=None, fast_only: bool = False) -> dict:
-    """Searches one term on every search-based site. fast_only leaves out
-    Facebook (8 regions + groups take ~2 minutes per term)."""
-    from scrapers.enrich import drop_excluded
-    from scrapers.runner import run_sources
-    sources = [s for s in sweep_sources(cfg) if not (fast_only and s.get("type") in FB_TYPES)]
-    results = run_sources(sources, [term], cfg, on_progress=on_progress)
-    found = new = 0
-    for r in results:
-        for l in drop_excluded(r.listings, cfg):
-            found += 1
-            if mark_seen(l) == "new":
-                new += 1
-    with _conn() as conn:
-        _ensure(conn)
-        conn.execute("INSERT OR REPLACE INTO telex_state VALUES (?, ?, ?, ?)",
-                     (term, datetime.now(timezone.utc).isoformat(), found, new))
-        conn.commit()
-    return {"term": term, "found": found, "new": new}
-
-
-# Correct spellings, and budget brands where a misspelled ad saves little.
-_TYPO_SKIP = {"teletronix", "electrovoice", "behringher", "beringer", "behringner", "bheringer",
-              "focusright", "presounus", "presonous"}
-
-
-def typo_queries() -> list[str]:
-    """Misspelled brand names sellers actually type ("nueman", "sennhieser",
-    "telefunkin", "pulltec"), taken from the spelling fixes Gear Scout
-    already applies when reading titles. Ads spelled like this rarely show up
-    in buyers' searches, so they sit longer and sell cheaper."""
-    import re
-    from scrapers.base import _BRAND_FIXES
-    out = []
-    for pattern, _right in _BRAND_FIXES:
-        group = re.search(r"\(\?:([^()]*)\)", pattern.pattern)
-        for alt in (group.group(1).split("|") if group else []):
-            alt = alt.replace("+", "")
-            if re.fullmatch(r"[a-z]{5,}", alt) and alt not in _TYPO_SKIP:  # plain words, no "a.k.g."
-                out.append(alt)
-    return list(dict.fromkeys(out))
-
+    """Searches one term now (the Telex page's search buttons): the fast
+    sites and eBay, plus Facebook (8 regions + groups, ~2 minutes) unless
+    fast_only. Same search as the automatic 30-minute sweep."""
+    sites = {"fast", "ebay"} if fast_only else {"fast", "ebay", "fb"}
+    res = _search_sites(term, cfg, sites)
+    return {"term": term, "found": res["found"], "new": res["new"]}
 
 def misspellings(term: str, n: int = 2) -> list[str]:
     """The term with its brand misspelled the way sellers do ("Neumann U47"
@@ -134,55 +95,6 @@ def search_links(term: str) -> list[tuple[str, str]]:
         links.append((f"“{typo}” eBay", f"https://www.ebay.com/sch/i.html?_nkw={tq}&_sop=10"))
         links.append((f"“{typo}” Marketplace", f"https://www.facebook.com/marketplace/search/?query={tq}"))
     return links
-
-
-TYPO_PER_HOUR = 3
-
-
-def run_typo_sweep(cfg: dict) -> list[dict]:
-    """Searches a few misspelled brand names an hour on the fast sites
-    (never Facebook), oldest first — every misspelling comes around about
-    twice a day. Finds land in the normal listings, where titles are read as
-    if spelled right, so they show on the Telex List, Steals and Dashboard."""
-    if (cfg.get("telex_sweep") or {}).get("typos", True) is False:
-        return []
-    st = state()
-    out = []
-    for q in sorted(typo_queries(), key=lambda t: st.get(t, {}).get("searched_at") or "")[:TYPO_PER_HOUR]:
-        try:
-            res = search_term(q, cfg, fast_only=True)
-            out.append(res)
-            logger.info("Misspelling search %r: %d matches, %d new", q, res["found"], res["new"])
-        except Exception:
-            logger.exception("Misspelling search failed for %r", q)
-    return out
-
-
-def run_sweep(cfg: dict) -> list[dict]:
-    try:
-        from scrapers.market import refresh_telex_term_values
-        refresh_telex_term_values(terms(cfg))
-    except Exception:
-        logger.exception("Telex term price lookup failed")
-    out = _run_sweep(cfg)
-    if groups(cfg):
-        out += run_group_sweep(cfg)
-    out += run_typo_sweep(cfg)
-    return out
-
-
-def _run_sweep(cfg: dict) -> list[dict]:
-    per_hour = int((cfg.get("telex_sweep") or {}).get("per_hour", DEFAULT_PER_HOUR) or DEFAULT_PER_HOUR)
-    out = []
-    for term in next_terms(cfg, max(1, per_hour)):
-        start = time.time()
-        try:
-            res = search_term(term, cfg)
-            out.append(res)
-            logger.info("Telex sweep %r: %d matches, %d new (%.0fs)", term, res["found"], res["new"], time.time() - start)
-        except Exception:
-            logger.exception("Telex sweep failed for %r", term)
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +234,13 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
 
 
 def term_matcher(term: str):
+    if "," in term:  # a Telex entry holding several terms: any of them
+        parts = [term_matcher(p.strip()) for p in term.split(",") if p.strip()]
+        return lambda t: any(m(t) for m in parts)
+    return _term_matcher(term)
+
+
+def _term_matcher(term: str):
     """A fast "does this (lower-cased, brand-spelling-fixed) title match the
     Telex term" test: every word in any order, like the live search. A long,
     descriptive term ("Warm audio WA-412 API 4 channel pre") rarely has every
@@ -389,28 +308,6 @@ def groups(cfg: dict) -> list[tuple[str, list[str]]]:
         ts = [str(t).strip() for t in g.get("terms") or [] if str(t).strip()]
         if name and ts:
             out.append((name, ts))
-    return out
-
-
-GROUP_PER_HOUR = 10
-
-
-def run_group_sweep(cfg: dict) -> list[dict]:
-    """Searches the next few group models (never-searched first) on the
-    fast sites — about 10 an hour, so a 400-model group comes around every
-    couple of days."""
-    st = state()
-    pool = [t for _, ts in groups(cfg) for t in ts]
-    per_hour = int((cfg.get("telex_sweep") or {}).get("group_per_hour", GROUP_PER_HOUR) or GROUP_PER_HOUR)
-    out = []
-    for term in sorted(dict.fromkeys(pool), key=lambda t: st.get(t, {}).get("searched_at") or "")[:per_hour]:
-        start = time.time()
-        try:
-            res = search_term(term, cfg, fast_only=True)
-            out.append(res)
-            logger.info("Telex group sweep %r: %d matches, %d new (%.0fs)", term, res["found"], res["new"], time.time() - start)
-        except Exception:
-            logger.exception("Telex group sweep failed for %r", term)
     return out
 
 
