@@ -41,7 +41,7 @@
   <section class="panel">
     <h2>📊 Price Board <span class="muted">— your Telex List and tracked items, updated hourly{% if board_built %} · {{ board_built|local }}{% endif %}</span></h2>
     <p class="muted">For each term: the <strong>best deal posted this week</strong> (biggest discount against what that gear
-      usually sells for used) and, for specific models, the <strong>cheapest one for sale anywhere</strong>. Price per piece;
+      usually sells for used) and the <strong>cheapest working one still for sale anywhere</strong> (any ad posted in the last 90 days). Price per piece;
       parts, accessories, auctions and placeholder prices are left out. Best deals first. You get a push + email when a
       new lowest shows up <em>and</em> it's 10%+ under the usual used price.</p>
   </section>
@@ -53,7 +53,7 @@
     {% if r.best %}{{ board_item("Best deal this week", r.best, '<span class="flag flag-deal">' ~ r.best.pct ~ '% under</span><span class="listing-each">vs ~$' ~ '{:,.0f}'.format(r.best.ref) ~ '</span>') }}{% endif %}
     {% if r.cheapest and (not r.best or r.cheapest.url != r.best.url) %}
       {% set pct = r.comp.pct if r.comp else none %}
-      {{ board_item("Cheapest anywhere (any age)", r.cheapest, ('<span class="listing-each">' ~ (pct ~ '% under' if pct and pct > 0 else ((-pct) ~ '% over usual' if pct else 'no comp yet')) ~ (' vs ~$' ~ '{:,.0f}'.format(r.comp.ref) if r.comp else '') ~ '</span>')) }}
+      {{ board_item("Cheapest anywhere (last 90 days)", r.cheapest, ('<span class="listing-each">' ~ (pct ~ '% under' if pct and pct > 0 else ((-pct) ~ '% over usual' if pct else 'no comp yet')) ~ (' vs ~$' ~ '{:,.0f}'.format(r.comp.ref) if r.comp else '') ~ '</span>')) }}
     {% endif %}
   </section>
   {% endfor %}

@@ -367,7 +367,9 @@ _OFF_TOPIC = re.compile(
     r"stratocaster|telecaster|jazzmaster|jazz bass|precision bass|les paul|(?<![\w-])strat(?![\w-])|"
     r"(?:guitar |bass |strat(?:ocaster)? |tele(?:caster)? |single[\s-]?coil |humbucker )?pick-?ups? set|"
     r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"
-    r"t-?shirts?|shirts?|hoodies?|sweatshirts?|(?<!new )jerseys?|hats?|caps? \(clothing\))\b", re.I)
+    r"t-?shirts?|shirts?|hoodies?|sweatshirts?|(?<!new )jerseys?|hats?|caps? \(clothing\)|"
+    # furniture ("Mart Stam S34 dining chairs")
+    r"dining|chairs?|armchairs?|sofas?|couch(?:es)?|dressers?|nightstands?|ottomans?)\b", re.I)
 
 
 @functools.lru_cache(maxsize=100_000)

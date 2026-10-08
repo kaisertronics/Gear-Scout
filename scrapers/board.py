@@ -193,7 +193,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         row = {"term": term, "kind": kind, "count": len(cands), "fresh_count": len(fresh), "specific": specific,
                "best": best_deal,
                "median": statistics.median(units) if units else None,
-               "cheapest": cheapest if specific else None,
+               "cheapest": cheapest,  # every term, brands too (owner asked)
                "comp": ({"ref": comp["ref"], "label": comp["label"], "est": comp["est"], "pct": comp["pct"]}
                         if comp else None)}
         # Trend: today's lowest vs. a week and a month ago.

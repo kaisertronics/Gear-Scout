@@ -3,6 +3,7 @@
     "date": "2026-10-07",
     "title": "Fewer wrong matches for broad terms; Price Board cheapest fixed",
     "items": [
+      "Every term now gets a “cheapest anywhere”, brands too (daking, stam, peluso, beesneez…), from any working ad still for sale posted in the last 90 days. Furniture is filtered out (“Mart Stam” dining chairs).",
       "Filtered out off-topic listings that share letters with your terms: tractors and loaders (“SSL attach”), trailers, mowers, guitar pickups (Seymour Duncan SSL-1…), guitars by model (Strat, Tele, Les Paul…), T-shirts and jerseys — about 130 removed.",
       "Fixed the site hanging: “Scrape now” runs as its own lower-priority process (it used to share the website's process and starve the pages), the Feed shows the current list instantly and refreshes in the background after any change, and a saved copy makes it load instantly after a restart. A Scrape now cut off by a restart no longer stays “running” forever (which also paused the hourly refresh).",
       "The cheapest working listing for each term (the Price Board's “cheapest anywhere”) now pulses gold with a “💲 Lowest” tag, and sits at the top of that term on the Telex page and when you filter the Feed by a term. Broken / “Non Functioning” ads no longer count as the cheapest.",
