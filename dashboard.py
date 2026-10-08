@@ -1328,9 +1328,9 @@ def telex():
         its = [l for l in items if parts & set(l["wanted"])]  # already newest first
         if sort == "cheap":
             its = sorted(its, key=unit)
-        # The cheapest working one (pulsing gold) goes first, however old.
-        lowest = [r for r in its if parts & set(r.get("lowest_for") or [])]
-        rest = [r for r in its if r not in lowest]
+        # The cheapest working one of each model (the overall cheapest pulses
+        # gold) goes first, cheapest first, however old.
+        lowest, rest = _pinned_first(its, parts)
         fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
         old = [r for r in rest if age(r) > FRESH_DAYS]
         new = [r for r in fresh if age(r) <= 2]
@@ -1753,12 +1753,29 @@ def _mark_lowest(items: list[dict]) -> None:
     "cheapest anywhere" — so it stands out (pulses) wherever it's listed."""
     from scrapers import board
     lowest: dict[str, list[str]] = {}
+    per_model: dict[str, dict[str, str]] = {}  # url -> {term: model name}
     for row in board.load().get("rows") or []:
         ch = row.get("cheapest")
         if ch and ch.get("url"):
             lowest.setdefault(ch["url"], []).append(row["term"])
+        for m in row.get("models") or []:
+            if m.get("url"):
+                per_model.setdefault(m["url"], {})[row["term"]] = m["model"]
     for l in items:
         l["lowest_for"] = lowest.get(l.get("url"))
+        l["model_lowest"] = per_model.get(l.get("url"))
+        names = list(dict.fromkeys((l["model_lowest"] or {}).values()))
+        l["model_lowest_label"] = ", ".join(names[:2]) if names else None
+
+
+def _pinned_first(its: list[dict], parts: set) -> tuple[list, list]:
+    """(the cheapest of each model for these terms — cheapest first — , the
+    rest). The overall cheapest is simply the first of them."""
+    from scrapers.enrich import parse_price
+    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
+    pinned = [r for r in its if parts & (set(r.get("lowest_for") or []) | set((r.get("model_lowest") or {}).keys()))]
+    pinned.sort(key=unit)
+    return pinned, [r for r in its if r not in pinned]
 
 
 def _feed_items(cfg) -> list[dict]:
@@ -1888,8 +1905,8 @@ def feed():
     if term:
         parts = {p.strip() for p in term.split(",") if p.strip()}
         view = [l for l in view if parts & set(l["wanted"])]
-        # Filtering by a term: its cheapest working one (pulsing gold) on top.
-        pinned = [l for l in view if parts & set(l.get("lowest_for") or [])]
+        # Filtering by a term: the cheapest working one of each model on top.
+        pinned, _ = _pinned_first(view, parts)
     if show == "deals":
         view = [l for l in view if l.get("deal_pct")]
     elif show == "steals":

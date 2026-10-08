@@ -1,5 +1,5 @@
 {% macro listing_card(l) %}
-<div class="listing-card{{ ' is-deal' if l.is_deal else '' }}{{ ' is-lowest' if l.lowest_for else '' }}">
+<div class="listing-card{{ ' is-deal' if l.is_deal else '' }}{{ ' is-lowest' if l.lowest_for else (' is-model-lowest' if l.model_lowest else '') }}">
   {% set card_body %}
     {% if l.image_url %}
       <img src="{{ l.image_url|img }}" alt="" class="listing-img" loading="lazy"
@@ -17,7 +17,8 @@
     <div class="listing-body">
       {% set tag = l.source_name|source_tag %}
       <span class="source-tag source-tag-{{ tag[1] }}" title="{{ l.source_name }}">{{ tag[0] }}</span>{% if l.is_new %}<span class="new-tag">NEW</span>{% endif %}{% if l.age_days is not none %}{% set d = l.age_days %}<span class="age-tag{{ ' age-old' if d > 7 else (' age-fresh' if d <= 2 else '') }}" title="{{ 'Posted by the seller' if l.age_known else 'Found by Gear Scout (the site doesn’t say when it was posted)' }}">{{ '' if l.age_known else '~' }}{% if d < 1 %}today{% elif d < 60 %}{{ d|int }}d{% else %}{{ (d / 30)|int }}mo{% endif %}</span>{% endif %}
-      {% if l.lowest_for %}<div class="lowest-tag" title="The cheapest working one for sale anywhere Gear Scout searches (Price Board)">💲 Lowest: {{ l.lowest_for|join(', ') }}</div>{% endif %}
+      {% if l.lowest_for %}<div class="lowest-tag" title="The cheapest working one for sale anywhere Gear Scout searches (Price Board)">💲 Lowest: {{ l.lowest_for|join(', ') }}{% if l.model_lowest_label %} · {{ l.model_lowest_label }}{% endif %}</div>
+      {% elif l.model_lowest %}<div class="lowest-tag lowest-tag-model" title="The cheapest working one of this model for sale anywhere Gear Scout searches">💲 Lowest {{ l.model_lowest_label }}</div>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">

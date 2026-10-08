@@ -68,6 +68,39 @@ def _unit(r: dict, unit: float, n: int, c) -> tuple[float, int]:
     return per, (qty if basis.startswith("each") or basis == "set" else n)
 
 
+_MODEL_FILLER = {"vintage", "used", "new", "rare", "mint", "excellent", "great", "good", "condition", "pair",
+                 "of", "the", "and", "with", "w", "for", "sale", "tested", "working", "original", "audio",
+                 "pro", "professional", "studio", "microphone", "mic", "series", "black", "silver", "blue",
+                 "engineering", "co", "labs", "electronics", "microphones", "inc", "company", "two", "three",
+                 "four", "x2", "pairs", "matched", "stereo"}
+
+
+# Add-ons sold for a unit, not the unit ("PCM 80 Pitch FX ROM", "algorithm card").
+_ADDON_WORDS = re.compile(r"\b(?:roms?|eproms?|cards?|cartridges?|chips?|firmware|upgrade kit|algorithms?|"
+                          r"manuals?|service manual|schematics?|remote only|power supply only|psu only)\b", re.I)
+
+
+def _is_addon(title: str) -> bool:
+    from scrapers.steals import _PARTS
+    return bool(_PARTS.search(title or "") or _ADDON_WORDS.search(title or ""))
+
+
+def model_id(title: str) -> tuple[str, str]:
+    """(grouping key, display name) for which model a listing is: brand +
+    model number when there is one ("AKG D12VR", "Lexicon PCM70"), else the
+    brand and the first model words ("Daking Mic Pre IV")."""
+    from scrapers.enrich import canonical_brand, model_key
+    key = model_key(title)
+    if key and ":" in key:
+        brand, model = key.split("|")[0].split(":", 1)
+        return key, f"{brand.replace('-', ' ').title()} {model.upper()}"
+    brand = canonical_brand(title) or ""
+    words = [w for w in re.findall(r"[a-z0-9][a-z0-9-]*", (title or "").lower())
+             if w not in _MODEL_FILLER and w not in brand.replace("-", " ").split() and not re.fullmatch(r"(?:19|20)\d\ds?", w)]
+    name = " ".join(words[:2])  # "Mic Pre EQ Version 1" and "Mic Pre EQ Green" are one model
+    return f"{brand}:{name}", f"{brand.replace('-', ' ').title()} {name.title()}".strip()
+
+
 def _brief(r: dict, unit: float, n: int) -> dict:
     return {"title": r["title"], "price": r["price"], "unit": unit, "qty": n, "url": r["url"],
             "image_url": r.get("image_url"), "source": (r.get("source_name") or "").split(" — ")[0],
@@ -153,6 +186,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # Working units only: a "Non Functioning" / "for parts" ad isn't the
         # cheapest way to own one.
         for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))
+                           and not _is_addon(c[2]["title"])
                            and (_age_days(c[2]) or 0) <= CHEAPEST_MAX_AGE_DAYS][:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             unit, n = _unit(r, unit, n, c)
@@ -190,7 +224,29 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # "Cheapest anywhere" only means something for a specific model
         # ("Avalon 737", "Distressor"), not a brand or a category ("stam",
         # "tube mic") — there it's just the cheapest junk.
+        # The cheapest working one of each model the term covers ("d12" →
+        # D12, D12E, D12VR…), cheapest model first — real units only (no
+        # repair jobs, copies or junk priced far under that model's usual).
+        from scrapers.steals import _CLONE as _COPY, _PARTS
+        by_model: dict[str, list] = {}
+        for c_unit, c_n, c_r in cands:
+            c_title = c_r["title"] or ""
+            if needs_repair(c_title, c_r.get("description")) or (_age_days(c_r) or 0) > CHEAPEST_MAX_AGE_DAYS:
+                continue
+            if (_COPY.search(c_title) and not _COPY.search(term)) or _is_addon(c_title):
+                continue  # copies, and add-ons ("algorithm card for PCM80")
+            key, name = model_id(c_title)
+            by_model.setdefault(key, []).append((c_unit, c_n, c_r, name))
+        models = []
+        for key, offers in by_model.items():
+            if len(offers) >= 3:
+                usual = statistics.median(u for u, _, _, _ in offers)
+                offers = [x for x in offers if x[0] >= usual * 0.3] or offers
+            m_unit, m_n, m_r, name = min(offers, key=lambda x: x[0])
+            models.append({**_brief(m_r, m_unit, m_n), "model": name, "model_count": len(offers)})
+        models.sort(key=lambda m: m["unit"])
         row = {"term": term, "kind": kind, "count": len(cands), "fresh_count": len(fresh), "specific": specific,
+               "models": models[:15],
                "best": best_deal,
                "median": statistics.median(units) if units else None,
                "cheapest": cheapest,  # every term, brands too (owner asked)
@@ -229,6 +285,10 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
     for _ in range(rounds):
         rows = load().get("rows") or []
         cheapest = {r["cheapest"]["url"]: r["term"] for r in rows if r.get("cheapest") and r["cheapest"].get("url")}
+        for r in rows:  # and each model's cheapest
+            for m in r.get("models") or []:
+                if m.get("url"):
+                    cheapest.setdefault(m["url"], r["term"])
         if not cheapest:
             return gone_total
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=VERIFY_HOURS)).isoformat()
