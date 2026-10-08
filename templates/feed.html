@@ -25,12 +25,15 @@
       <a href="{{ url_for('feed', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'all' else '' }}">All</a>
       <a href="{{ url_for('feed', show='deals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'deals' else '' }}">🔥 Deals (10%+ under)</a>
       <a href="{{ url_for('feed', show='steals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'steals' else '' }}">💥 Steals ({{ steal_pct }}%+)</a>
+      {% set keep = dict(base, show=show) if show != 'all' else base %}
+      <a href="{{ url_for('feed', **keep) }}" class="btn btn-sm{{ ' btn-primary' if sort == 'new' else '' }}">Newest first</a>
+      <a href="{{ url_for('feed', sort='cheap', **keep) }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">💲 Cheapest first (any age)</a>
     </div>
     <details class="feed-terms"{{ ' open' if term else '' }}>
       <summary>{% if term %}Showing only “{{ term }}” — <a href="{{ url_for('feed', show=show if show != 'all' else None) }}">show all terms</a>{% else %}Filter by term{% endif %}</summary>
       <div class="feed-filters">
         {% for t in terms %}
-          <a href="{{ url_for('feed', term=t, show=show if show != 'all' else None) }}"
+          <a href="{{ url_for('feed', term=t, show=show if show != 'all' else None, sort=sort if sort == 'cheap' else None) }}"
              class="btn btn-sm{{ ' btn-primary' if t == term else '' }}{{ ' feed-term-empty' if not counts[t] else '' }}">{{ t }} <span class="muted">{{ counts[t] }}</span></a>
         {% endfor %}
       </div>
@@ -57,7 +60,7 @@
   </section>
 
   <section class="panel">
-    <h2>Posted in the last {{ recent_days }} days <span class="muted">— {{ recent|length }}</span></h2>
+    <h2>{% if sort == 'cheap' %}Cheapest first — every ad still for sale, any age{% else %}Posted in the last {{ recent_days }} days{% endif %} <span class="muted">— {{ recent|length }}</span></h2>
     {% if recent %}
       <div class="listing-grid">
         {% for l in recent[:48] %}{{ listing_card(l) }}{% endfor %}

@@ -1331,8 +1331,12 @@ def telex():
         # The cheapest working one of each model (the overall cheapest pulses
         # gold) goes first, cheapest first, however old.
         lowest, rest = _pinned_first(its, parts)
-        fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
-        old = [r for r in rest if age(r) > FRESH_DAYS]
+        if sort == "cheap":
+            # Cheapest first means every ad still for sale, however old.
+            fresh, old = lowest + sorted(rest, key=lambda r: r.get("unit") or 1e12), []
+        else:
+            fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
+            old = [r for r in rest if age(r) > FRESH_DAYS]
         new = [r for r in fresh if age(r) <= 2]
         for r in new:
             new_all.setdefault(r["url"], (r, entry))
@@ -1913,6 +1917,7 @@ def feed():
     since = _feed_visit()
     show = request.args.get("show") or "all"
     term = request.args.get("term") or ""
+    sort = "cheap" if request.args.get("sort") == "cheap" else "new"
     try:
         within = int(request.args.get("within") or 0)
     except ValueError:
@@ -1948,6 +1953,11 @@ def feed():
         new = [l for l in new if l not in pinned]
         older = [l for l in older if l not in pinned]
         recent = pinned + [l for l in recent if l not in pinned]
+    if sort == "cheap":
+        # One list, every ad still for sale whatever its age, cheapest first
+        # (each model's cheapest on top when a term is picked).
+        rest = sorted((l for l in view if l not in pinned), key=lambda l: l.get("unit") or 1e12)
+        new, recent, older = [], pinned + rest, []
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
@@ -1957,7 +1967,7 @@ def feed():
     _verify_feed([l["url"] for l in (new + recent)[:80]])
     return render_template("feed.html", new=new, recent=recent, older=older, total=len(items),
                            terms=terms, counts=counts, term=term, show=show, since_label=_ago(since),
-                           sweep=sweep, recent_days=FEED_RECENT_DAYS, steal_pct=FEED_STEAL_PCT,
+                           sweep=sweep, recent_days=FEED_RECENT_DAYS, steal_pct=FEED_STEAL_PCT, sort=sort,
                            first_visit=since is None)
 
 
