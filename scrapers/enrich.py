@@ -369,7 +369,11 @@ _OFF_TOPIC = re.compile(
     r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"
     r"t-?shirts?|shirts?|hoodies?|sweatshirts?|(?<!new )jerseys?|hats?|caps? \(clothing\)|"
     # furniture ("Mart Stam S34 dining chairs")
-    r"dining|chairs?|armchairs?|sofas?|couch(?:es)?|dressers?|nightstands?|ottomans?)\b", re.I)
+    r"dining|chairs?|armchairs?|sofas?|couch(?:es)?|dressers?|nightstands?|ottomans?|"
+    # more clothing and records ("Harley-Davidson Women's … Short Sleeve",
+    # "Whirr – Distressor EP … Records 2020", "Tri Coloured Vinyl")
+    r"short sleeve|long sleeve|women'?s|men'?s (?:tee|shirt)|(?<![\w-])ep(?![\w-])|records \d{4}|"
+    r"colou?red vinyl|vinyl (?:lp|record|ep|album|single|7\"|12\"))\b", re.I)
 
 
 @functools.lru_cache(maxsize=100_000)
@@ -522,7 +526,7 @@ _FORMS = (
         r"mxr|electro-?harmonix|ehx|jhs|keeley|walrus audio|strymon|earthquaker|wampler|fulltone|"
         r"chase bliss|meris|source audio|xotic|catalinbread|dunlop|zvex|jackson audio|"
         r"boss\s+(?!br|dr|sp|mc|tr|ad|rc-?505|gt-?1000)[a-z]{2,3}-?\d{1,3}[a-z]*)\b", re.I)),
-    ("plugin", re.compile(r"\b(?:plug-?ins?|software|licen[sc]e|vst|aax|download code|"
+    ("plugin", re.compile(r"\b(?:plug[\s-]?ins?\b(?! power)|software|licen[sc]e|vst|aax|download code|"
                           r"uad-?2 (?:plug|powered plug))\b|\(download\)|\bdigital download\b", re.I)),
     ("kit", re.compile(r"\b(?:diy|pcb|bare boards?|unbuilt|unassembled|(?:partial|build|clone|diy|project) kit|kit (?:build|form|only))\b", re.I)),
     ("500", re.compile(r"\b500[\s-]?series\b|\bapi[\s-]?500\b|\b500 (?:module|format)\b|\(500\)|\b(?:lunchbox|vpr)\b", re.I)),

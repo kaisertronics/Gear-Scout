@@ -1749,30 +1749,52 @@ def _ago(iso: Optional[str]) -> Optional[str]:
 
 
 def _mark_lowest(items: list[dict]) -> None:
-    """Marks the cheapest working listing for each term — the Price Board's
-    "cheapest anywhere" — so it stands out (pulses) wherever it's listed."""
-    from scrapers import board
-    lowest: dict[str, list[str]] = {}
-    per_model: dict[str, dict[str, str]] = {}  # url -> {term: model name}
-    for row in board.load().get("rows") or []:
-        ch = row.get("cheapest")
-        if ch and ch.get("url"):
-            lowest.setdefault(ch["url"], []).append(row["term"])
-        for m in row.get("models") or []:
-            if m.get("url"):
-                per_model.setdefault(m["url"], {})[row["term"]] = m["model"]
+    """(Kept for callers; the marks are set when the Feed is built.)"""
+    return None
+
+
+def _mark_picks(items: list[dict], cfg) -> None:
+    """For every term: the cheapest working one of each model among exactly
+    these listings (scrapers/models.py) — the term's overall cheapest pulses
+    gold, each model's cheapest gets a gold "Lowest <model>" tag. Worked out
+    from the list itself, so a new cheaper ad is marked as soon as it's
+    listed; the scraper re-checks the marked ones are still for sale."""
+    from scrapers import models, wanted
+    from scrapers.enrich import parse_price, quantity
+    by_term: dict[str, list] = {}
     for l in items:
-        l["lowest_for"] = lowest.get(l.get("url"))
-        l["model_lowest"] = per_model.get(l.get("url"))
-        names = list(dict.fromkeys((l["model_lowest"] or {}).values()))
+        l["lowest_for"], l["model_lowest"], l["model_lowest_label"] = None, None, None
+        ctx = l.get("price_ctx") or {}
+        l["unit"] = ctx.get("unit_value") or (
+            (parse_price(l.get("price")) or 0) / max(1, quantity(l.get("title"), l.get("description"))))
+        for t in l.get("wanted") or []:
+            by_term.setdefault(t, []).append(l)
+    by_url = {l["url"]: l for l in items}
+    marked = set()
+    exclude = cfg.get("exclude_words") or []
+    for term in wanted.terms(cfg):
+        ps = models.picks(term, by_term.get(term, []), exclude)
+        for i, p in enumerate(ps):
+            l = by_url.get(p["url"])
+            if not l:
+                continue
+            marked.add(p["url"])
+            if i == 0:
+                l["lowest_for"] = (l["lowest_for"] or []) + [term]
+            l["model_lowest"] = {**(l["model_lowest"] or {}), term: p["model"]}
+    for l in items:
+        names = list(dict.fromkeys((l.get("model_lowest") or {}).values()))
         l["model_lowest_label"] = ", ".join(names[:2]) if names else None
+    try:
+        Path("/data/lowest_picks.txt").write_text("\n".join(sorted(marked)))
+    except OSError:
+        pass
 
 
 def _pinned_first(its: list[dict], parts: set) -> tuple[list, list]:
     """(the cheapest of each model for these terms — cheapest first — , the
     rest). The overall cheapest is simply the first of them."""
-    from scrapers.enrich import parse_price
-    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
+    unit = lambda r: r.get("unit") or 1e12  # price per piece, as the picks use
     pinned = [r for r in its if parts & (set(r.get("lowest_for") or []) | set((r.get("model_lowest") or {}).keys()))]
     pinned.sort(key=unit)
     return pinned, [r for r in its if r not in pinned]
@@ -1800,7 +1822,7 @@ def _feed_items(cfg) -> list[dict]:
         # Something changed: show the current list right away and rebuild in
         # the background — rebuilding inside the request made the page hang
         # for a minute while a scrape was using the CPU.
-        same_terms = c["key"] is None or c["key"][2] == key[2]
+        same_terms = c["key"] is None or (len(c["key"]) > 2 and c["key"][2] == key[2])
         if same_terms:
             def rebuild():
                 _feed_state["rebuilding"] = True
@@ -1863,6 +1885,7 @@ def _build_feed(cfg, key) -> list[dict]:
             ctx["deal"] = False  # the card's "% under" comes from l.comp, as everywhere else
         l["checked_label"] = _ago(l.get("confirmed_live_at"))
         out.append(l)
+    _mark_picks(out, cfg)
     # Newest post first; ties (same posting time, or no posting time) go to
     # the one Gear Scout found most recently.
     out.sort(key=lambda l: l.get("first_seen") or "", reverse=True)

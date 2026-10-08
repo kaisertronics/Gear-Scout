@@ -55,50 +55,15 @@ def _is_specific(term: str) -> bool:
     return bool(words) and (bool(brand) or len(words) >= 2)
 
 
-def _unit(r: dict, unit: float, n: int, c) -> tuple[float, int]:
-    """Price per piece for a several-piece ad: "Selling 3 Apollo x8p —
-    C$2,800" is almost certainly C$2,800 each (a mint x8p goes for ~$1,800),
-    not three for C$2,800. Uses the same rule as everywhere else: a price
-    near ONE unit's usual price is per piece."""
-    if n < 2 or not c:
-        return unit, n
-    from scrapers.enrich import parse_price, price_basis
-    value = parse_price(r["price"]) or unit * n
-    basis, qty, per = price_basis(r["title"], r.get("description"), value, c["ref"])
-    return per, (qty if basis.startswith("each") or basis == "set" else n)
-
-
-_MODEL_FILLER = {"vintage", "used", "new", "rare", "mint", "excellent", "great", "good", "condition", "pair",
-                 "of", "the", "and", "with", "w", "for", "sale", "tested", "working", "original", "audio",
-                 "pro", "professional", "studio", "microphone", "mic", "series", "black", "silver", "blue",
-                 "engineering", "co", "labs", "electronics", "microphones", "inc", "company", "two", "three",
-                 "four", "x2", "pairs", "matched", "stereo"}
-
-
 # Add-ons sold for a unit, not the unit ("PCM 80 Pitch FX ROM", "algorithm card").
 _ADDON_WORDS = re.compile(r"\b(?:roms?|eproms?|cards?|cartridges?|chips?|firmware|upgrade kit|algorithms?|"
+                          r"grill(?:e|es|s)?|replacement|knobs?|faceplates?|(?:oled |lcd )?displays?|lcd|oled|screens?|"
                           r"manuals?|service manual|schematics?|remote only|power supply only|psu only)\b", re.I)
 
 
 def _is_addon(title: str) -> bool:
     from scrapers.steals import _PARTS
     return bool(_PARTS.search(title or "") or _ADDON_WORDS.search(title or ""))
-
-
-def model_id(title: str) -> tuple[str, str]:
-    """(grouping key, display name) for which model a listing is: brand +
-    model number when there is one ("AKG D12VR", "Lexicon PCM70"), else the
-    brand and the first model words ("Daking Mic Pre IV")."""
-    from scrapers.enrich import canonical_brand, model_key
-    key = model_key(title)
-    if key and ":" in key:
-        brand, model = key.split("|")[0].split(":", 1)
-        return key, f"{brand.replace('-', ' ').title()} {model.upper()}"
-    brand = canonical_brand(title) or ""
-    words = [w for w in re.findall(r"[a-z0-9][a-z0-9-]*", (title or "").lower())
-             if w not in _MODEL_FILLER and w not in brand.replace("-", " ").split() and not re.fullmatch(r"(?:19|20)\d\ds?", w)]
-    name = " ".join(words[:2])  # "Mic Pre EQ Version 1" and "Mic Pre EQ Green" are one model
-    return f"{brand}:{name}", f"{brand.replace('-', ' ').title()} {name.title()}".strip()
 
 
 def _brief(r: dict, unit: float, n: int) -> dict:
@@ -169,8 +134,12 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
             value = parse_price(r["price"])
             if not value or value < 20:
                 continue
-            n = quantity(title, r.get("description"))
-            cands.append((value / max(n, 1), n, r))
+            # Price per piece, by the same rule the Feed uses ("3 available —
+            # $2,800" near one unit's usual price means each).
+            from scrapers.enrich import price_context
+            ctx = price_context(title, r["price"], index, market, description=r.get("description"))
+            n = ctx.get("qty") or quantity(title, r.get("description"))
+            cands.append((ctx.get("unit_value") or value / max(n, 1), n, r))
         cands.sort(key=lambda c: c[0])
         # "Cheapest anywhere" is where junk floats up (a record named
         # "Distressor", a pedal): ignore anything under a quarter of what this
@@ -178,30 +147,6 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         if len(cands) >= 5:
             typical = statistics.median(u for u, _, _ in cands)
             cands = [c for c in cands if c[0] >= typical * 0.25]
-        # The cheapest believable one: placeholders and mismatches (under a
-        # fifth of the item's own comp) are skipped.
-        cheapest = comp = None
-        checked = []
-        from scrapers.enrich import needs_repair
-        # Working units only: a "Non Functioning" / "for parts" ad isn't the
-        # cheapest way to own one.
-        for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))
-                           and not _is_addon(c[2]["title"])][:12]:
-            c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
-            unit, n = _unit(r, unit, n, c)
-            if c and unit < c["ref"] * 0.2:
-                continue
-            checked.append((unit, n, r, c))
-        # The real model, not a copy: "LA-2A style", "D12 type", clones and
-        # kits don't count as the cheapest LA-2A — unless your term asks for
-        # them ("U47 clone", "API clone").
-        from scrapers.steals import _CLONE
-        if not _CLONE.search(term):
-            real = [x for x in checked if not _CLONE.search(x[2]["title"] or "")]
-            checked = real or checked
-        if checked:  # re-sorted after working out per-piece prices
-            unit, n, r, c = min(checked, key=lambda x: x[0])
-            cheapest, comp = _brief(r, unit, n), c
         fresh = [(u, n, r) for u, n, r in cands if (_age_days(r) or 0) <= FRESH_DAYS]
         # Best deal this week: the biggest real discount among ads posted in
         # the last week (a solid comp, 10-80% under — beyond 80% is almost
@@ -223,27 +168,25 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # "Cheapest anywhere" only means something for a specific model
         # ("Avalon 737", "Distressor"), not a brand or a category ("stam",
         # "tube mic") — there it's just the cheapest junk.
-        # The cheapest working one of each model the term covers ("d12" →
-        # D12, D12E, D12VR…), cheapest model first — real units only (no
-        # repair jobs, copies or junk priced far under that model's usual).
-        from scrapers.steals import _CLONE as _COPY, _PARTS
-        by_model: dict[str, list] = {}
+        # The cheapest working one of each model, cheapest first — the same
+        # picks the Feed and the Telex page mark (scrapers/models.py). The
+        # first is the term's "cheapest anywhere".
+        from scrapers import models as model_picks
+        rows_by_url = {}
+        unit_rows = []
         for c_unit, c_n, c_r in cands:
-            c_title = c_r["title"] or ""
-            if needs_repair(c_title, c_r.get("description")):
-                continue
-            if (_COPY.search(c_title) and not _COPY.search(term)) or _is_addon(c_title):
-                continue  # copies, and add-ons ("algorithm card for PCM80")
-            key, name = model_id(c_title)
-            by_model.setdefault(key, []).append((c_unit, c_n, c_r, name))
+            rows_by_url[c_r["url"]] = (c_unit, c_n, c_r)
+            unit_rows.append({**c_r, "unit": c_unit})
         models = []
-        for key, offers in by_model.items():
-            if len(offers) >= 3:
-                usual = statistics.median(u for u, _, _, _ in offers)
-                offers = [x for x in offers if x[0] >= usual * 0.3] or offers
-            m_unit, m_n, m_r, name = min(offers, key=lambda x: x[0])
-            models.append({**_brief(m_r, m_unit, m_n), "model": name, "model_count": len(offers)})
-        models.sort(key=lambda m: m["unit"])
+        for p in model_picks.picks(term, unit_rows, exclude):
+            c_unit, c_n, c_r = rows_by_url[p["url"]]
+            models.append({**_brief(c_r, c_unit, c_n), "model": p["model"], "model_count": p["count"]})
+        if models:
+            first = models[0]
+            cheapest = {k: v for k, v in first.items() if k not in ("model", "model_count")}
+            comp = evaluate(first["title"], first["price"], None, first["url"], market, index, similar)
+        else:
+            cheapest = comp = None
         row = {"term": term, "kind": kind, "count": len(cands), "fresh_count": len(fresh), "specific": specific,
                "models": models[:15],
                "best": best_deal,
@@ -284,6 +227,12 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
     for _ in range(rounds):
         rows = load().get("rows") or []
         cheapest = {r["cheapest"]["url"]: r["term"] for r in rows if r.get("cheapest") and r["cheapest"].get("url")}
+        try:  # and what the Feed / Telex page mark as each model's cheapest
+            for u in Path("/data/lowest_picks.txt").read_text().split("\n"):
+                if u.startswith("http"):
+                    cheapest.setdefault(u, None)
+        except OSError:
+            pass
         for r in rows:  # and each model's cheapest
             for m in r.get("models") or []:
                 if m.get("url"):
@@ -316,7 +265,7 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
             return gone_total
         gone_total += len(gone)
         logger.info("Price Board: %d cheapest listings were gone — picking the next cheapest", len(gone))
-        build(cfg, only=[cheapest[u] for u in gone])
+        build(cfg, only=[cheapest[u] for u in gone if cheapest.get(u)])
     return gone_total
 
 
