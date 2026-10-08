@@ -3,6 +3,7 @@
     "date": "2026-10-07",
     "title": "Fewer wrong matches for broad terms; Price Board cheapest fixed",
     "items": [
+      "The cheapest per term and per model is now the cheapest working ad still for sale no matter how old it is (it was limited to ads posted in the last 90 days) — e.g. Daking's cheapest is now a $599 mic pre posted 5 months ago.",
       "For terms that cover several models (“d12” → D12, D12E, D12VR; “Lexicon pcm” → PCM60, PCM70, PCM91…), the cheapest working one of EACH model now comes first, cheapest model first, with a gold “💲 Lowest <model>” tag. The term's overall cheapest still pulses. Each is checked to still be for sale; add-on cards, ROMs, manuals and copies don't count.",
       "Every term now gets a “cheapest anywhere”, brands too (daking, stam, peluso, beesneez…), from any working ad still for sale posted in the last 90 days. Furniture is filtered out (“Mart Stam” dining chairs).",
       "Filtered out off-topic listings that share letters with your terms: tractors and loaders (“SSL attach”), trailers, mowers, guitar pickups (Seymour Duncan SSL-1…), guitars by model (Strat, Tele, Les Paul…), T-shirts and jerseys — about 130 removed.",

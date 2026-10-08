@@ -21,7 +21,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 BOARD_PATH = Path("/data/price_board.json")
 FRESH_DAYS = 7
-CHEAPEST_MAX_AGE_DAYS = 90  # "cheapest anywhere": ads posted up to 90 days ago
+# "Cheapest anywhere": any ad still for sale, however long ago it was posted.
 VERIFY_HOURS = 3            # re-check the cheapest is still up if not confirmed this recently
 MIN_GENERIC = 300  # owner's budget is $500–$2,000; a little room below
 
@@ -186,8 +186,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         # Working units only: a "Non Functioning" / "for parts" ad isn't the
         # cheapest way to own one.
         for unit, n, r in [c for c in cands if not needs_repair(c[2]["title"], c[2].get("description"))
-                           and not _is_addon(c[2]["title"])
-                           and (_age_days(c[2]) or 0) <= CHEAPEST_MAX_AGE_DAYS][:12]:
+                           and not _is_addon(c[2]["title"])][:12]:
             c = evaluate(r["title"], r["price"], r.get("description"), r["url"], market, index, similar)
             unit, n = _unit(r, unit, n, c)
             if c and unit < c["ref"] * 0.2:
@@ -231,7 +230,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         by_model: dict[str, list] = {}
         for c_unit, c_n, c_r in cands:
             c_title = c_r["title"] or ""
-            if needs_repair(c_title, c_r.get("description")) or (_age_days(c_r) or 0) > CHEAPEST_MAX_AGE_DAYS:
+            if needs_repair(c_title, c_r.get("description")):
                 continue
             if (_COPY.search(c_title) and not _COPY.search(term)) or _is_addon(c_title):
                 continue  # copies, and add-ons ("algorithm card for PCM80")
