@@ -140,7 +140,11 @@ def skip_on_light_runs(sources: list[dict]) -> tuple[list[dict], list[str]]:
     keep, skipped = [], []
     for s in sources:
         b = board.get(s["name"])
-        if b and (b["fail_streak"] >= 5 or (b["sched_runs"] >= 12 and b["sched_found"] == 0)):
+        # Marketplace regions are kept: their browse feed is still worth
+        # reading even when Facebook's search side comes back empty.
+        never_matching = b and b["sched_runs"] >= 12 and b["sched_found"] == 0 \
+            and s.get("type") != "facebook_marketplace_region"
+        if b and (b["fail_streak"] >= 5 or never_matching):
             skipped.append(s["name"])
         elif s.get("type") in slow_types and (recent_ok.get(s["name"]) or "") > three_h_ago:
             skipped.append(s["name"])

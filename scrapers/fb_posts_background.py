@@ -97,6 +97,40 @@ def facebook_paused() -> bool:
         return False
 
 
+MARKETPLACE_SEARCH_PAUSE_HOURS = 48
+
+
+def marketplace_search_paused() -> bool:
+    """True while Gear Scout leaves Marketplace *searches* alone because
+    Facebook stopped returning search results for the account (browsing
+    the regional feeds, groups and posts carry on)."""
+    with _conn() as conn:
+        until = _state_get(conn, "mp_search_paused_until")
+    try:
+        return bool(until and datetime.fromisoformat(until) > datetime.now(timezone.utc))
+    except ValueError:
+        return False
+
+
+def pause_marketplace_search(cfg: Optional[dict] = None, hours: int = MARKETPLACE_SEARCH_PAUSE_HOURS) -> None:
+    if marketplace_search_paused():
+        return
+    until = datetime.now(timezone.utc) + timedelta(hours=hours)
+    with _conn() as conn:
+        _state_set(conn, "mp_search_paused_until", until.isoformat())
+    logger.warning("Facebook Marketplace search returns nothing — Marketplace searches paused %dh", hours)
+    if cfg:
+        try:
+            from scrapers.notify import push_enabled, send_push
+            if push_enabled(cfg):
+                send_push(cfg, "Facebook Marketplace search is returning nothing",
+                          f"Facebook seems to be limiting Marketplace search on your account. Gear Scout stops "
+                          f"searching Marketplace for {hours} hours (browsing, groups and posts continue).",
+                          tags=["warning"])
+        except Exception:
+            logger.exception("Couldn't send Marketplace pause notification")
+
+
 def pause_facebook(reason: str, cfg: Optional[dict] = None) -> None:
     until = datetime.now(timezone.utc) + timedelta(hours=BLOCK_PAUSE_HOURS)
     with _conn() as conn:

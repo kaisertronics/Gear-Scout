@@ -606,6 +606,12 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
     # mean hundreds of requests against the actual Facebook account, one
     # term is exactly what a search box is for.
     is_live = len(keywords) == 1 and bool(keywords[0].strip())
+    from scrapers.fb_posts_background import marketplace_search_paused
+    search_paused = marketplace_search_paused()
+    if is_live and search_paused:
+        return ScrapeResult(source_name=name, source_url=url, success=False, blocked=True,
+                            error="Marketplace search paused (Facebook isn't returning search results).",
+                            fix_hint="Resumes on its own after the pause.", duration_seconds=0.0)
     if is_live:
         from scrapers.facebook_marketplace_regions import facebook_marketplace_search_url
 
@@ -691,7 +697,7 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                 # newest, so fresh ads could wait for a full scheduled run).
                 hour = int(time.time() // 3600)
                 broad = [broad[(hour + int(loc_id.group(1)[-3:]) if loc_id else hour) % len(broad)]]
-            if not is_live and loc_id:
+            if not is_live and loc_id and not search_paused:
                 for term in broad:
                     # A time budget per region, so one slow page can't stall the run.
                     if time.time() - start > REGION_BUDGET_SECONDS:
@@ -708,6 +714,15 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     except Exception as e:
                         logger.warning("FB Marketplace broad search %r failed for %s: %s", term, name, e)
             cards = list(collected.values())
+            if is_live and len(cards) <= 1:
+                # A Marketplace search with no results at all (one link is
+                # usually just a Messenger chat) — on the account, not the term:
+                # even "microphone" comes back empty when Facebook limits search.
+                _save_session(context)
+                context.close()
+                return ScrapeResult(source_name=name, source_url=url, success=False,
+                                    error="Marketplace search returned no results at all.",
+                                    fix_hint="EMPTY_MARKETPLACE_SEARCH", duration_seconds=time.time() - start)
             listings = []
             seen_ids = set()
 

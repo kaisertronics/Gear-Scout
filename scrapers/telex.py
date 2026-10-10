@@ -107,7 +107,7 @@ def search_links(term: str) -> list[tuple[str, str]]:
 FAST_EVERY_MIN = 30      # Reverb, Craigslist, Kijiji, ShopGoodwill, Long & McQuade, OfferUp
 EBAY_EVERY_MIN = 120     # eBay's API has a daily allowance (sold checks use it too)
 TYPO_EVERY_MIN = 360
-FB_TERMS_PER_CYCLE = 4   # Marketplace (8 regions) + your groups: ~2 min a term
+FB_TERMS_PER_CYCLE = 2   # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
 TYPOS_PER_CYCLE = 2
 FAST_BUDGET_SECONDS = 600
 SWEEP_MARKER = "/data/last_sweep.json"
@@ -161,6 +161,10 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
                                                           f"{r.error} {r.fix_hint}", re.I)
                              for r in results if site_of.get(r.source_name) == "fb"):
         pause_facebook("Facebook asked to slow down or confirm the account", cfg)
+    mp = [r for r in results if r.source_name.startswith("FB Marketplace")]
+    if mp and all((r.fix_hint or "") == "EMPTY_MARKETPLACE_SEARCH" for r in mp):
+        from scrapers.fb_posts_background import pause_marketplace_search
+        pause_marketplace_search(cfg)
     counts = {s: [0, 0] for s in sites}
     for r in results:
         c = counts.setdefault(site_of.get(r.source_name, "fast"), [0, 0])
