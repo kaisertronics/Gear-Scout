@@ -751,6 +751,12 @@ def cached_image(name):
     return resp
 
 
+@app.template_test("local_pickup")
+def _is_local_pickup(source_name: str) -> bool:
+    """Sites where you pick the item up yourself (no shipping)."""
+    return bool(re.match(r"(?:FB |Facebook|Craigslist|OfferUp|Kijiji|seattle group)", source_name or ""))
+
+
 @app.template_filter("img")
 def _img_filter(url):
     """The saved copy of a picture when there is one, else the original link."""
@@ -1333,7 +1339,7 @@ def telex():
         lowest, rest = _pinned_first(its, parts)
         if sort == "cheap":
             # Cheapest first means every ad still for sale, however old.
-            fresh, old = lowest + sorted(rest, key=lambda r: r.get("unit") or 1e12), []
+            fresh, old = lowest + sorted(rest, key=lambda r: r.get("total") or r.get("unit") or 1e12), []
         else:
             fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
             old = [r for r in rest if age(r) > FRESH_DAYS]
@@ -1771,6 +1777,8 @@ def _mark_picks(items: list[dict], cfg) -> None:
         ctx = l.get("price_ctx") or {}
         l["unit"] = ctx.get("unit_value") or (
             (parse_price(l.get("price")) or 0) / max(1, quantity(l.get("title"), l.get("description"))))
+        l["qty"] = ctx.get("qty") or 1
+        l["total"] = models.landed(l)  # price + known shipping, per piece
         for t in l.get("wanted") or []:
             by_term.setdefault(t, []).append(l)
     by_url = {l["url"]: l for l in items}
@@ -1798,7 +1806,7 @@ def _mark_picks(items: list[dict], cfg) -> None:
 def _pinned_first(its: list[dict], parts: set) -> tuple[list, list]:
     """(the cheapest of each model for these terms — cheapest first — , the
     rest). The overall cheapest is simply the first of them."""
-    unit = lambda r: r.get("unit") or 1e12  # price per piece, as the picks use
+    unit = lambda r: r.get("total") or r.get("unit") or 1e12  # price + shipping per piece, as the picks use
     pinned = [r for r in its if parts & (set(r.get("lowest_for") or []) | set((r.get("model_lowest") or {}).keys()))]
     pinned.sort(key=unit)
     return pinned, [r for r in its if r not in pinned]
@@ -1956,7 +1964,7 @@ def feed():
     if sort == "cheap":
         # One list, every ad still for sale whatever its age, cheapest first
         # (each model's cheapest on top when a term is picked).
-        rest = sorted((l for l in view if l not in pinned), key=lambda l: l.get("unit") or 1e12)
+        rest = sorted((l for l in view if l not in pinned), key=lambda l: l.get("total") or l.get("unit") or 1e12)
         new, recent, older = [], pinned + rest, []
     sweep = None
     try:

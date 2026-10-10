@@ -68,15 +68,20 @@ def _ebay_gone(url: str) -> Optional[bool]:
     if not (api.get("client_id") and api.get("client_secret")):
         return None
     token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
+    from scrapers.ebay_api import _headers, shipping_of
     r = requests.get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"),
-                     params={"legacy_item_id": m.group(1)},
-                     headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
+                     params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
     _check_response(r)
     if r.status_code in (404, 410):
         return True
     if r.status_code != 200:
         return None
     item = r.json()
+    try:
+        from scrapers.store import set_shipping
+        set_shipping(url, shipping_of(item))
+    except Exception:
+        pass
     end = item.get("itemEndDate")
     if end:
         try:
@@ -100,6 +105,12 @@ def check_url(url: str) -> Optional[bool]:
                          headers={"Accept-Version": "3.0", "Accept": "application/hal+json"}, timeout=20)
         if r.status_code == 404:
             return True
+        try:
+            from scrapers.reverb_api import shipping_of
+            from scrapers.store import set_shipping
+            set_shipping(url, shipping_of(r.json()))
+        except Exception:
+            pass
         slug = ((r.json().get("state") or {}).get("slug") or "").lower()
         return None if not slug else slug != "live"
     if "/products/" in url and "facebook.com" not in url:

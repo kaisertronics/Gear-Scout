@@ -115,10 +115,21 @@ def model_of(title: str, term: str) -> tuple[str, str]:
     return f"w:{name}", label
 
 
+def landed(r: dict) -> float:
+    """What it costs delivered, per piece: price + known US shipping (split
+    across the pieces of a pair / lot). Local pickup and unknown shipping
+    count as no shipping."""
+    unit = r.get("unit") or 0
+    ship = r.get("shipping")
+    n = r.get("qty") or 1
+    return unit + (ship / max(n, 1) if ship else 0)
+
+
 def picks(term: str, rows: list[dict], exclude_words: Optional[list] = None) -> list[dict]:
     """The cheapest working one of each model among `rows` (each with
-    'title', 'price', 'description', 'url' and 'unit' = price per piece),
-    cheapest first: [{'url', 'model', 'unit', 'count'}]. The first is the
+    'title', 'price', 'description', 'url', 'unit' = price per piece and,
+    when known, 'shipping' and 'qty'), cheapest delivered first (price +
+    known shipping): [{'url', 'model', 'unit', 'total', 'count'}]. The first is the
     term's overall cheapest. Leaves out repair jobs, add-ons, copies (unless
     the term asks for them), auctions, and prices far under that model's
     usual (a part, or a typo)."""
@@ -157,7 +168,8 @@ def picks(term: str, rows: list[dict], exclude_words: Optional[list] = None) -> 
         if len(offers) >= 3:
             usual = statistics.median(r["unit"] for r in offers)
             offers = [r for r in offers if r["unit"] >= usual * 0.3] or offers
-        best = min(offers, key=lambda r: r["unit"])
-        out.append({"url": best["url"], "model": names[key], "unit": best["unit"], "count": len(offers)})
-    out.sort(key=lambda m: m["unit"])
+        best = min(offers, key=landed)  # price + shipping decides
+        out.append({"url": best["url"], "model": names[key], "unit": best["unit"], "total": landed(best),
+                    "count": len(offers)})
+    out.sort(key=lambda m: m["total"])
     return out

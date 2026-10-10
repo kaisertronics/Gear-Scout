@@ -83,9 +83,8 @@ def fetch_ebay_ending(cfg: dict) -> int:
         searches += [{**base, "q": search_query(t), "limit": "50"} for t in wanted.terms(cfg)]
         _TERM_SEARCH_MARK.write_text(datetime.now(timezone.utc).isoformat())
     for params in searches:
-        resp = requests.get(SEARCH_URL, params=params,
-                            headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
-                            timeout=30)
+        from scrapers.ebay_api import _headers
+        resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             logger.warning("eBay ending-soon auctions failed: HTTP %s", resp.status_code)
@@ -94,6 +93,8 @@ def fetch_ebay_ending(cfg: dict) -> int:
             listing = ebay_auction_listing(item, "eBay — Auctions")
             if not listing or not wanted.match(listing.title, listing.price, ms, listing.source_name):
                 continue
+            from scrapers.ebay_api import shipping_of
+            listing.shipping = shipping_of(item)
             mark_seen(listing)
             with _conn() as conn:
                 conn.execute("UPDATE seen SET price = ?, description = ? WHERE url = ?",

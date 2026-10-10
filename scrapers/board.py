@@ -70,7 +70,8 @@ def _brief(r: dict, unit: float, n: int) -> dict:
     return {"title": r["title"], "price": r["price"], "unit": unit, "qty": n, "url": r["url"],
             "image_url": r.get("image_url"), "source": (r.get("source_name") or "").split(" — ")[0],
             "location": (r.get("location") or "").split(" @")[0] or None, "age_days": _age_days(r),
-            "age_known": bool(r.get("posted_at"))}
+            "age_known": bool(r.get("posted_at")), "shipping": r.get("shipping"),
+            "total": unit + ((r.get("shipping") or 0) / max(n or 1, 1))}
 
 
 def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
@@ -176,7 +177,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         unit_rows = []
         for c_unit, c_n, c_r in cands:
             rows_by_url[c_r["url"]] = (c_unit, c_n, c_r)
-            unit_rows.append({**c_r, "unit": c_unit})
+            unit_rows.append({**c_r, "unit": c_unit, "qty": c_n})
         models = []
         for p in model_picks.picks(term, unit_rows, exclude):
             c_unit, c_n, c_r = rows_by_url[p["url"]]

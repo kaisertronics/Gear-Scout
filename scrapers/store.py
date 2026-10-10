@@ -73,6 +73,7 @@ def _conn() -> sqlite3.Connection:
         ("last_seen", "TEXT"),
         ("sold_checked_at", "TEXT"),
         ("confirmed_live_at", "TEXT"),
+        ("shipping", "REAL"),  # US shipping in USD (0 = free); NULL = not known / local pickup
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -162,6 +163,16 @@ def set_posted_at(url: str, posted) -> None:
         conn.commit()
 
 
+def set_shipping(url: str, shipping) -> None:
+    """Saves a listing's US shipping cost (USD, 0 = free), learned when its
+    page or API record is re-checked."""
+    if shipping is None:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET shipping = ? WHERE url = ?", (float(shipping), url))
+        conn.commit()
+
+
 def set_pending(url: str, pending: bool) -> None:
     with _conn() as conn:
         conn.execute("UPDATE seen SET pending = ? WHERE url = ?", (1 if pending else 0, url))
@@ -200,6 +211,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
                     "UPDATE seen SET location = ? WHERE global_id = ? AND location IS NULL",
                     (listing.location, listing.global_id),
                 )
+            if getattr(listing, "shipping", None) is not None:
+                conn.execute("UPDATE seen SET shipping = ? WHERE global_id = ?", (listing.shipping, listing.global_id))
             old_value, new_value = parse_price(existing[0]), parse_price(listing.price)
             if old_value and new_value and new_value < old_value * 0.99:
                 conn.execute(
@@ -232,8 +245,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location, last_seen)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen, shipping)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -249,6 +262,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 1 if duplicate else 0,
                 getattr(listing, "location", None),
                 now,
+                getattr(listing, "shipping", None),
             ),
         )
         _record_status(conn, listing)

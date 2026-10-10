@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-09",
+    "title": "Shipping counts in the cheapest price",
+    "items": [
+      "Gear Scout now records US shipping for Reverb and eBay listings (to your zip for eBay) and shows it on each card: “free shipping”, “+ $72 shipping · $1,706 delivered”, or “local pickup” for Facebook, Craigslist, OfferUp and Kijiji.",
+      "The cheapest per term and per model, “Cheapest first” and the Price Board all decide by price + known shipping (split per piece for pairs and lots). Where a site doesn't show shipping (dealers, ShopGoodwill), it counts as unknown.",
+      "Listings already stored are getting their shipping looked up once; it's refreshed whenever a listing is re-checked."
+    ]
+  },
+  {
     "date": "2026-10-07",
     "title": "Fewer wrong matches for broad terms; Price Board cheapest fixed",
     "items": [

@@ -93,6 +93,32 @@ def _get_token(client_id: str, client_secret: str) -> str:
     return token
 
 
+def shipping_of(item: dict) -> Optional[float]:
+    """Cheapest US shipping in USD on an eBay item (0 = free), None if not shown."""
+    costs = []
+    for o in item.get("shippingOptions") or []:
+        c = (o.get("shippingCost") or {})
+        if c.get("currency", "USD") == "USD":
+            try:
+                costs.append(float(c.get("value")))
+            except (TypeError, ValueError):
+                pass
+    return min(costs) if costs else None
+
+
+def _headers(token: str) -> dict:
+    """Browse API headers, with your zip code so shipping costs are to you."""
+    h = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}
+    try:
+        import yaml
+        z = str((yaml.safe_load(open("/config/config.yaml")) or {}).get("home_zip") or "").strip()
+        if z:
+            h["X-EBAY-C-ENDUSERCTX"] = f"contextualLocation=country%3DUS%2Czip%3D{z}"
+    except Exception:
+        pass
+    return h
+
+
 def _format_price(price: Optional[dict]) -> Optional[str]:
     if not price or "value" not in price:
         return None
@@ -142,15 +168,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         )
     try:
         token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-        resp = requests.get(
-            SEARCH_URL,
-            params=params,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-            },
-            timeout=30,
-        )
+        resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
@@ -186,6 +204,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         auction = ebay_auction_listing(item, name)
         if auction:
             auction.posted_at = posted_at
+            auction.shipping = shipping_of(item)
             listings.append(auction)
             continue
         condition = item.get("condition")
@@ -198,6 +217,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             image_url=(item.get("image") or {}).get("imageUrl"),
             posted_at=posted_at,
             listing_id=item_id,
+            shipping=shipping_of(item),
         ))
 
     return ScrapeResult(

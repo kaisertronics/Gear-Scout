@@ -955,3 +955,5 @@ button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; f
    (the term's overall cheapest is the one that pulses). */
 .listing-card.is-model-lowest { border: 2px solid #f59e0b; box-shadow: 0 0 0 1px #fde68a; }
 .lowest-tag-model { background: #fef3c7; color: #78350f; border: 1px solid #f59e0b; }
+.listing-ship { font-size: 11px; color: #475569; margin-top: 2px; }
+@media (prefers-color-scheme: dark) { .listing-ship { color: #cbd5e1; } }

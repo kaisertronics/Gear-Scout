@@ -28,6 +28,20 @@ LOOKBACK_HOURS = 3
 MAX_PAGES = 10
 
 
+def shipping_of(item: dict):
+    """US shipping in USD from a Reverb listing (0 = free); None when it's
+    local pickup only or not shown."""
+    rates = ((item.get("shipping") or {}).get("rates")) or []
+    for code in ("US_CON", "US"):
+        for r in rates:
+            if r.get("region_code") == code:
+                try:
+                    return float(((r.get("rate") or {}).get("amount")) or 0)
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
 def _to_listing(item: dict, name: str) -> Listing:
     price = item.get("price") or {}
     photos = item.get("photos") or []
@@ -53,6 +67,7 @@ def _to_listing(item: dict, name: str) -> Listing:
         image_url=image,
         posted_at=posted,
         listing_id=str(item.get("id")),
+        shipping=shipping_of(item),
     )
 
 
