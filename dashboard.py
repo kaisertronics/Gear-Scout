@@ -2030,6 +2030,10 @@ def feed():
         new = [l for l in new if l not in pinned]
         older = [l for l in older if l not in pinned]
         recent = pinned + [l for l in recent if l not in pinned]
+    if show in ("deals", "steals") and sort != "cheap":
+        # Deals / steals: all of them in view, whatever their age (a steal
+        # posted three weeks ago is still a steal) — newest first.
+        new, recent, older = new, recent + older, []
     if sort == "cheap":
         # One list, every ad still for sale whatever its age, cheapest first
         # (each model's cheapest on top when a term is picked).
