@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-10-11",
+    "title": "Overseas ads removed",
+    "items": [
+      "Overseas listings are left out completely: only sellers in the US and Canada. Reverb sellers are identified by the currency they list in (a Japanese shop lists in yen, a UK shop in pounds — about half of Reverb's used Neumann listings were overseas); eBay by the item's location.",
+      "They're dropped when scraped and kept out of the Feed, Telex page, Price Board, cheapest picks, deals, alerts and the digest. Listings already stored were checked once."
+    ]
+  },
+  {
     "date": "2026-10-09",
     "title": "Shipping counts in the cheapest price",
     "items": [

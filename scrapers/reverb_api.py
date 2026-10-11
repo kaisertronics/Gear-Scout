@@ -28,6 +28,14 @@ LOOKBACK_HOURS = 3
 MAX_PAGES = 10
 
 
+def country_of(item: dict):
+    """Where a Reverb seller is, from the currency they list in (Reverb shows
+    every price in US dollars, but a Japanese shop lists in JPY, a UK one in
+    GBP): "US", "CA", or the currency code for anywhere else."""
+    cur = (item.get("listing_currency") or (item.get("price") or {}).get("currency") or "").upper()
+    return {"USD": "US", "CAD": "CA"}.get(cur, cur or None)
+
+
 def shipping_of(item: dict):
     """US shipping in USD from a Reverb listing (0 = free); None when it's
     local pickup only or not shown."""
@@ -68,6 +76,7 @@ def _to_listing(item: dict, name: str) -> Listing:
         posted_at=posted,
         listing_id=str(item.get("id")),
         shipping=shipping_of(item),
+        country=country_of(item),
     )
 
 
@@ -132,7 +141,8 @@ def scrape_reverb_api(source: dict, keywords: list[str]) -> ScrapeResult:
             continue
         seen.add(lid)
         title = item.get("title") or ""
-        if title and keyword_match(title, keywords):
+        from scrapers.store import is_overseas
+        if title and keyword_match(title, keywords) and not is_overseas(country_of(item)):
             listing = _to_listing(item, name)
             if listing.listing_id in known:
                 listing.listing_id = known[listing.listing_id]

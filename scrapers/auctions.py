@@ -93,8 +93,12 @@ def fetch_ebay_ending(cfg: dict) -> int:
             listing = ebay_auction_listing(item, "eBay — Auctions")
             if not listing or not wanted.match(listing.title, listing.price, ms, listing.source_name):
                 continue
-            from scrapers.ebay_api import shipping_of
+            from scrapers.ebay_api import country_of, shipping_of
+            from scrapers.store import is_overseas
+            if is_overseas(country_of(item)):
+                continue  # overseas sellers are left out
             listing.shipping = shipping_of(item)
+            listing.country = country_of(item)
             mark_seen(listing)
             with _conn() as conn:
                 conn.execute("UPDATE seen SET price = ?, description = ? WHERE url = ?",
@@ -135,7 +139,7 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             "SELECT * FROM seen WHERE description LIKE 'Auction%' AND hidden = 0 AND duplicate = 0"
-            " AND COALESCE(sold, 0) = 0")]
+            " AND COALESCE(sold, 0) = 0 AND (country IS NULL OR country IN ('US', 'CA'))")]
     market, index, similar = load_market(), price_index(), similar_index()
     out, seen = [], set()
     for r in rows:

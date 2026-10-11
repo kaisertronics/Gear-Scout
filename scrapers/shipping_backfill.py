@@ -1,5 +1,5 @@
 """
-One-off (safe to re-run): looks up US shipping for stored Reverb and eBay
+One-off (safe to re-run): looks up US shipping and the seller's country for stored Reverb and eBay
 listings on your Wanted list that were saved before shipping was recorded.
 New listings get it from the scrapes themselves.
 
@@ -24,7 +24,7 @@ def _todo(cfg: dict) -> list[tuple[str, str]]:
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            """SELECT url, title, price, source_name FROM seen WHERE shipping IS NULL AND COALESCE(sold, 0) = 0
+            """SELECT url, title, price, source_name FROM seen WHERE (shipping IS NULL OR country IS NULL) AND COALESCE(sold, 0) = 0
                AND COALESCE(hidden, 0) = 0 AND COALESCE(duplicate, 0) = 0
                AND (url LIKE '%reverb.com/item/%' OR url LIKE '%ebay.com/itm/%')""").fetchall()
     return [(r["url"], "reverb" if "reverb.com" in r["url"] else "ebay") for r in rows
@@ -41,8 +41,8 @@ def main() -> None:
     logger.info("Shipping backfill: %d Reverb, %d eBay listings", len(reverb), len(ebay))
     if "--count" in sys.argv:
         return
-    from scrapers.reverb_api import HEADERS, shipping_of as reverb_ship
-    from scrapers.store import set_shipping
+    from scrapers.reverb_api import HEADERS, country_of as reverb_country, shipping_of as reverb_ship
+    from scrapers.store import set_country, set_shipping
     done = 0
     for url in reverb:
         m = re.search(r"/item/(\d+)", url)
@@ -51,6 +51,7 @@ def main() -> None:
             if r.ok:
                 ship = reverb_ship(r.json())
                 set_shipping(url, ship if ship is not None else None)
+                set_country(url, reverb_country(r.json()))
                 done += ship is not None
         except Exception as e:
             logger.debug("Reverb shipping failed for %s: %s", url, e)
@@ -58,7 +59,7 @@ def main() -> None:
     api = cfg.get("ebay_api") or {}
     if ebay and api.get("client_id") and api.get("client_secret"):
         from scrapers.ebay_api import SEARCH_URL, _check_response, _get_token, _headers, ebay_paused_until
-        from scrapers.ebay_api import shipping_of as ebay_ship
+        from scrapers.ebay_api import country_of as ebay_country, shipping_of as ebay_ship
         token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
         for url in ebay:
             if ebay_paused_until():
@@ -73,6 +74,7 @@ def main() -> None:
                 if r.ok:
                     ship = ebay_ship(r.json())
                     set_shipping(url, ship)
+                    set_country(url, ebay_country(r.json()))
                     done += ship is not None
             except Exception as e:
                 logger.debug("eBay shipping failed for %s: %s", url, e)

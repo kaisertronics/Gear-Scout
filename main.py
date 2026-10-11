@@ -96,6 +96,7 @@ def _found_since_last_digest(exclude: set[str]) -> list:
             description=r["description"], image_url=r["image_url"], posted_at=posted,
             listing_id=r["global_id"].split("::", 1)[-1], location=r["location"],
             shipping=r["shipping"] if "shipping" in r.keys() else None,
+            country=r["country"] if "country" in r.keys() else None,
         ))
     return out
 
@@ -115,6 +116,9 @@ def _wanted_only(listings: list, cfg: dict) -> list:
     deals = {r["url"]: r["steal"] for r in find(cfg, since=since, min_pct=10)["trusted"]}
     keep, seen = [], set()
     for l in listings:
+        from scrapers.store import is_overseas
+        if is_overseas(getattr(l, "country", None)):
+            continue  # overseas sellers are left out
         if (l.description or "").startswith("Auction") or exclude_match(l.title, exclude) \
                 or is_not_audio(l.title) or title_says_sold(l.title) or not wanted.match(l.title, l.price, ms, l.source_name):
             continue

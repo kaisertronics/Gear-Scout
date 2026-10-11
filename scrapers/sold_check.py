@@ -78,8 +78,10 @@ def _ebay_gone(url: str) -> Optional[bool]:
         return None
     item = r.json()
     try:
-        from scrapers.store import set_shipping
+        from scrapers.ebay_api import country_of
+        from scrapers.store import set_country, set_shipping
         set_shipping(url, shipping_of(item))
+        set_country(url, country_of(item))
     except Exception:
         pass
     end = item.get("itemEndDate")
@@ -106,9 +108,10 @@ def check_url(url: str) -> Optional[bool]:
         if r.status_code == 404:
             return True
         try:
-            from scrapers.reverb_api import shipping_of
-            from scrapers.store import set_shipping
+            from scrapers.reverb_api import country_of, shipping_of
+            from scrapers.store import set_country, set_shipping
             set_shipping(url, shipping_of(r.json()))
+            set_country(url, country_of(r.json()))
         except Exception:
             pass
         slug = ((r.json().get("state") or {}).get("slug") or "").lower()

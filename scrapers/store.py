@@ -74,6 +74,7 @@ def _conn() -> sqlite3.Connection:
         ("sold_checked_at", "TEXT"),
         ("confirmed_live_at", "TEXT"),
         ("shipping", "REAL"),  # US shipping in USD (0 = free); NULL = not known / local pickup
+        ("country", "TEXT"),   # where it's sold from; NULL = not known (US/Canada sources)
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -163,6 +164,22 @@ def set_posted_at(url: str, posted) -> None:
         conn.commit()
 
 
+HOME_COUNTRIES = ("US", "CA")  # anything else is overseas and kept out of your results
+HOME_SQL = "(country IS NULL OR country IN ('US', 'CA'))"  # SQL: not overseas
+
+
+def is_overseas(country) -> bool:
+    return bool(country) and country not in HOME_COUNTRIES
+
+
+def set_country(url: str, country) -> None:
+    if not country:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET country = ? WHERE url = ?", (country, url))
+        conn.commit()
+
+
 def set_shipping(url: str, shipping) -> None:
     """Saves a listing's US shipping cost (USD, 0 = free), learned when its
     page or API record is re-checked."""
@@ -211,6 +228,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
                     "UPDATE seen SET location = ? WHERE global_id = ? AND location IS NULL",
                     (listing.location, listing.global_id),
                 )
+            if getattr(listing, "country", None):
+                conn.execute("UPDATE seen SET country = ? WHERE global_id = ?", (listing.country, listing.global_id))
             if getattr(listing, "shipping", None) is not None:
                 conn.execute("UPDATE seen SET shipping = ? WHERE global_id = ?", (listing.shipping, listing.global_id))
             old_value, new_value = parse_price(existing[0]), parse_price(listing.price)
@@ -245,8 +264,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location, last_seen, shipping)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen, shipping, country)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -263,6 +282,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 getattr(listing, "location", None),
                 now,
                 getattr(listing, "shipping", None),
+                getattr(listing, "country", None),
             ),
         )
         _record_status(conn, listing)

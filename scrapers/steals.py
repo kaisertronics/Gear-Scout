@@ -52,7 +52,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
     from scrapers.store import _conn
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND price IS NOT NULL"
-           " AND url NOT LIKE '%search/posts%'")
+           " AND url NOT LIKE '%search/posts%' AND (country IS NULL OR country IN ('US', 'CA'))")
     args: list = []
     if since:
         sql += " AND first_seen >= ?"

@@ -106,6 +106,10 @@ def shipping_of(item: dict) -> Optional[float]:
     return min(costs) if costs else None
 
 
+def country_of(item: dict) -> Optional[str]:
+    return ((item.get("itemLocation") or {}).get("country") or "").upper() or None
+
+
 def _headers(token: str) -> dict:
     """Browse API headers, with your zip code so shipping costs are to you."""
     h = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}
@@ -190,8 +194,9 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
     listings = []
     for item in items:
         title = item.get("title") or ""
-        if not title or not keyword_match(title, keywords):
-            continue
+        from scrapers.store import is_overseas
+        if not title or not keyword_match(title, keywords) or is_overseas(country_of(item)):
+            continue  # overseas sellers are left out
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         posted_at = None
         if item.get("itemCreationDate"):
@@ -205,6 +210,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         if auction:
             auction.posted_at = posted_at
             auction.shipping = shipping_of(item)
+            auction.country = country_of(item)
             listings.append(auction)
             continue
         condition = item.get("condition")
@@ -218,6 +224,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             posted_at=posted_at,
             listing_id=item_id,
             shipping=shipping_of(item),
+            country=country_of(item),
         ))
 
     return ScrapeResult(

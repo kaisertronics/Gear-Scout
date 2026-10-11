@@ -28,7 +28,8 @@ def recent_drops(cfg: dict, hours: int = 24, min_pct: int = MIN_PCT) -> list[dic
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             "SELECT * FROM seen WHERE price_dropped_at >= ? AND hidden = 0 AND duplicate = 0"
-            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND previous_price IS NOT NULL", (since,))]
+            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND previous_price IS NOT NULL"
+            " AND (country IS NULL OR country IN ('US', 'CA'))", (since,))]
     exclude = cfg.get("exclude_words") or []
     market, index, similar = load_market(), price_index(), similar_index()
     from scrapers import wanted

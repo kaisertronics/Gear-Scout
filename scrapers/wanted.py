@@ -134,7 +134,8 @@ def recent_rows(days: int = FEED_DAYS) -> list[dict]:
         return [dict(r) for r in conn.execute(
             """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND COALESCE(hidden, 0) = 0
                AND COALESCE(duplicate, 0) = 0 AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0
-               AND COALESCE(last_seen, first_seen) >= ? ORDER BY first_seen DESC""", (since,)).fetchall()]
+               AND COALESCE(last_seen, first_seen) >= ? AND (country IS NULL OR country IN ('US', 'CA'))
+               ORDER BY first_seen DESC""", (since,)).fetchall()]
 
 
 def posted_age_days(row: dict) -> Optional[float]:
@@ -173,6 +174,7 @@ def alert_new(cfg: dict) -> int:
         rows = [dict(r) for r in conn.execute(
             """SELECT * FROM seen WHERE first_seen > ? AND url IS NOT NULL AND COALESCE(hidden, 0) = 0
                AND COALESCE(duplicate, 0) = 0 AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0
+               AND (country IS NULL OR country IN ('US', 'CA'))
                ORDER BY first_seen""", (since,)).fetchall()]
     newest = max([r["first_seen"] for r in rows], default=since)
     ms = matchers(cfg)
