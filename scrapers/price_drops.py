@@ -65,7 +65,9 @@ def alert(cfg: dict) -> int:
     from scrapers.emailer import send_html_email
     from scrapers.notify import push_enabled, send_push
     email_cfg = cfg.get("email") or {}
-    line = lambda r: (f"{r['title'][:60]} — now {r['price']} (was {r['previous_price']}), "
+    ship_txt = lambda r: ("" if not isinstance(r.get("shipping"), (int, float)) else
+                          (" + free ship" if r["shipping"] == 0 else f" + ${r['shipping']:,.0f} ship"))
+    line = lambda r: (f"{r['title'][:60]} — now {r['price']}{ship_txt(r)} (was {r['previous_price']}), "
                       f"{r['comp']['pct']}% under ~${r['comp']['ref']:,.0f}")
     title = f"Price drop{'s' if len(rows) > 1 else ''}: {len(rows)} now a deal"
     if push_enabled(cfg):

@@ -179,7 +179,9 @@ def _mark(urls, kind: str):
 
 def _line(r) -> str:
     c = r["comp"]
-    return (f"{r['title'][:70]} — bid {r['price']} (comp ~${c['ref']:,.0f}, {c['pct']}% under), "
+    ship = r.get("shipping")
+    ship_txt = "" if not isinstance(ship, (int, float)) else (" + free ship" if ship == 0 else f" + ${ship:,.0f} ship")
+    return (f"{r['title'][:70]} — bid {r['price']}{ship_txt} (comp ~${c['ref']:,.0f}, {c['pct']}% under), "
             f"ends {r['ends'].strftime('%-I:%M %p').lower()}")
 
 

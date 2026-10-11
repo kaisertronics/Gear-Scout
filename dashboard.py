@@ -751,6 +751,19 @@ def cached_image(name):
     return resp
 
 
+@app.template_filter("delivered")
+def _delivered(l) -> Optional[str]:
+    """Price + listed US shipping for the whole ad ("$1,706"), or None when
+    the site doesn't list shipping (or it's free / local pickup)."""
+    from scrapers.enrich import parse_price
+    ship = l.get("shipping") if hasattr(l, "get") else None
+    value = parse_price(l.get("price")) if hasattr(l, "get") else None
+    if not isinstance(ship, (int, float)) or ship <= 0 or not value:
+        return None
+    total = value + ship
+    return f"${total:,.0f}" if total >= 100 else f"${total:,.2f}"
+
+
 @app.template_test("local_pickup")
 def _is_local_pickup(source_name: str) -> bool:
     """Sites where you pick the item up yourself (no shipping)."""
@@ -1208,7 +1221,9 @@ def deals():
     order = {"new": _fresh_order,
              "discount": lambda l: -l["comp"]["pct"],
              "savings": lambda l: -l["steal"]["saved"],
-             "cheap": lambda l: l["steal"].get("unit") or 0}
+             # cheapest delivered: price + listed shipping (per piece)
+             "cheap": lambda l: (l["steal"].get("unit") or 0)
+             + ((l.get("shipping") or 0) / max(1, (l.get("price_ctx") or {}).get("qty") or 1))}
     trusted.sort(key=order.get(sort, order["new"]))
     rough.sort(key=order.get(sort, order["new"]))
     counts = {k: sum(1 for l in d["trusted"] if in_price(l) and (

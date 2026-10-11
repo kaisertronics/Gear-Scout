@@ -95,6 +95,7 @@ def _found_since_last_digest(exclude: set[str]) -> list:
             source_name=r["source_name"], title=r["title"], url=r["url"], price=r["price"],
             description=r["description"], image_url=r["image_url"], posted_at=posted,
             listing_id=r["global_id"].split("::", 1)[-1], location=r["location"],
+            shipping=r["shipping"] if "shipping" in r.keys() else None,
         ))
     return out
 

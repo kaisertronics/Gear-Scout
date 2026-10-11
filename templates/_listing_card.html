@@ -22,14 +22,16 @@
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">
-          <span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>
+          {% set dl = l|delivered %}
+          {% if dl %}<span class="listing-price" title="Price + listed shipping">{{ dl }}</span><span class="listing-was" style="text-decoration:none;">delivered</span>
+          {% else %}<span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>{% endif %}
           {% if l.price|orig_price %}<span class="listing-was" style="text-decoration:none;">{{ l.price|orig_price }}</span>{% endif %}
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
           {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
         {% if l.shipping is number %}
-          <div class="listing-ship">{% if l.shipping == 0 %}free shipping{% else %}+ ${{ '{:,.0f}'.format(l.shipping) }} shipping{% if l.total is number %} · ${{ '{:,.0f}'.format(l.total) }} delivered{% endif %}{% endif %}</div>
+          <div class="listing-ship">{% if l.shipping == 0 %}free shipping{% else %}{{ l.price|usd }} + ${{ '{:,.0f}'.format(l.shipping) }} shipping{% endif %}</div>
         {% elif (l.source_name or '') is local_pickup %}
           <div class="listing-ship muted">local pickup</div>
         {% endif %}

@@ -185,6 +185,14 @@ def build_email_html(
                 <span style="display:inline-block;margin-top:6px;padding:2px 10px;
                     background:#dcfce7;color:#166534;border-radius:12px;
                     font-size:13px;font-weight:600;">{display_price(item.price)[0]}</span>"""
+                ship = getattr(item, "shipping", None)
+                if isinstance(ship, (int, float)):
+                    from scrapers.enrich import parse_price as _pp
+                    v = _pp(item.price)
+                    ship_txt = "free shipping" if ship == 0 else (
+                        f"+ ${ship:,.0f} shipping = ${(v or 0) + ship:,.0f} delivered" if v else f"+ ${ship:,.0f} shipping")
+                    price_html += f"""
+                <span style="font-size:11px;color:#475569;">&nbsp;{ship_txt}</span>"""
                 if display_price(item.price)[1]:
                     price_html += f"""
                 <span style="font-size:11px;color:#94a3b8;">&nbsp;{display_price(item.price)[1]}</span>"""

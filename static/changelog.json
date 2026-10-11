@@ -3,6 +3,7 @@
     "date": "2026-10-09",
     "title": "Shipping counts in the cheapest price",
     "items": [
+      "When a site lists shipping, the price you see on every ad is now the delivered price (price + shipping), with the breakdown underneath; free shipping and local pickup are labelled. Cheapest picks, Cheapest first, the Price Board and the Deals page's cheapest sort all go by delivered cost. The digest email and auction / price-drop alerts show shipping too.",
       "Gear Scout now records US shipping for Reverb and eBay listings (to your zip for eBay) and shows it on each card: “free shipping”, “+ $72 shipping · $1,706 delivered”, or “local pickup” for Facebook, Craigslist, OfferUp and Kijiji.",
       "The cheapest per term and per model, “Cheapest first” and the Price Board all decide by price + known shipping (split per piece for pairs and lots). Where a site doesn't show shipping (dealers, ShopGoodwill), it counts as unknown.",
       "Listings already stored are getting their shipping looked up once; it's refreshed whenever a listing is re-checked."
