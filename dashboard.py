@@ -1448,14 +1448,43 @@ def _terms_changed(added: list[str] | None = None) -> None:
     of recalculating everything. The Feed, the Telex page and the deals
     (which follow the Wanted list) refresh on their next load."""
     _data_changed()
+    # Several adds/removes in a row (one after the other) used to start one
+    # minute-long Price Board rebuild EACH, all at once — the site hung.
+    # Now: one rebuild, a little after the last change.
+    with _board_lock:
+        _board_state["due"] = time.time() + 20
+        _board_state["terms"] |= set(added or [])
+        if _board_state["running"]:
+            return
+        _board_state["running"] = True
 
     def run():
         try:
-            from scrapers import board
-            board.build(load_config_raw(), only=added or [])
+            while True:
+                wait = _board_state["due"] - time.time()
+                if wait > 0:
+                    time.sleep(min(wait, 5))
+                    continue
+                with _board_lock:
+                    terms = list(_board_state["terms"])
+                    _board_state["terms"] = set()
+                    due = _board_state["due"]
+                try:
+                    from scrapers import board
+                    board.build(load_config_raw(), only=terms)
+                except Exception:
+                    logging.exception("Price Board update for changed terms failed")
+                with _board_lock:
+                    if _board_state["due"] == due and not _board_state["terms"]:
+                        _board_state["running"] = False
+                        return
         except Exception:
-            logging.exception("Price Board update for new terms failed")
+            _board_state["running"] = False
     threading.Thread(target=run, name="board-terms", daemon=True).start()
+
+
+_board_lock = threading.Lock()
+_board_state: dict = {"due": 0.0, "terms": set(), "running": False}
 
 
 @app.route("/telex/add", methods=["POST"])
@@ -1861,8 +1890,26 @@ def _feed_items(cfg) -> list[dict]:
                     _feed_state["rebuilding"] = False
             threading.Thread(target=rebuild, name="feed-rebuild", daemon=True).start()
             return c["data"]
-    elif c["data"] is not None and _feed_state.get("rebuilding"):
+    elif c["data"] is not None and _feed_state.get("rebuilding") and c["key"] is not None \
+            and len(c["key"]) > 2 and c["key"][2] == key[2]:
         return c["data"]
+    if c["data"] is not None:
+        # Your terms changed (added / removed): show the current list right
+        # away — minus removed terms — and rebuild in the background, instead
+        # of making the page wait (several deletes in a row stalled it).
+        current = set(key[2])
+        stale = [l for l in c["data"] if set(l.get("wanted") or []) & current]
+        if not _feed_state.get("rebuilding"):
+            def rebuild_terms():
+                _feed_state["rebuilding"] = True
+                try:
+                    _build_feed(load_config_raw(), (_data_version[0], key[1], tuple(wanted.terms(load_config_raw()))))
+                except Exception:
+                    logging.exception("Feed rebuild failed")
+                finally:
+                    _feed_state["rebuilding"] = False
+            threading.Thread(target=rebuild_terms, name="feed-rebuild-terms", daemon=True).start()
+        return stale
     return _build_feed(cfg, key)
 
 
