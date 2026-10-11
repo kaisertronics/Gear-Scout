@@ -1239,9 +1239,9 @@ def deals():
 def steals_status():
     """Whether the Steals list is up to date (kicks off a rebuild if not)."""
     try:
-        min_pct = int(request.args.get("pct") or 60)
+        min_pct = int(request.args.get("pct") or 50)
     except ValueError:
-        min_pct = 60
+        min_pct = 50
     if _deals_cache["data"] is not None:
         _all_deals()
     return {"rebuilding": _deals_state["running"]}
@@ -1250,10 +1250,10 @@ def steals_status():
 @app.route("/steals")
 def steals():
     try:
-        min_pct = int(request.args.get("pct") or 60)
+        min_pct = int(request.args.get("pct") or 50)
     except ValueError:
-        min_pct = 60
-    min_pct = min_pct if min_pct in STEAL_LEVELS else 60
+        min_pct = 50
+    min_pct = min_pct if min_pct in STEAL_LEVELS else 50
     data = _steals(min_pct)
     _verify_top_listings()
     # Newest posts first; ads up 30+ days get their own section at the bottom.
@@ -1762,7 +1762,7 @@ def learning_dismiss():
 
 FEED_VISIT_FILE = Path("/data/feed_visit.json")
 FEED_RECENT_DAYS = 14   # posted within this → main list; older → collapsed section
-FEED_STEAL_PCT = 60  # same as steal alerts (scrapers/steals.py MIN_PCT)
+FEED_STEAL_PCT = 50  # same as steal alerts (scrapers/steals.py MIN_PCT)
 _feed_cache: dict = {"key": None, "at": 0.0, "data": None}
 
 
@@ -1943,6 +1943,9 @@ def _build_feed(cfg, key) -> list[dict]:
     with app.test_request_context("/deals"):
         deals = _all_deals() or {}
     comp_by_url = {d["url"]: d["comp"] for d in deals.get("trusted") or []}
+    # Steals with only one price source: shown marked "double-check".
+    check_by_url = {d["url"]: d["comp"] for d in deals.get("rough") or []
+                    if FEED_STEAL_PCT <= d["comp"]["pct"] <= 90}  # 80–90% "too good": shown, to double-check
     out = []
     for l in items:
         ctx = l.get("price_ctx") or {}
@@ -1955,6 +1958,10 @@ def _build_feed(cfg, key) -> list[dict]:
         l["is_deal"] = bool(comp)
         l["deal_pct"] = comp["pct"] if comp else None
         l["is_steal"] = bool(comp and comp["pct"] >= FEED_STEAL_PCT and not comp["est"])
+        check = None if comp else check_by_url.get(l["url"])
+        if check:
+            l["comp"], l["is_steal"], l["steal_check"] = check, True, True
+            l["deal_pct"] = check["pct"]
         if ctx:
             ctx["deal"] = False  # the card's "% under" comes from l.comp, as everywhere else
         l["checked_label"] = _ago(l.get("confirmed_live_at"))

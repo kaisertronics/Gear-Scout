@@ -18,7 +18,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-MIN_PCT = 60
+MIN_PCT = 50  # owner chose 50%+ (Oct 11)
 MIN_PRICE = 20.0   # under this it's a placeholder ("$1 — make an offer") or a part
 MIN_REF = 100.0    # 60% off a $60 item isn't a steal worth a page
 MAX_PCT = 92       # beyond this it's almost always the wrong comp
@@ -29,6 +29,7 @@ MAX_PCT = 92       # beyond this it's almost always the wrong comp
 _PARTS = re.compile(
     r"\b(?:head\s?(?:set\s)?block|headstack|assembly|electronics|internals?|pcb|circuit board|boards?|"
     r"option card|expansion card|card for|case(?: only)?\s+(?:w/|with|for)|foam|insert|faceplate|front panel|"
+    r"faders?|(?:box|unit|chassis|case|panel|frame) only|splitter box|"
     r"capsule only|socket|connection base|connectors?|pickups?|humbuckers?|power suppl(?:y|ies) only|psu only|cable only|shock ?mount only|manual|"
     r"(?:stand|mount|clip|cable|case|bag|cover|adapter|holder|cradle|grille)s?\s+for)\b", re.I)
 # Clones / "style" copies get compared with the real thing far too easily.
@@ -142,12 +143,16 @@ def _ensure(conn):
 
 
 def alert_new(cfg: dict) -> int:
-    """Push + email for new steals (found in the last 3 hours, trusted comp
-    only), once per listing. Runs hourly in the scraper."""
+    """Push + email for new steals (found in the last 3 hours), once per
+    listing. Ones with only one price source are sent marked "double-check".
+    Runs every 30 minutes in the scraper."""
     from scrapers.lowest import notify_new_lowest
     from scrapers.store import _conn
     since = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
-    found = find(cfg, since=since)["trusted"]
+    res = find(cfg, since=since)
+    for r in res["rough"]:
+        r["_check"] = True
+    found = res["trusted"] + res["rough"]
     if not found:
         return 0
     with _conn() as conn:
@@ -161,7 +166,8 @@ def alert_new(cfg: dict) -> int:
         alert = {"title": r["title"], "price": r["price"], "url": r["url"], "image_url": r.get("image_url"),
                  "source_name": r.get("source_name") or "", "location": (r.get("location") or "").split(" @")[0]}
         try:
-            notify_new_lowest(cfg, f"Steal — {s['pct']}% under {s['label']} ~${s['ref']:,.0f}", alert, None,
+            check = " (double-check)" if r.get("_check") else ""
+            notify_new_lowest(cfg, f"Steal{check} — {s['pct']}% under {s['label']} ~${s['ref']:,.0f}", alert, None,
                               from_telex=True)
             sent += 1
         except Exception:

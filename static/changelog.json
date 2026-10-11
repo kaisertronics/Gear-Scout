@@ -3,6 +3,7 @@
     "date": "2026-10-11",
     "title": "Overseas ads removed",
     "items": [
+      "Steals are back: a steal is now 50%+ under (was 60%), from your Telex List. Ones with only one price to compare against show too, tagged “🔎 Steal? double-check” (up to 90% under) — and steal alerts mark them the same way. Parts like console faders and “box only”, and camcorders, are filtered.",
       "Overseas listings are left out completely: only sellers in the US and Canada. Reverb sellers are identified by the currency they list in (a Japanese shop lists in yen, a UK shop in pounds — about half of Reverb's used Neumann listings were overseas); eBay by the item's location.",
       "They're dropped when scraped and kept out of the Feed, Telex page, Price Board, cheapest picks, deals, alerts and the digest. Listings already stored were checked once."
     ]

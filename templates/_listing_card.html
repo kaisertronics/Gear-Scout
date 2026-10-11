@@ -37,6 +37,7 @@
         {% endif %}
       {% endif %}
       {% if l.source_detail %}<div class="listing-source">{{ l.source_detail }}</div>{% endif %}
+      {% if l.steal_check %}<div class="lowest-tag lowest-tag-model" title="A steal on paper, but only one price to compare against — check it's the real thing and the price isn't a typo">🔎 Steal? double-check · {{ l.comp.pct }}% under</div>{% endif %}
       {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>

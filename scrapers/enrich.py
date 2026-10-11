@@ -363,7 +363,7 @@ def is_accessory_only(title: Optional[str]) -> bool:
 _OFF_TOPIC = re.compile(
     r"\b(?:tractors?|backhoes?|skid[\s-]?steers?|track loaders?|loaders?|excavators?|mulchers?|bulldozers?|"
     r"forklifts?|trailers?|semi[\s-]?trucks?|pickup trucks?|4wd|awd|\d+\s?hrs|mowers?|(?<![\w-])(?:atvs?|utvs?)(?![\w-])|snowmobiles?|"
-    r"kubota|john deere|bobcat|caterpillar|great dane|"
+    r"kubota|john deere|bobcat|caterpillar|great dane|camcorders?|video cameras?|xdcam|"
     r"stratocaster|telecaster|jazzmaster|jazz bass|precision bass|les paul|(?<![\w-])strat(?![\w-])|"
     r"(?:guitar |bass |strat(?:ocaster)? |tele(?:caster)? |single[\s-]?coil |humbucker )?pick-?ups? set|"
     r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"
