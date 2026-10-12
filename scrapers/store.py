@@ -84,6 +84,14 @@ def _conn() -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS seen_first_seen ON seen(first_seen)")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_source ON seen(source_name, first_seen)")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_favorite ON seen(favorite) WHERE favorite = 1")
+    # Ads you dismissed with ✕, remembered forever (they outlive the listing
+    # row, which is purged after 90 days unseen) by link, ID and title+price,
+    # so a repost or relist of the same ad stays hidden too.
+    conn.execute("CREATE TABLE IF NOT EXISTS hidden_keys (key TEXT PRIMARY KEY, title TEXT, created TEXT)")
+    if not conn.execute("SELECT 1 FROM hidden_keys LIMIT 1").fetchone():
+        for gid, url, key, title in conn.execute(
+                "SELECT global_id, url, dup_key, title FROM seen WHERE hidden = 1").fetchall():
+            _remember_hidden(conn, gid, url, key, title)
     conn.execute("PRAGMA optimize")
     conn.commit()
     if "dup_key" not in existing_cols:
@@ -260,12 +268,14 @@ def mark_seen(listing, live_only: bool = False) -> str:
         duplicate = _find_original(
             conn, listing.global_id, listing.url, key, source_family(listing.url)
         )
+        # An ad you dismissed with ✕ (or a repost of it) stays dismissed.
+        hidden = is_hidden_ad(listing.global_id, listing.url, key, conn)
         conn.execute(
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location, last_seen, shipping, country)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen, shipping, country, hidden)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -283,9 +293,13 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 now,
                 getattr(listing, "shipping", None),
                 getattr(listing, "country", None),
+                1 if hidden else 0,
             ),
         )
         _record_status(conn, listing)
+        if hidden:
+            conn.commit()
+            return "seen"  # never "new": no push, no email, no Feed
         if duplicate and listing.url:
             # Seen again through another source (another Facebook region, a
             # Telex search): the original row is what's shown, so it's the one
@@ -362,12 +376,76 @@ def mark_price_drops_notified(global_ids: list[str]):
         conn.commit()
 
 
+def norm_url(url) -> str:
+    """A listing's link without tracking bits (query string, #anchor,
+    trailing slash, http/www differences), so the same ad matches however
+    it was linked."""
+    u = (url or "").strip().lower()
+    u = re.sub(r"[?#].*$", "", u)
+    u = re.sub(r"^https?://(www\.|m\.)?", "", u)
+    return u.rstrip("/")
+
+
+def _hidden_keys_for(global_id, url, dup_key_value) -> list[str]:
+    keys = [f"gid:{global_id}"] if global_id else []
+    if norm_url(url):
+        keys.append(f"url:{norm_url(url)}")
+    # Title + price only for Facebook/Craigslist, where a repost gets a new
+    # link; on Reverb/eBay two dealers can list identical units that way.
+    if dup_key_value and _is_crosspost_site(url):
+        keys.append(f"dup:{dup_key_value}")
+    return keys
+
+
+def _is_crosspost_site(url) -> bool:
+    from scrapers.enrich import source_family
+    return source_family(url or "") in _CROSSPOST_FAMILIES
+
+
+def _remember_hidden(conn, global_id, url, dup_key_value, title) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executemany("INSERT OR IGNORE INTO hidden_keys (key, title, created) VALUES (?, ?, ?)",
+                     [(k, title, now) for k in _hidden_keys_for(global_id, url, dup_key_value)])
+
+
+def is_hidden_ad(global_id, url, dup_key_value, conn=None) -> bool:
+    """True if you dismissed this ad (or the same ad under another link or
+    another site) with ✕."""
+    keys = _hidden_keys_for(global_id, url, dup_key_value)
+    if not keys:
+        return False
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        q = "SELECT 1 FROM hidden_keys WHERE key IN (%s) LIMIT 1" % ",".join("?" * len(keys))
+        return conn.execute(q, keys).fetchone() is not None
+    finally:
+        if own:
+            conn.close()
+
+
 def set_hidden(global_id: str, hidden: bool):
+    """✕ on an ad: hides it now and for good, including every other stored
+    copy of it (same link, or same title + price) and any repost later."""
     with _conn() as conn:
-        conn.execute(
-            "UPDATE seen SET hidden = ? WHERE global_id = ?",
-            (1 if hidden else 0, global_id),
-        )
+        row = conn.execute("SELECT url, dup_key, title FROM seen WHERE global_id = ?", (global_id,)).fetchone()
+        url, key, title = row if row else (None, None, None)
+        keys = _hidden_keys_for(global_id, url, key)
+        if hidden:
+            _remember_hidden(conn, global_id, url, key, title)
+        else:
+            conn.executemany("DELETE FROM hidden_keys WHERE key = ?", [(k,) for k in keys])
+        conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, global_id))
+        # Other copies of the same ad.
+        if norm_url(url):
+            for (gid, other_url) in conn.execute("SELECT global_id, url FROM seen WHERE url LIKE ?",
+                                                 (f"%{norm_url(url).split('/')[-1]}%",)).fetchall():
+                if norm_url(other_url) == norm_url(url):
+                    conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, gid))
+        if key and _is_crosspost_site(url):
+            for (gid, other_url) in conn.execute("SELECT global_id, url FROM seen WHERE dup_key = ?", (key,)).fetchall():
+                if _is_crosspost_site(other_url):
+                    conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, gid))
         conn.commit()
 
 
@@ -380,6 +458,7 @@ def unhide_all() -> int:
     with _conn() as conn:
         n = conn.execute("SELECT COUNT(*) FROM seen WHERE hidden = 1").fetchone()[0]
         conn.execute("UPDATE seen SET hidden = 0 WHERE hidden = 1")
+        conn.execute("DELETE FROM hidden_keys")
         conn.commit()
     return n
 
