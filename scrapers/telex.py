@@ -139,12 +139,12 @@ def search_query(term: str) -> str:
     as a whole phrase, so it's searched by its brand + model words — the
     same words that decide a match (see term_matcher)."""
     import re
-    words = [w for w in term.split() if re.search(r"[A-Za-z0-9]", w)]
+    words = [w for w in term.split() if re.search(r"[A-Za-z0-9]", w) and not w.startswith("-")]
     if len(words) >= 4:
         key = [words[0]] + [w for w in words[1:] if re.search(r"\d", w) and len(w) >= 2]
         if len(key) >= 2:
             return " ".join(key)
-    return term
+    return " ".join(words) if words else term
 
 
 def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
@@ -249,6 +249,13 @@ def term_matcher(term: str):
     if "," in term:  # a Telex entry holding several terms: any of them
         parts = [term_matcher(p.strip()) for p in term.split(",") if p.strip()]
         return lambda t: any(m(t) for m in parts)
+    # "-word" leaves those out: "patchbay -behringer" = any patchbay but Behringer.
+    words = term.split()
+    neg = [w[1:].lower() for w in words if w.startswith("-") and len(w) > 1]
+    if neg:
+        base = _term_matcher(" ".join(w for w in words if not w.startswith("-")))
+        pats = [re.compile(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])") for n in neg]
+        return lambda t: base(t) and not any(p.search(t) for p in pats)
     return _term_matcher(term)
 
 

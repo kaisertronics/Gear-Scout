@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-12",
+    "title": "Cables, snakes and patchbays on your list",
+    "items": [
+      "Terms that are cables, snakes, patchbays or connectors (“XLR snake”, “Hosa DTP-805”, “Neutrik NC3FXX”, “Canare L-4E6S”) now find those listings — before, they were skipped as accessories, and broad ones were held to a $150 minimum.",
+      "You can leave words out of a term with a minus: “patchbay -behringer” finds any patchbay except Behringer.",
+      "Added for the studio wiring: Hosa DTP-805, Hosa STX-807F, ART P16, XLR snake, TRS snake, DB25 TRS, patchbay -behringer."
+    ]
+  },
+  {
     "date": "2026-10-11",
     "title": "Overseas ads removed",
     "items": [

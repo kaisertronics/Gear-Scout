@@ -58,7 +58,7 @@ _GEAR_WORD = re.compile(
     r"500[\s-]?series|lunchbox|interfaces?|converters?|reverbs?|delays?|effects? processors?|processors?|"
     r"monitors?|speakers?|recorders?|reel[\s-]to[\s-]reel|tape (?:machine|deck)|amps?|amplifiers?|"
     r"transformers?|di box|direct box|patch ?bays?|outboard|pro audio|studio|recording|harmonizer|"
-    r"synth(?:esizer)?s?|tube mic|valve mic)\b", re.I)
+    r"synth(?:esizer)?s?|tube mic|valve mic|snakes?|multicore|breakout|patchbays?)\b", re.I)
 _MODEL_CODE = re.compile(r"\b(?=[a-z-]*\d)(?=[\d-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*\b", re.I)
 _NOT_MODEL = re.compile(r"^\d+x\d+$|^\d+(?:in|ft|mm|cm|btu|k|gb|tb|mp|hp|pc|pcs|port|v|w)$", re.I)
 # Dealers that only sell studio gear: anything there is gear. (Not Reverb:
@@ -99,6 +99,19 @@ def is_spare_tube(title: str) -> bool:
     return bool(_TUBE_TYPE.search(title) and _TUBE_SALE.search(title) and not _WHOLE_UNIT.search(title))
 
 
+# A term that IS a cable / snake / patchbay ("XLR snake", "Hosa DTP-805",
+# "patchbay"): those listings are what you want, not accessories to skip,
+# and they're often under the broad-term price floor.
+_CABLE_TERM = re.compile(r"\b(?:cables?|snakes?|looms?|breakouts?|patch ?bays?|patchbays?|patch cables?|"
+                         r"db-?25|harness|multicore|fan ?outs?|tie ?lines?|connectors?|jacks?|feed ?throughs?|"
+                         r"canare|mogami|gotham|belden|neutrik|switchcraft|rean)\b|"
+                         r"\b(?:dtp|css|stx|xlr|cpp)-?\d{3}|\b(?:nc3|na3|np3|ne8|nys|nl4)\w*", re.I)
+
+
+def is_cable_term(term: str) -> bool:
+    return bool(_CABLE_TERM.search(term))
+
+
 def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] = None) -> list[str]:
     """Wanted terms a listing title matches (empty = not wanted). Parts,
     accessories, and pedal/plugin versions (unless the term asks) never
@@ -109,15 +122,19 @@ def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] 
         return []
     text = fix_brand_spelling(title.lower())
     hits = [m for m in ms if m[1](text)]
-    if not hits or is_partial(title) or is_accessory_only(title) or is_spare_tube(title):
+    if not hits or is_partial(title) or is_spare_tube(title):
         return []
+    accessory = is_accessory_only(title)
     form = item_form(title)
     value = parse_price(price) or 0
     out = []
     for term, _, term_form, specific in hits:
+        cable = is_cable_term(term)
+        if accessory and not cable:
+            continue
         if form in ("pedal", "plugin") and form != term_form:
             continue
-        if not specific and value < BROAD_MIN_PRICE:
+        if not specific and value < (20 if cable else BROAD_MIN_PRICE):
             continue
         if _needs_gear_check(term, specific) and not _looks_like_gear(title, source):
             continue
