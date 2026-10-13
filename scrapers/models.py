@@ -135,16 +135,22 @@ def picks(term: str, rows: list[dict], exclude_words: Optional[list] = None) -> 
     usual (a part, or a typo)."""
     from scrapers.board import _is_addon
     from scrapers.enrich import exclude_match, is_not_audio, needs_repair, title_says_sold
+    from scrapers.enrich import canonical_brand
     from scrapers.steals import _CLONE
+    from scrapers.wanted import is_cable_term
     wants_copy = bool(_CLONE.search(term))
+    term_brand = canonical_brand(term)
+    cable_term = is_cable_term(term)
     cands = []
     for r in rows:
         t = r.get("title") or ""
         unit = r.get("unit")
         if not unit or unit < 20 or (r.get("description") or "").startswith("Auction"):
             continue
-        if (needs_repair(t, r.get("description")) or _is_addon(t) or is_not_audio(t) or title_says_sold(t)
-                or (exclude_words and exclude_match(t, exclude_words)) or (_CLONE.search(t) and not wants_copy)):
+        own_brand = bool(term_brand) and canonical_brand(t) == term_brand  # the maker you asked for
+        if (needs_repair(t, r.get("description")) or (_is_addon(t) and not cable_term) or is_not_audio(t)
+                or title_says_sold(t) or (exclude_words and exclude_match(t, exclude_words))
+                or (_CLONE.search(t) and not wants_copy and not own_brand)):
             continue
         cands.append(r)
     by_model: dict[str, list] = {}

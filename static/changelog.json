@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-13",
+    "title": "Lowest price picks: older ads count again",
+    "items": [
+      "Fixed: some of your cheapest ads were never marked “💲 Lowest” because the parts filter read brand names as parts. “sE Electronics” looked like “electronics (part)”, and “w/ gold XLR connector” looked like a loose connector. The VR2 Voodoo now shows the $349 ad from 2024 instead of a $375 one.",
+      "Fixed: “HEDD Type 20” was treated as a knock-off (“type”), and “Audioscape … SSL style” was skipped as a copy even though that’s exactly what the term asks for. Both now get their cheapest marked.",
+      "Connector terms (Neutrik NP3X, NC3MXX…) now count connector listings."
+    ]
+  },
+  {
     "date": "2026-10-12",
     "title": "Cables, snakes and patchbays on your list",
     "items": [

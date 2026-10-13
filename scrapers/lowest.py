@@ -38,7 +38,7 @@ _ACCESSORY = re.compile(
 )
 # Clones/replicas stay in the results (the user wants them) but are tagged,
 # so a $400 "U87 replica" isn't mistaken for a Neumann.
-_CLONE = re.compile(r"\b(?:replica|clone|copy|tribute|inspired|style|type|kit|diy|based on)\b", re.I)
+_CLONE = re.compile(r"\b(?:replica|clone|copy|tribute|inspired|style|type(?!\s?-?\d)|kit|diy|based on)\b", re.I)
 REPAIR_FLOOR = 0.1      # needs-repair units can legitimately be very cheap
 WORKING_FLOOR = 0.25    # below this share of typical it's an accessory/placeholder
 

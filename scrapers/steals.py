@@ -27,13 +27,13 @@ MAX_PCT = 92       # beyond this it's almost always the wrong comp
 # in the whole unit's price ("Studer A80 headblock", "TLM67 internal
 # electronics", "Neumann case w/ TLM 103 foam").
 _PARTS = re.compile(
-    r"\b(?:head\s?(?:set\s)?block|headstack|assembly|electronics|internals?|pcb|circuit board|boards?|"
+    r"\b(?:head\s?(?:set\s)?block|headstack|assembly|(?:replacement |spare )electronics|electronics (?:only|for|assembly|board|kit)|internals?|pcb|circuit board|boards?|"
     r"option card|expansion card|card for|case(?: only)?\s+(?:w/|with|for)|foam|insert|faceplate|front panel|"
     r"faders?|(?:box|unit|chassis|case|panel|frame) only|splitter box|"
     r"capsule only|socket|connection base|connectors?|pickups?|humbuckers?|power suppl(?:y|ies) only|psu only|cable only|shock ?mount only|manual|"
     r"(?:stand|mount|clip|cable|case|bag|cover|adapter|holder|cradle|grille)s?\s+for)\b", re.I)
 # Clones / "style" copies get compared with the real thing far too easily.
-_CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type)\b", re.I)
+_CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type(?!\s?-?\d))\b", re.I)
 
 
 def _terms(cfg: dict):

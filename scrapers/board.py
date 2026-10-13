@@ -61,9 +61,18 @@ _ADDON_WORDS = re.compile(r"\b(?:roms?|eproms?|cards?|cartridges?|chips?|firmwar
                           r"manuals?|service manual|schematics?|remote only|power supply only|psu only)\b", re.I)
 
 
+_INCLUDED = re.compile(r"\s(?:w/|with|incl\.?|includes?|including|plus|\+)\s?", re.I)
+
+
 def _is_addon(title: str) -> bool:
+    """A part or accessory sold on its own. Words after "w/", "with",
+    "includes", "+" describe what comes WITH the item ("VR2 w/ gold XLR
+    connector", "… + shock mount"), so they don't count."""
     from scrapers.steals import _PARTS
-    return bool(_PARTS.search(title or "") or _ADDON_WORDS.search(title or ""))
+    t = title or ""
+    m = _INCLUDED.search(t)
+    cut = m.start() if m else len(t)
+    return any(hit.start() < cut for rx in (_PARTS, _ADDON_WORDS) for hit in rx.finditer(t))
 
 
 def _brief(r: dict, unit: float, n: int) -> dict:
