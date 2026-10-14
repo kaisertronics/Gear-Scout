@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-13",
+    "title": "New: 💰 Saved page with social slides",
+    "items": [
+      "Paste a Google Sheet link (columns Item and Paid; New, Date and Where optional) and Gear Scout shows what you saved on each piece vs. buying new, plus a running total.",
+      "Rows without a new price get today's Reverb “Brand New” price automatically.",
+      "Makes 1080×1080 slides for Instagram/Facebook: a cover with your total, one slide per piece, a leaderboard and a running-total chart. Save one or all as images."
+    ]
+  },
+  {
+    "date": "2026-10-13",
     "title": "Lowest price picks: older ads count again",
     "items": [
       "Fixed: some of your cheapest ads were never marked “💲 Lowest” because the parts filter read brand names as parts. “sE Electronics” looked like “electronics (part)”, and “w/ gold XLR connector” looked like a loose connector. The VR2 Voodoo now shows the $349 ad from 2024 instead of a $375 one.",

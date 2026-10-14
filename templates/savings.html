@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.sv-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 18px}
+.sv-tile{border-radius:12px;padding:14px 16px;background:#16181d;color:#f4f1ea}
+.sv-tile b{display:block;font-size:2rem;line-height:1.1;font-weight:800}
+.sv-tile span{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:#9aa3ab}
+.sv-tile.big b{color:#3ddc97;font-size:2.6rem}
+.sv-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.sv-form input[type=url]{flex:1 1 320px;min-width:0;padding:8px 10px}
+.sv-table{width:100%;border-collapse:collapse;font-size:.95rem}
+.sv-table th,.sv-table td{padding:7px 8px;border-bottom:1px solid #e3e6ea;text-align:left;vertical-align:middle}
+.sv-table td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sv-bar{height:8px;border-radius:4px;background:#e3e6ea;position:relative;min-width:120px}
+.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#ffd166}
+.sv-save{color:#1f8a55;font-weight:700}
+.sv-slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:10px}
+.sv-slide img{width:100%;height:auto;border-radius:10px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.sv-slide button{margin-top:6px;width:100%}
+.sv-help{font-size:.9rem;color:#5d6872;max-width:70ch}
+.sv-err{background:#fdecea;border-left:4px solid #b8322a;padding:8px 12px;border-radius:0 6px 6px 0}
+</style>
+<h1>💰 Saved</h1>
+<p class="sv-help">What you paid for your gear vs. buying it new. Keep a Google Sheet with a row per item:
+columns <b>Item</b> and <b>Paid</b> (required), plus <b>New</b>, <b>Date</b> and <b>Where</b> if you like.
+Rows without a new price get today's Reverb "Brand New" price. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
+
+<form class="sv-form" method="post" action="{{ url_for('savings_sheet') }}">
+  <input type="url" name="sheet_url" value="{{ sheet_url }}" placeholder="https://docs.google.com/spreadsheets/d/…" aria-label="Google Sheet link">
+  <button type="submit">Save sheet</button>
+  {% if sheet_url %}<button type="submit" formaction="{{ url_for('savings_refresh') }}">Re-read sheet + prices</button>{% endif %}
+</form>
+
+{% if d and d.error %}<div class="sv-err">{{ d.error }}</div>{% endif %}
+
+{% if d and d['items'] %}
+<div class="sv-hero">
+  <div class="sv-tile big"><span>Total saved</span><b>${{ '{:,.0f}'.format(d.total_saved) }}</b></div>
+  <div class="sv-tile"><span>Under new</span><b>{{ d.pct }}%</b></div>
+  <div class="sv-tile"><span>Paid</span><b>${{ '{:,.0f}'.format(d.total_paid) }}</b></div>
+  <div class="sv-tile"><span>New would be</span><b>${{ '{:,.0f}'.format(d.total_new) }}</b></div>
+</div>
+
+<h2>Slides for your feed</h2>
+<p class="sv-help">1080 × 1080, ready for Instagram/Facebook. Tap a slide's button to save it as an image{% if slides|length > 1 %}, or save them all{% endif %}.</p>
+<button type="button" id="sv-all">⬇ Save all {{ slides|length }} slides</button>
+<div class="sv-slides">
+  {% for s in slides %}
+  <div class="sv-slide"><img src="{{ url_for('savings_slide', n=loop.index) }}?v={{ version }}" alt="Slide {{ loop.index }}" loading="lazy">
+    <button type="button" data-n="{{ loop.index }}">⬇ Save slide {{ loop.index }}</button></div>
+  {% endfor %}
+</div>
+
+<h2>Every item</h2>
+<div style="overflow-x:auto">
+<table class="sv-table">
+  <thead><tr><th>Item</th><th>Paid</th><th>New</th><th>Saved</th><th></th><th>Running total</th></tr></thead>
+  <tbody>
+  {% for i in d['items'] %}
+  <tr>
+    <td><b>{{ i.item }}</b>{% if i.where or i.date %}<br><small>{{ i.where }}{% if i.where and i.date %} · {% endif %}{{ i.date }}</small>{% endif %}</td>
+    <td class="n">${{ '{:,.0f}'.format(i.paid) }}</td>
+    <td class="n">{% if i.new %}${{ '{:,.0f}'.format(i.new) }}<br><small>{{ i.basis }}</small>{% else %}<small>add a “New” price<br>({{ i.basis }})</small>{% endif %}</td>
+    <td class="n sv-save">{% if i.saved is not none %}${{ '{:,.0f}'.format(i.saved) }} · {{ i.pct }}%{% else %}—{% endif %}</td>
+    <td>{% if i.new %}<div class="sv-bar" title="paid vs new"><i style="width:{{ [100, (100 * i.paid / i.new)|round]|min }}%"></i></div>{% endif %}</td>
+    <td class="n">${{ '{:,.0f}'.format(i.running) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% elif sheet_url and not (d and d.error) %}
+<p>No rows yet: put your gear in the sheet with “Item” and “Paid” in the first row.</p>
+{% endif %}
+
+<script>
+(function () {
+  function save(n) {
+    return new Promise(function (done) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas'); c.width = 1080; c.height = 1080;
+        c.getContext('2d').drawImage(img, 0, 0, 1080, 1080);
+        c.toBlob(function (b) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(b); a.download = 'gear-savings-' + n + '.png';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(done, 400);
+        }, 'image/png');
+      };
+      img.src = '{{ url_for("savings_slide", n=0) }}'.replace('/0', '/' + n) + '?v={{ version }}';
+    });
+  }
+  document.querySelectorAll('.sv-slide button').forEach(function (b) {
+    b.addEventListener('click', function () { save(b.dataset.n); });
+  });
+  var all = document.getElementById('sv-all');
+  if (all) all.addEventListener('click', async function () {
+    for (var n = 1; n <= {{ slides|length }}; n++) { await save(n); }
+  });
+})();
+</script>
+{% endblock %}

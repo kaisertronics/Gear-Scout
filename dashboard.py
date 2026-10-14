@@ -2554,6 +2554,60 @@ def _start_lowest_job(query: str) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# Saved: what you paid for your gear vs. new, with social slides
+# ---------------------------------------------------------------------------
+_savings_cache: dict = {"key": None, "at": 0.0, "data": None}
+
+
+def _savings_data(refresh: bool = False):
+    from scrapers import savings
+    url = (load_config_raw().get("savings_sheet_url") or "").strip()
+    if not url:
+        return url, None
+    c = _savings_cache
+    if not refresh and c["key"] == url and c["data"] is not None and time.time() - c["at"] < 600:
+        return url, c["data"]
+    d = savings.build(url, refresh=refresh)
+    c.update(key=url, at=time.time(), data=d)
+    return url, d
+
+
+@app.route("/saved")
+def savings_page():
+    from scrapers import savings_slides
+    url, d = _savings_data()
+    slides = savings_slides.slides(d) if d and d.get("count") else []
+    return render_template("savings.html", sheet_url=url, d=d, slides=slides,
+                           version=int(_savings_cache.get("at") or 0))
+
+
+@app.route("/saved/sheet", methods=["POST"])
+def savings_sheet():
+    cfg = load_config_for_edit()
+    cfg["savings_sheet_url"] = request.form.get("sheet_url", "").strip()
+    save_config_raw(cfg)
+    _savings_cache.update(key=None, data=None)
+    return redirect(url_for("savings_page"))
+
+
+@app.route("/saved/refresh", methods=["POST"])
+def savings_refresh():
+    _savings_data(refresh=True)
+    return redirect(url_for("savings_page"))
+
+
+@app.route("/saved/slide/<int:n>.svg")
+def savings_slide(n: int):
+    from flask import Response
+    from scrapers import savings_slides
+    _, d = _savings_data()
+    slides = savings_slides.slides(d) if d and d.get("count") else []
+    if not 1 <= n <= len(slides):
+        return ("No such slide", 404)
+    return Response(slides[n - 1], mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
 @app.route("/lowest")
 def lowest():
     from scrapers.ebay_api import ebay_manual_lowest_url
