@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+@font-face{font-family:Fraunces;font-style:italic;font-weight:800;src:url({{ url_for('static', filename='fonts/fraunces-800i.woff2') }}) format('woff2')}
 .sv-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 18px}
-.sv-tile{border-radius:12px;padding:14px 16px;background:#16181d;color:#f4f1ea}
-.sv-tile b{display:block;font-size:2rem;line-height:1.1;font-weight:800}
-.sv-tile span{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:#9aa3ab}
-.sv-tile.big b{color:#3ddc97;font-size:2.6rem}
+.sv-tile{border-radius:14px;padding:14px 16px;background:#161512;color:#EFE6D2}
+.sv-tile b{display:block;font-size:2rem;line-height:1.1;font-weight:800;font-family:Fraunces,Georgia,serif;font-style:italic}
+.sv-tile span{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:#A39A8A}
+.sv-tile.big b{color:#E0892B;font-size:2.6rem}
 .sv-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
 .sv-form input[type=url]{flex:1 1 320px;min-width:0;padding:8px 10px}
 .sv-table{width:100%;border-collapse:collapse;font-size:.95rem}
 .sv-table th,.sv-table td{padding:7px 8px;border-bottom:1px solid #e3e6ea;text-align:left;vertical-align:middle}
 .sv-table td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .sv-bar{height:8px;border-radius:4px;background:#e3e6ea;position:relative;min-width:120px}
-.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#ffd166}
+.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#E0892B}
 .sv-save{color:#1f8a55;font-weight:700}
 .sv-slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:10px}
 .sv-slide img{width:100%;height:auto;border-radius:10px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.25)}
