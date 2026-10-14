@@ -96,7 +96,7 @@ def item_slide(it, n, total):
 
 
 def leaderboard(d, n, total):
-    top = sorted([i for i in d["items"] if i["saved"] is not None], key=lambda i: -i["saved"])[:6]
+    top = sorted([i for i in d["items"] if i["saved"] is not None and i["saved"] > 0], key=lambda i: -i["saved"])[:6]
     mx = max([i["saved"] for i in top] or [1]) or 1
     b = (_sans(72, 236, 28, "BIGGEST SAVES", ORANGE, spacing=6)
          + _serif(70, 330, 92, "The leaderboard"))
@@ -133,7 +133,8 @@ def running(d, n, total):
 
 
 def slides(d) -> list[str]:
-    items = [i for i in d["items"] if i["saved"] is not None]
+    # A piece you paid over today's price stays in the table, not the posts.
+    items = [i for i in d["items"] if i["saved"] is not None and i["saved"] > 0]
     total = len(items) + 3
     out = [cover(d, 1, total)]
     out += [item_slide(it, k + 2, total) for k, it in enumerate(items)]

@@ -24,7 +24,7 @@
 <h1>💰 Saved</h1>
 <p class="sv-help">What you paid for your gear vs. buying it new. Keep a Google Sheet with one row per item:
 <b>column A = the gear</b>, <b>column B = what you paid</b>. No headers needed. Put a new price in column C only if you want to override the lookup.
-Rows without a new price get today's Reverb "Brand New" price. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
+Rows without one get today's price: new on Reverb if it's still sold new, otherwise its going used price (your Telex List prices, then listings Gear Scout has found, then Reverb). "x 2" or "pair" in a name counts two. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
 
 <form class="sv-form" method="post" action="{{ url_for('savings_sheet') }}">
   <input type="url" name="sheet_url" value="{{ sheet_url }}" placeholder="https://docs.google.com/spreadsheets/d/…" aria-label="Google Sheet link">
