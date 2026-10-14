@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-14",
+    "title": "Gear Scout has its brand back",
+    "items": [
+      "The whole app now wears the original Gear Scout look, the same as the Saved page's social slides: the knob, VU meter and patch-cable logo, the “Gear Scout” wordmark, charcoal top bar with an orange edge, warm paper pages and Fraunces italic headings.",
+      "The home-screen icon is the new logo too (remove and re-add Gear Scout to your home screen if your phone keeps the old one)."
+    ]
+  },
+  {
+    "date": "2026-10-14",
     "title": "Saved: every piece gets a real price",
     "items": [
       "Items without a new price now use today's going used price: your Telex List prices first, then listings Gear Scout has found, then Reverb. Before, discontinued or shorthand items (260VU, Ampex, Sony 56s, Distressors…) counted as $0 saved.",

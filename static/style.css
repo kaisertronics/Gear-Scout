@@ -957,3 +957,69 @@ button.is-busy, button:disabled, .btn.is-busy { opacity: .5; cursor: progress; f
 .lowest-tag-model { background: #fef3c7; color: #78350f; border: 1px solid #f59e0b; }
 .listing-ship { font-size: 11px; color: #475569; margin-top: 2px; }
 @media (prefers-color-scheme: dark) { .listing-ship { color: #cbd5e1; } }
+
+/* ---------- Gear Scout brand ----------
+   The original logo's look (same as the Saved page's social slides):
+   charcoal + cream + orange, Fraunces italic headings, IBM Plex Sans body.
+   Kept last so it sets the palette for everything above. */
+@font-face { font-family: 'GS Fraunces'; font-style: italic; font-weight: 800; font-display: swap;
+  src: url("fonts/fraunces-800i.woff2") format("woff2"); }
+@font-face { font-family: 'GS Plex'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("fonts/plex-sans.woff2") format("woff2"); }
+:root {
+  --charcoal: #161512;
+  --charcoal-2: #2A2722;
+  --cream: #EFE6D2;
+  --orange: #E0892B;
+  --orange-ink: #A0561A;            /* orange dark enough for text on paper */
+  --navy: var(--charcoal);          /* buttons, active tabs, the top bar */
+  --navy-light: #CFC4AE;            /* nav links on the dark bar */
+  --accent: var(--orange-ink);
+  --bg: #F4EFE4;
+  --panel: #FFFDF8;
+  --border: #E4DACA;
+  --text: #1C1B18;
+  --muted: #6B6457;
+}
+body { font-family: 'GS Plex', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+h1, h2, .panel h2, .status-summary-title, .ai-verdict {
+  font-family: 'GS Fraunces', Fraunces, Georgia, serif; font-style: italic; font-weight: 800; letter-spacing: -0.015em;
+}
+h1 { font-size: 34px; line-height: 1.1; }
+.panel h2 { font-size: 20px; }
+a { color: var(--orange-ink); }
+
+.topbar { background: var(--charcoal); color: var(--cream); border-bottom: 3px solid var(--orange); }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--cream);
+  font-family: 'GS Fraunces', Fraunces, Georgia, serif; font-style: italic; font-weight: 800; font-size: 26px; }
+.brand img { display: block; width: 58px; height: auto; }
+.brand em { color: var(--orange); font-style: italic; }
+.topbar nav a.active, .topbar nav a:hover { color: var(--cream); border-bottom-color: var(--orange); }
+.logout-form button:hover { color: var(--cream); }
+.topbar-search input, .topbar-search-btn { border-color: rgba(239,230,210,0.25); background: rgba(239,230,210,0.08); color: var(--cream); }
+.topbar-search input::placeholder { color: rgba(239,230,210,0.55); }
+.topbar-search input:focus { background: rgba(239,230,210,0.14); box-shadow: 0 0 0 2px var(--orange); }
+
+.btn-primary, .search-form button { background: var(--charcoal); color: var(--cream); }
+.btn-primary:hover, .search-form button:hover { background: var(--charcoal-2); box-shadow: inset 0 -3px 0 var(--orange); }
+.status-table a.btn-primary { color: var(--cream); }
+.settings-tab.active { color: var(--text); border-bottom-color: var(--orange); }
+.status-table a, .watch-query, .fbm-manual-link { color: var(--orange-ink); }
+.gs-toast { background: var(--charcoal); color: var(--cream); }
+.ai-modal { background: rgba(22,21,18,0.6); }
+.source-tag-store, .age-tag, .source-tag { background: #ECE4D4; color: #4A443A; }
+.listing-ship { color: #5E574B; }
+.stat-value { font-family: 'GS Fraunces', Fraunces, Georgia, serif; font-style: italic; font-weight: 800; font-size: 22px; }
+.stat-card { border-top: 3px solid var(--orange); }
+.listing-card:hover { box-shadow: 0 6px 18px rgba(22,21,18,0.12); }
+@media (max-width: 640px) {
+  .brand { font-size: 22px; }
+  .brand img { width: 48px; }
+}
+/* Plain buttons (no class) get the brand look instead of the browser's. */
+button:not([class]), input[type=submit]:not([class]) {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  background: var(--panel); color: var(--text); border: 1px solid #CDBFA6;
+}
+button:not([class]):hover, input[type=submit]:not([class]):hover { border-color: var(--orange); box-shadow: inset 0 -2px 0 var(--orange); }
+input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
