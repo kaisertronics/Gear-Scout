@@ -71,7 +71,8 @@ def _col(headers: list[str], names) -> Optional[int]:
 
 
 def read_sheet(sheet_url: str) -> tuple[list[dict], Optional[str]]:
-    """([{item, paid, new, date, where}], error message or None)."""
+    """([{item, paid, new, date, where}], error message or None). Works with
+    no header row: column A = gear, B = price paid, C = new price (optional)."""
     url = csv_url(sheet_url)
     if not url:
         return [], "That doesn't look like a Google Sheets link."
@@ -87,12 +88,17 @@ def read_sheet(sheet_url: str) -> tuple[list[dict], Optional[str]]:
     head = rows[0]
     ci, cp = _col(head, _ITEM), _col(head, _PAID)
     if ci is None or cp is None:
-        return [], "Name one column “Item” (or Gear/Model) and one “Paid” in the first row."
-    cn, cd, cw = _col(head, _NEW), _col(head, _DATE), _col(head, _WHERE)
-    if cn == cp:
-        cn = None
+        # No header row: column A = the gear, B = what you paid, C = new
+        # price if you typed one (blank → looked up).
+        ci, cp, cn, cd, cw = 0, 1, 2, None, None
+        body = rows
+    else:
+        cn, cd, cw = _col(head, _NEW), _col(head, _DATE), _col(head, _WHERE)
+        if cn == cp:
+            cn = None
+        body = rows[1:]
     out = []
-    for row in rows[1:]:
+    for row in body:
         get = lambda i: row[i].strip() if i is not None and i < len(row) else ""
         item, paid = get(ci), _money(get(cp))
         if not item or paid is None:

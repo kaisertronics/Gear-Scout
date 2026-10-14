@@ -21,8 +21,8 @@
 .sv-err{background:#fdecea;border-left:4px solid #b8322a;padding:8px 12px;border-radius:0 6px 6px 0}
 </style>
 <h1>💰 Saved</h1>
-<p class="sv-help">What you paid for your gear vs. buying it new. Keep a Google Sheet with a row per item:
-columns <b>Item</b> and <b>Paid</b> (required), plus <b>New</b>, <b>Date</b> and <b>Where</b> if you like.
+<p class="sv-help">What you paid for your gear vs. buying it new. Keep a Google Sheet with one row per item:
+<b>column A = the gear</b>, <b>column B = what you paid</b>. No headers needed. Put a new price in column C only if you want to override the lookup.
 Rows without a new price get today's Reverb "Brand New" price. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
 
 <form class="sv-form" method="post" action="{{ url_for('savings_sheet') }}">
