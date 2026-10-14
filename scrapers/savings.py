@@ -118,12 +118,19 @@ def _load_cache() -> dict:
 _QTY = re.compile(r"(?:\b[x×]\s*(\d{1,2})\b|\b(\d{1,2})\s*[x×]\b|\((\d{1,2})\)|\bpair\b)", re.I)
 
 
+_NOT_PLURAL = {"series", "dynamics", "electronics", "acoustics", "labs", "systems", "products", "works",
+               "instruments", "sounds", "tubes", "records", "studios", "designs", "engineers", "devices",
+               "bros", "amps"}
+
+
 def split_qty(item: str) -> tuple[str, int]:
     """("CAPI VP28 x 8" → ("CAPI VP28", 8)); "pair" counts as 2."""
     m = _QTY.search(item or "")
     if not m:
-        # "Hedd type 20's" = a pair of them.
-        if re.search(r"\d['’]s\b", item or ""):
+        # "Hedd type 20's", "mixcubes", "NS10s", "mics" = a pair of them.
+        if re.search(r"\d['’]s\b", item or "") or any(
+                (re.fullmatch(r"[a-z]{3,}[^su'’]s", w) or w == "mics") and w not in _NOT_PLURAL
+                for w in re.findall(r"[a-z'’]+", (item or "").lower())):
             return item.strip(), 2
         return item.strip(), 1
     n = next((int(g) for g in m.groups() if g), 2)
@@ -139,6 +146,7 @@ def _query(name: str) -> str:
     q = re.sub(r"\b([a-z]{5,}[^s\W])s\b", r"\1", q, flags=re.I)
     q = re.sub(r"\s+", " ", q).strip()
     q = re.sub(r"(?i)\b(avalon)\s+(?:vt-?)?737(?:sp)?\b", r"\1 vt-737sp", q)
+    q = re.sub(r"(?i)\bcapi\s*vm-?28\b", "capi vp28", q)  # CAPI's preamp is the VP28
     try:
         from scrapers.enrich import _BRAND_RE
         m = _BRAND_RE.search(q.lower())
@@ -211,17 +219,36 @@ def _reverb_new_used(query: str) -> tuple[list[float], list[float]]:
                 or not _whole_piece(title, query, value)):
             continue
         seen.add((title.lower(), value))
-        (new if cond == "brand new" else used).append(value)
+        (new if cond == "brand new" else used).append(_unit(title, value))
     _seen_q[query] = (time.time(), (new, used))
     return new, used
+
+
+# Words that pick a version of the same product: "MixCubes active" must not
+# be priced off passive MixCubes (the price search drops "active" as filler).
+_VERSIONS = ((r"\bactive\b|\bpowered\b", r"\bpassive\b"),)
 
 
 def _whole_piece(title: str, query: str, value) -> bool:
     from scrapers.board import _is_addon
     from scrapers.enrich import needs_repair
     from scrapers.market import _usable
-    return (_usable(title, query, value) and not _is_addon(title) and not _PART_NO.search(title)
+    for a, b in _VERSIONS:
+        for want, avoid in ((a, b), (b, a)):
+            if re.search(want, query, re.I) and (re.search(avoid, title, re.I) or not re.search(want, title, re.I)):
+                return False
+    # A pair (monitors, mics) is the same gear twice, not a lot: judge it
+    # as one, and _unit prices it per piece.
+    single = re.sub(r"\(?\b(?:matched |stereo )?pair\b\)?|\(set\)", " ", title, flags=re.I)
+    return (_usable(single, query, value) and not _is_addon(single) and not _PART_NO.search(title)
             and not needs_repair(title))
+
+
+def _unit(title: str, value: float) -> float:
+    """One unit's price: a pair listed at $400 is $200 each."""
+    from scrapers.enrich import price_basis
+    title = re.sub(r"\(set\)", "(pair)", title, flags=re.I)
+    return price_basis(title, None, value)[2]
 
 
 def scouted_used(query: str) -> list[float]:
@@ -244,7 +271,7 @@ def scouted_used(query: str) -> list[float]:
         if (title.lower(), value) in seen or not _whole_piece(title, query, value):
             continue
         seen.add((title.lower(), value))
-        out.append(value)
+        out.append(_unit(title, value))
     return out
 
 
@@ -273,7 +300,7 @@ def _ebay_new(query: str) -> list[float]:
             continue
         if (title.lower(), value) not in seen and _whole_piece(title, query, value):
             seen.add((title.lower(), value))
-            out.append(value)
+            out.append(_unit(title, value))
     return out
 
 
@@ -298,7 +325,7 @@ def prices(item: str, refresh: bool = False) -> dict:
     loosened step by step like Gear Scout's market lookups. Cached a month.
     {new, new_basis, used, used_basis, rough}"""
     q = _query(item)
-    key = "v8:" + q.lower()
+    key = "v10:" + q.lower()
     cache = _load_cache()
     hit = cache.get(key)
     if hit and not refresh and time.time() - hit.get("at", 0) < NEW_MAX_AGE:
@@ -365,23 +392,43 @@ def build(sheet_url: str, refresh: bool = False) -> dict:
     rows, error = read_sheet(sheet_url)
     items, running = [], 0.0
     for r in rows:
-        name, qty = split_qty(r["item"])
-        p = prices(name, refresh)
-        times = lambda v: round(v * qty, 2) if v else None
-        each = (lambda v: f"{qty} × ${v:,.0f} · ") if qty > 1 else (lambda v: "")
-        new_v, used_v = times(p["new"]), times(p["used"])
-        new_basis = (each(p["new"]) + p["new_basis"]) if p["new"] else p["new_basis"]
-        used_basis = (each(p["used"]) + p["used_basis"]) if p["used"] else p["used_basis"]
+        # "4 x CAPI VP28 / 4 x Link SSL 4K" is two things: price each part.
+        parts = [x for x in re.split(r"\s+(?:/|\+)\s+", r["item"]) if x.strip()]
+        priced = []
+        for part in parts:
+            name, qty = split_qty(part)
+            p = prices(name, refresh)
+            each = f"{qty} × " if qty > 1 else ""
+            priced.append({
+                "qty": qty,
+                "new": round(p["new"] * qty, 2) if p["new"] else None,
+                "used": round(p["used"] * qty, 2) if p["used"] else None,
+                "new_basis": (f"{each}${p['new']:,.0f} · " if p["new"] and qty > 1 else "") + p["new_basis"],
+                "used_basis": (f"{each}${p['used']:,.0f} · " if p["used"] and qty > 1 else "") + p["used_basis"],
+                "rough": p["rough"]})
+        label = lambda k: " + ".join(x[k] for x in priced) if len(priced) > 1 else priced[0][k]
+        qty = sum(x["qty"] for x in priced)
+        new_v = round(sum(x["new"] for x in priced), 2) if all(x["new"] for x in priced) else None
+        used_v = round(sum(x["used"] for x in priced), 2) if all(x["used"] for x in priced) else None
+        new_basis, used_basis = label("new_basis"), label("used_basis")
+        p = {"rough": any(x["rough"] for x in priced)}
         if r["new"]:
             new_v, new_basis = r["new"], "from your sheet"
-        # "Saved" is against new; gear that isn't sold new compares to used.
-        compare, against = (new_v, "new") if new_v else (used_v, "used")
+        # "Saved" is against new; gear that isn't sold new compares to used
+        # (part by part when a row is several things).
+        if new_v:
+            compare, against = new_v, "new"
+        elif all(x["new"] or x["used"] for x in priced) and any(x["new"] for x in priced):
+            compare, against = round(sum(x["new"] or x["used"] for x in priced), 2), "mixed"
+        else:
+            compare, against = used_v, "used"
         saved = round(compare - r["paid"], 2) if compare else None
         if saved is not None:
             running += saved
         vs_market = round(used_v - r["paid"], 2) if used_v else None
         items.append({**r, "qty": qty, "new": compare, "against": against, "new_only": new_v,
-                      "basis": new_basis if against == "new" else used_basis + " (not sold new)",
+                      "basis": new_basis if against == "new" else used_basis + " (not sold new)" if against == "used"
+                      else "new where still made, used market average where not",
                       "new_basis": new_basis, "used": used_v, "used_basis": used_basis, "rough": p["rough"],
                       "saved": saved, "pct": round(100 * saved / compare) if saved is not None and compare else None,
                       "vs_market": vs_market,
@@ -406,7 +453,7 @@ def build(sheet_url: str, refresh: bool = False) -> dict:
             "vs_market_pct": round(100 * (market_value - market_paid) / market_value) if market_value else 0,
             "overpaid": over, "overpaid_total": round(-sum(i["vs_market"] for i in over), 2),
             "best_buys": sorted([i for i in marketed if i["vs_market"] > 0], key=lambda i: -i["vs_market_pct"])[:5],
-            "not_new": [i for i in priced if i["against"] == "used"],
+            "not_new": [i for i in priced if i["against"] != "new"],
             "rough": [i for i in items if i["rough"] or "(rough)" in (i.get("new_basis") or "")],
             "unpriced": [i for i in items if i["saved"] is None],
             "total_paid_all": round(sum(i["paid"] for i in items), 2)}

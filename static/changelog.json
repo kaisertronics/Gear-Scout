@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-14",
+    "title": "Saved: pairs and active/passive priced right",
+    "items": [
+      "A plural name (“mixcubes”, “NS10s”, “mics”) counts as a pair, like “x 2” does.",
+      "Listings for a pair now count, priced per piece ($300 a pair = $150 each). Before, every “pair” listing was ignored as a lot.",
+      "“Active” gear is never priced off passive versions (and the other way round). Your active MixCubes pair at $200 is now $100 under the used market, not $30 over.",
+      "A row with two things in it (“4 x CAPI VP28 / 4 x …”) prices each part and adds them up. CAPI “VM28” is read as the VP28."
+    ]
+  },
+  {
+    "date": "2026-10-14",
     "title": "Saved: vs new, vs the used market, and where you overpaid",
     "items": [
       "Every piece now gets two prices: today's new price (Reverb Brand New + eBay New) and its used market average (your Telex prices, then listings Gear Scout has found, then Reverb).",

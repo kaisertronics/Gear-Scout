@@ -102,13 +102,15 @@ def item_slide(it, n, total):
     y = y0 + len(bars) * 112 + 36
     against_new = it.get("against", "new") == "new"
     vm = it.get("vs_market")
-    b += _sans(72, y + 10, 24, "YOU SAVED VS NEW" if against_new else "YOU SAVED VS THE USED MARKET AVERAGE", CREAM, spacing=4)
+    label = {"new": "YOU SAVED VS NEW", "mixed": "YOU SAVED VS NEW (USED WHERE NOT MADE NEW)"}.get(
+        it.get("against", "new"), "YOU SAVED VS THE USED MARKET AVERAGE")
+    b += _sans(72, y + 10, 24, label, CREAM, spacing=4)
     b += _serif(66, y + 110, 108, _money(it["saved"]), ORANGE)
     b += _serif(1014, y + 110, 64, f'{it["pct"]}% off', CREAM, "end")
     if against_new and vm is not None:
         word = "under" if vm >= 0 else "over"
         b += _sans(72, min(y + 158, 950), 26, f"and {_money(abs(vm))} {word} the used market average", MUTED, weight=500)
-    elif not against_new:
+    elif it.get("against") == "used":
         b += _sans(72, min(y + 158, 950), 26, "no longer made new, so this is against used prices", MUTED, weight=500)
     return _frame(b, n, total)
 
