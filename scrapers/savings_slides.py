@@ -76,22 +76,40 @@ def cover(d, n, total):
 
 
 def item_slide(it, n, total):
-    lines = _wrap(it["item"], 20)
-    title = "".join(_serif(70, 290 + i * 82, 80, E(l)) for i, l in enumerate(lines))
-    y0 = 290 + (len(lines) - 1) * 82 + 36
-    new, paid = it["new"] or 1, it["paid"]
-    bw = 936
-    pw = max(48, bw * min(paid / new, 1))
-    b = (_sans(72, 200, 28, f"STEAL #{n - 1}", ORANGE, spacing=6) + title
-         + _sans(72, y0 + 44, 24, "NEW", spacing=4)
-         + f'<rect x="72" y="{y0 + 62}" width="{bw}" height="68" rx="14" fill="{PANEL}"/>'
-         + _serif(72 + bw - 22, y0 + 110, 44, _money(it["new"]), CREAM, "end")
-         + _sans(72, y0 + 178, 24, "YOU PAID", spacing=4)
-         + f'<rect x="72" y="{y0 + 196}" width="{pw:.0f}" height="68" rx="14" fill="{ORANGE}"/>'
-         + _serif(72 + pw + 18, y0 + 244, 44, _money(paid), ORANGE)
-         + _sans(72, min(y0 + 340, 800), 26, "YOU SAVED", CREAM, spacing=5)
-         + _serif(66, min(y0 + 460, 920), 128, _money(it["saved"]), ORANGE)
-         + _serif(1014, min(y0 + 460, 920), 72, f'{it["pct"]}% off', CREAM, "end"))
+    """One piece: NEW (if it's still made), USED MARKET AVERAGE and YOU
+    PAID as bars, then what you saved and how you did against the market."""
+    lines = _wrap(it["item"], 22)[:2]
+    size = 80 if len(lines) == 1 else 70
+    title = "".join(_serif(70, 290 + i * 76, size, E(l)) for i, l in enumerate(lines))
+    y0 = 290 + (len(lines) - 1) * 76 + 30
+    bars = []
+    if it.get("new_only"):
+        bars.append(("NEW", it["new_only"], PANEL, CREAM))
+    if it.get("used"):
+        bars.append(("USED MARKET AVERAGE", it["used"], "#4A443A", CREAM))
+    bars.append(("YOU PAID", it["paid"], ORANGE, ORANGE))
+    top = max(v for _, v, _, _ in bars) or 1
+    bw, b = 936, _sans(72, 200, 28, f"STEAL #{n - 1}", ORANGE, spacing=6) + title
+    for k, (label, v, fill, ink) in enumerate(bars):
+        y = y0 + k * 112
+        w = max(48, bw * v / top)
+        b += (_sans(72, y + 34, 22, label, spacing=4)
+              + f'<rect x="72" y="{y + 48}" width="{w:.0f}" height="52" rx="12" fill="{fill}"/>')
+        if w > bw - 230:
+            b += _serif(72 + w - 18, y + 86, 38, _money(v), CHARCOAL if fill == ORANGE else CREAM, "end")
+        else:
+            b += _serif(72 + w + 16, y + 86, 38, _money(v), ink)
+    y = y0 + len(bars) * 112 + 36
+    against_new = it.get("against", "new") == "new"
+    vm = it.get("vs_market")
+    b += _sans(72, y + 10, 24, "YOU SAVED VS NEW" if against_new else "YOU SAVED VS THE USED MARKET AVERAGE", CREAM, spacing=4)
+    b += _serif(66, y + 110, 108, _money(it["saved"]), ORANGE)
+    b += _serif(1014, y + 110, 64, f'{it["pct"]}% off', CREAM, "end")
+    if against_new and vm is not None:
+        word = "under" if vm >= 0 else "over"
+        b += _sans(72, min(y + 158, 950), 26, f"and {_money(abs(vm))} {word} the used market average", MUTED, weight=500)
+    elif not against_new:
+        b += _sans(72, min(y + 158, 950), 26, "no longer made new, so this is against used prices", MUTED, weight=500)
     return _frame(b, n, total)
 
 
@@ -108,6 +126,25 @@ def leaderboard(d, n, total):
         b += (_sans(72, y + 28, 28, E(name), CREAM, weight=600)
               + f'<rect x="72" y="{y + 42}" width="{max(w, 10):.0f}" height="30" rx="15" fill="{ORANGE if not k else CREAM}"{fade}/>'
               + _serif(72 + max(w, 10) + 16, y + 68, 34, _money(it["saved"]), ORANGE if not k else CREAM))
+    return _frame(b, n, total)
+
+
+def market(d, n, total):
+    """The market check: vs new, vs the used market, what it's worth."""
+    vm = d.get("vs_market") or 0
+    b = (_sans(72, 236, 28, "THE MARKET CHECK", ORANGE, spacing=6)
+         + _serif(70, 330, 84, "Not just cheaper")
+         + _serif(70, 416, 84, "than new.", ORANGE))
+    rows = [("SAVED VS BUYING NEW", _money(d["total_saved"]), f'{d["pct"]}% under new'),
+            ("VS THE USED MARKET AVERAGE", ("−" if vm < 0 else "") + _money(abs(vm)),
+             f'{abs(d.get("vs_market_pct") or 0)}% {"under" if vm >= 0 else "over"} going used prices'),
+            ("WORTH TODAY, USED", _money(d.get("market_value")), f'paid {_money(d.get("market_paid"))}')]
+    for k, (label, big, sub) in enumerate(rows):
+        y = 480 + k * 150
+        b += (f'<rect x="72" y="{y}" width="936" height="128" rx="22" fill="{PANEL}"/>'
+              + _sans(104, y + 50, 24, label, spacing=4)
+              + _sans(104, y + 96, 26, sub, CREAM, weight=500)
+              + _serif(980, y + 90, 64, big, ORANGE if k != 1 or vm >= 0 else CREAM, "end"))
     return _frame(b, n, total)
 
 
@@ -135,8 +172,8 @@ def running(d, n, total):
 def slides(d) -> list[str]:
     # A piece you paid over today's price stays in the table, not the posts.
     items = [i for i in d["items"] if i["saved"] is not None and i["saved"] > 0]
-    total = len(items) + 3
+    total = len(items) + 4
     out = [cover(d, 1, total)]
     out += [item_slide(it, k + 2, total) for k, it in enumerate(items)]
-    out += [leaderboard(d, total - 1, total), running(d, total, total)]
+    out += [leaderboard(d, total - 2, total), market(d, total - 1, total), running(d, total, total)]
     return out

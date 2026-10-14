@@ -138,6 +138,7 @@ def _query(name: str) -> str:
     q = re.sub(r"[^\w\s\-.]", " ", q)
     q = re.sub(r"\b([a-z]{5,}[^s\W])s\b", r"\1", q, flags=re.I)
     q = re.sub(r"\s+", " ", q).strip()
+    q = re.sub(r"(?i)\b(avalon)\s+(?:vt-?)?737(?:sp)?\b", r"\1 vt-737sp", q)
     try:
         from scrapers.enrich import _BRAND_RE
         m = _BRAND_RE.search(q.lower())
@@ -153,7 +154,7 @@ def _words(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", re.sub(r"[-.]", "", (text or "").lower())))
 
 
-def telex_value(q: str) -> tuple[Optional[float], str]:
+def telex_value(q: str) -> tuple[Optional[float], str, Optional[str]]:
     """The used price Gear Scout already keeps for the Telex term that best
     names this item ("distressor", "vanguard v13"). One-word brand terms
     ("audioscape", "ssl") are too broad to price a specific piece."""
@@ -163,7 +164,7 @@ def telex_value(q: str) -> tuple[Optional[float], str]:
             rows = conn.execute("SELECT query, typical, samples FROM market_prices "
                                 "WHERE model_key LIKE 'telex:%' AND typical IS NOT NULL").fetchall()
     except Exception:
-        return None, ""
+        return None, "", None
     from scrapers.enrich import canonical_brand
     have = _words(q)
     brand = canonical_brand(q)
@@ -182,8 +183,8 @@ def telex_value(q: str) -> tuple[Optional[float], str]:
         if best is None or len(tw) > len(_words(best[0])):
             best = (term, typical, n)
     if not best:
-        return None, ""
-    return round(best[1], 2), f"used, Gear Scout Telex price for “{best[0]}” ({best[2]} listings)"
+        return None, "", None
+    return round(best[1], 2), f"your Telex price for “{best[0]}” ({best[2]} listings)", best[0]
 
 
 _PART_NO = re.compile(r"\b\d{5,}-\d{1,3}\b|\b(?:only|card|board|cabinet|faceplate|knob|manual|schematic)\b", re.I)
@@ -247,87 +248,165 @@ def scouted_used(query: str) -> list[float]:
     return out
 
 
-def new_price(item: str, refresh: bool = False) -> tuple[Optional[float], str]:
-    """(what one unit costs today, where that came from): the Brand New
-    price on Reverb when the model is still sold new, else its going used
-    price (the Telex term's price, else listings Gear Scout has found, else
-    Reverb used) — whichever is higher (a "new" price under the used one is
-    a clone or accessory). Shorthand names are loosened step by step like
-    Gear Scout's market lookups. Cached a month; (None, reason) if nothing."""
+def _ebay_new(query: str) -> list[float]:
+    """Buy-it-now prices of eBay listings in "New" condition (whole piece)."""
+    import yaml
+    from scrapers.ebay_api import SEARCH_URL, _check_response, _get_token, ebay_paused_until
+    try:
+        api = (yaml.safe_load(open("/config/config.yaml")) or {}).get("ebay_api") or {}
+    except OSError:
+        return []
+    if ebay_paused_until() or not (api.get("client_id") and api.get("client_secret")):
+        return []
+    token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
+    r = requests.get(SEARCH_URL, params={"q": query, "limit": 50,
+                                         "filter": "conditionIds:{1000},buyingOptions:{FIXED_PRICE},priceCurrency:USD"},
+                     headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
+    _check_response(r)
+    r.raise_for_status()
+    out, seen = [], set()
+    for it in r.json().get("itemSummaries", []) or []:
+        title = it.get("title") or ""
+        try:
+            value = float((it.get("price") or {}).get("value"))
+        except (TypeError, ValueError):
+            continue
+        if (title.lower(), value) not in seen and _whole_piece(title, query, value):
+            seen.add((title.lower(), value))
+            out.append(value)
+    return out
+
+
+def _used_pick(tv, tbasis, scouted, used):
+    """(going used price, basis, listings) from the best source available."""
+    if tv:
+        return tv, tbasis, None
+    if len(scouted) >= 3 or (len(scouted) >= 2 and len(used) < 3):
+        return statistics.median(scouted), f"median of {len(scouted)} listings Gear Scout found", len(scouted)
+    if len(used) >= 3:
+        return statistics.median(used), f"Reverb used, median of {len(used)}", len(used)
+    return None
+
+
+def prices(item: str, refresh: bool = False) -> dict:
+    """Today's prices for one unit of a piece of gear:
+      new  — Brand New on Reverb + New-condition on eBay (median),
+      used — your Telex term's price, else listings Gear Scout has found,
+             else Reverb used; a single listing counts as a rough price.
+    New listings far under (or over) the going price are accessories,
+    parts, clones or bundles and are dropped one by one. Shorthand names are
+    loosened step by step like Gear Scout's market lookups. Cached a month.
+    {new, new_basis, used, used_basis, rough}"""
     q = _query(item)
-    key = "v6:" + q.lower()
+    key = "v8:" + q.lower()
     cache = _load_cache()
     hit = cache.get(key)
     if hit and not refresh and time.time() - hit.get("at", 0) < NEW_MAX_AGE:
-        return hit.get("value"), hit.get("basis", "")
-    value, basis = None, "no listings found"
-    tv, tbasis = telex_value(q)
-    rough = None  # one listing, if that's all there is anywhere
+        return hit["p"]
+    tv, tbasis, term = telex_value(q)
+    if term and len(term) >= len(q) - 2:
+        q = term.lower()  # "vanguard 13" searches as your term "vanguard v13"
+    out = {"new": None, "new_basis": "not sold new (no new listings found)", "used": None,
+           "used_basis": "no used listings found", "rough": False}
+    first_used = None
     try:
         from scrapers.market import lookup_plan
         for i, attempt in enumerate(lookup_plan(q)):
             if i:
                 time.sleep(0.4)
-            new, used = _reverb_new_used(attempt)
+            new_r, used = _reverb_new_used(attempt)
+            try:
+                new_e = _ebay_new(attempt)
+            except Exception as e:
+                logger.debug("eBay new lookup failed for %s: %s", attempt, e)
+                new_e = []
             scouted = scouted_used(attempt)
-            if rough is None and (scouted or used or new):
-                rough = (scouted or used or new)[0]
-            new_med = statistics.median(new) if len(new) >= 2 else None
-            used_med, used_basis = None, ""
-            if tv:
-                used_med, used_basis = tv, tbasis
-            elif len(scouted) >= 3 or (len(scouted) >= 2 and len(used) < 3):
-                used_med, used_basis = statistics.median(scouted), f"used, median of {len(scouted)} listings Gear Scout found"
-            elif len(used) >= 3:
-                used_med, used_basis = statistics.median(used), f"used on Reverb, median of {len(used)}"
-            if new_med and (not used_med or new_med >= used_med):
-                value, basis = round(new_med, 2), f"new on Reverb, median of {len(new)}"
-            elif used_med:
-                value, basis = round(used_med, 2), used_basis
-            if value:
-                if attempt != q.lower() and not basis.startswith("used, Gear Scout Telex"):
-                    basis += f" (“{attempt}”)"
+            if out["used"] is None:
+                pick = _used_pick(tv, tbasis, scouted, used)
+                if pick:
+                    out["used"], out["used_basis"] = round(pick[0], 2), pick[1]
+                elif first_used is None and (scouted or used):
+                    first_used = (scouted or used)[0]
+            if out["new"] is None and (new_r or new_e):
+                # Yardstick for junk: the going used price, else Reverb's
+                # new listings (dealers), else everything new.
+                ref = out["used"] or (statistics.median(new_r) if new_r else statistics.median(new_r + new_e))
+                keep_r = [v for v in new_r if 0.5 * ref <= v <= 4 * ref]
+                keep_e = [v for v in new_e if 0.5 * ref <= v <= 4 * ref]
+                if len(keep_r) + len(keep_e) >= 2 or keep_r:
+                    where = " + ".join(n for n, v in (("Reverb", keep_r), ("eBay", keep_e)) if v)
+                    n = len(keep_r) + len(keep_e)
+                    out["new"] = round(statistics.median(keep_r + keep_e), 2)
+                    out["new_basis"] = f"{where} new, median of {n}" + (" (rough)" if n == 1 else "")
+                    if attempt != q.lower():
+                        out["new_basis"] += f" (“{attempt}”)"
+            if out["new"] is not None and out["used"] is not None:
                 break
     except Exception as e:
         logger.debug("Price lookup failed for %s: %s", item, e)
-        if not tv:
-            return None, "lookup failed"
-    if not value and tv:
-        value, basis = tv, tbasis
-    if not value and rough:
-        value, basis = round(rough, 2), "rough: only 1 listing found"
-    cache[key] = {"value": value, "basis": basis, "at": time.time()}
+        if out["used"] is None and tv:
+            out["used"], out["used_basis"] = tv, tbasis
+        if out["new"] is None and out["used"] is None:
+            return {**out, "new_basis": "lookup failed", "used_basis": "lookup failed"}
+    if out["used"] is None and first_used:
+        out["used"], out["used_basis"], out["rough"] = round(first_used, 2), "rough: only 1 used listing found", True
+    cache[key] = {"p": out, "at": time.time()}
     try:
         NEW_CACHE.write_text(json.dumps(cache))
     except OSError:
         pass
-    return value, basis
+    return out
 
 
 def build(sheet_url: str, refresh: bool = False) -> dict:
-    """Everything the page and the slides show."""
+    """Everything the page and the slides show. Per item: new price (or the
+    used price when it isn't sold new — that's what "saved" uses), the going
+    used price, saved vs new, saved vs the used market, and overpaid."""
     rows, error = read_sheet(sheet_url)
     items, running = [], 0.0
     for r in rows:
         name, qty = split_qty(r["item"])
+        p = prices(name, refresh)
+        times = lambda v: round(v * qty, 2) if v else None
+        each = (lambda v: f"{qty} × ${v:,.0f} · ") if qty > 1 else (lambda v: "")
+        new_v, used_v = times(p["new"]), times(p["used"])
+        new_basis = (each(p["new"]) + p["new_basis"]) if p["new"] else p["new_basis"]
+        used_basis = (each(p["used"]) + p["used_basis"]) if p["used"] else p["used_basis"]
         if r["new"]:
-            new, basis = r["new"], "from your sheet"
-        else:
-            unit, basis = new_price(name, refresh)
-            new = round(unit * qty, 2) if unit else None
-            if unit and qty > 1:
-                basis = f"{qty} × ${unit:,.0f} · " + basis
-        saved = round(new - r["paid"], 2) if new else None
+            new_v, new_basis = r["new"], "from your sheet"
+        # "Saved" is against new; gear that isn't sold new compares to used.
+        compare, against = (new_v, "new") if new_v else (used_v, "used")
+        saved = round(compare - r["paid"], 2) if compare else None
         if saved is not None:
             running += saved
-        items.append({**r, "new": new, "basis": basis, "saved": saved,
-                      "pct": round(100 * saved / new) if saved is not None and new else None,
+        vs_market = round(used_v - r["paid"], 2) if used_v else None
+        items.append({**r, "qty": qty, "new": compare, "against": against, "new_only": new_v,
+                      "basis": new_basis if against == "new" else used_basis + " (not sold new)",
+                      "new_basis": new_basis, "used": used_v, "used_basis": used_basis, "rough": p["rough"],
+                      "saved": saved, "pct": round(100 * saved / compare) if saved is not None and compare else None,
+                      "vs_market": vs_market,
+                      "vs_market_pct": round(100 * vs_market / used_v) if vs_market is not None and used_v else None,
+                      "overpaid": vs_market is not None and vs_market < -0.05 * used_v,
                       "running": round(running, 2)})
     priced = [i for i in items if i["saved"] is not None]
+    marketed = [i for i in items if i["vs_market"] is not None]
     total_new = sum(i["new"] for i in priced)
     total_paid = sum(i["paid"] for i in priced)
+    market_value = sum(i["used"] for i in marketed)
+    market_paid = sum(i["paid"] for i in marketed)
+    over = sorted([i for i in items if i["overpaid"]], key=lambda i: i["vs_market"])
     return {"items": items, "error": error, "count": len(priced), "missing": len(items) - len(priced),
             "total_saved": round(total_new - total_paid, 2), "total_new": round(total_new, 2),
             "total_paid": round(total_paid, 2),
             "pct": round(100 * (total_new - total_paid) / total_new) if total_new else 0,
-            "best": max(priced, key=lambda i: i["saved"], default=None)}
+            "best": max(priced, key=lambda i: i["saved"], default=None),
+            # vs the used market
+            "market_count": len(marketed), "market_value": round(market_value, 2),
+            "market_paid": round(market_paid, 2), "vs_market": round(market_value - market_paid, 2),
+            "vs_market_pct": round(100 * (market_value - market_paid) / market_value) if market_value else 0,
+            "overpaid": over, "overpaid_total": round(-sum(i["vs_market"] for i in over), 2),
+            "best_buys": sorted([i for i in marketed if i["vs_market"] > 0], key=lambda i: -i["vs_market_pct"])[:5],
+            "not_new": [i for i in priced if i["against"] == "used"],
+            "rough": [i for i in items if i["rough"] or "(rough)" in (i.get("new_basis") or "")],
+            "unpriced": [i for i in items if i["saved"] is None],
+            "total_paid_all": round(sum(i["paid"] for i in items), 2)}
