@@ -31,7 +31,7 @@
 <h1>💰 Saved</h1>
 <p class="sv-help">What you saved on your gear vs. buying it new, how you did against the used market, and where you overpaid. Keep a Google Sheet with one row per item:
 <b>column A = the gear</b>, <b>column B = what you paid</b>. No headers needed. Put a new price in column C only if you want to override the lookup.
-Each piece gets today's new price (Reverb Brand New + eBay New) and its going used price (your Telex List prices, then listings Gear Scout has found, then Reverb). Gear that isn't sold new any more is compared to the used price. "x 2" or "pair" in a name counts two. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
+Each piece gets today's new price (Reverb Brand New + eBay New) and its going used price (your Telex List prices, then listings Gear Scout has found, then Reverb). When no new price can be found (vintage gear, or gear sold only direct by its maker) it's compared to the used price. "x 2", "pair" or a plural name counts two; split a row with " / " to price two different things. A price in column C always wins. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
 
 <form class="sv-form" method="post" action="{{ url_for('savings_sheet') }}">
   <input type="url" name="sheet_url" value="{{ sheet_url }}" placeholder="https://docs.google.com/spreadsheets/d/…" aria-label="Google Sheet link">
@@ -54,7 +54,7 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
   <div class="sv-card"><h3>1 · Saved vs buying new</h3>
     <div class="big sv-pos">${{ '{:,.0f}'.format(d.total_saved) }}</div>
     {{ d.pct }}% under new across {{ d.count }} pieces (${{ '{:,.0f}'.format(d.total_paid) }} paid vs ${{ '{:,.0f}'.format(d.total_new) }} new).
-    {% if d.not_new %}<br><small>{{ d.not_new|length }} piece{{ '' if d.not_new|length == 1 else 's' }} aren't sold new any more, so they're compared to the going used price.</small>{% endif %}</div>
+    {% if d.not_new %}<br><small>{{ d.not_new|length }} piece{{ '' if d.not_new|length == 1 else 's' }} have no new price to be found, so they're compared to the going used price.</small>{% endif %}</div>
   <div class="sv-card"><h3>2 · Saved vs the used market</h3>
     <div class="big {{ 'sv-pos' if d.vs_market >= 0 else 'sv-neg' }}">{{ '-' if d.vs_market < 0 else '' }}${{ '{:,.0f}'.format(d.vs_market|abs) }}</div>
     {{ d.vs_market_pct|abs }}% {{ 'under' if d.vs_market >= 0 else 'over' }} what the same pieces sell for used today, across {{ d.market_count }} pieces.
@@ -95,7 +95,7 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
     <td class="n">${{ '{:,.0f}'.format(i.paid) }}</td>
     <td class="n">{% if i.new_only %}${{ '{:,.0f}'.format(i.new_only) }}<br><small>{{ i.new_basis }}</small>{% else %}<small>{{ i.new_basis }}</small>{% endif %}</td>
     <td class="n">{% if i.used %}${{ '{:,.0f}'.format(i.used) }}<br><small>{{ i.used_basis }}</small>{% else %}<small>{{ i.used_basis }}</small>{% endif %}</td>
-    <td class="n sv-save">{% if i.saved is not none %}{{ '-' if i.saved < 0 else '' }}${{ '{:,.0f}'.format(i.saved|abs) }} · {{ i.pct }}%{% if i.against == 'used' %}<br><small>vs used (not sold new)</small>{% endif %}{% else %}—{% endif %}</td>
+    <td class="n sv-save">{% if i.saved is not none %}{{ '-' if i.saved < 0 else '' }}${{ '{:,.0f}'.format(i.saved|abs) }} · {{ i.pct }}%{% if i.against == 'used' %}<br><small>vs used (no new price found)</small>{% endif %}{% else %}—{% endif %}</td>
     <td class="n {{ 'sv-neg' if i.overpaid else 'sv-pos' }}">{% if i.vs_market is not none %}{{ '-' if i.vs_market < 0 else '' }}${{ '{:,.0f}'.format(i.vs_market|abs) }} · {{ i.vs_market_pct }}%{% if i.overpaid %}<br><small>overpaid</small>{% endif %}{% else %}—{% endif %}</td>
     <td>{% if i.new and i.paid <= i.new %}<div class="sv-bar" title="paid vs new"><i style="width:{{ [100, (100 * i.paid / i.new)|round]|min }}%"></i></div>{% endif %}</td>
     <td class="n">${{ '{:,.0f}'.format(i.running) }}</td>

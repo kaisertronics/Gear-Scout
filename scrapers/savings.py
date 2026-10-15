@@ -147,6 +147,10 @@ def _query(name: str) -> str:
     q = re.sub(r"\s+", " ", q).strip()
     q = re.sub(r"(?i)\b(avalon)\s+(?:vt-?)?737(?:sp)?\b", r"\1 vt-737sp", q)
     q = re.sub(r"(?i)\bcapi\s*vm-?28\b", "capi vp28", q)  # CAPI's preamp is the VP28
+    # "beyer 818 mics" → "beyerdynamic m818" (Beyer's mics are the M series).
+    q = re.sub(r"(?i)\bbeyer(?:dynamic)?\b", "beyerdynamic", q)
+    if re.search(r"(?i)\bbeyerdynamic\b", q) and re.search(r"(?i)\bmics?\b", name):
+        q = re.sub(r"(?i)\b(?:m\s?)?(\d{2,3})\b", r"m\1", q)
     try:
         from scrapers.enrich import _BRAND_RE
         m = _BRAND_RE.search(q.lower())
@@ -251,28 +255,49 @@ def _unit(title: str, value: float) -> float:
     return price_basis(title, None, value)[2]
 
 
+_SAYS_NEW = re.compile(r"\bbrand[- ]new\b|\bnew in box\b|\bnib\b|\bbnib\b|\bsealed\b|\bunopened\b|\bnever opened\b", re.I)
+
+
 def scouted_used(query: str) -> list[float]:
-    """Prices of listings Gear Scout itself has found for this piece (every
-    source, live or sold): the used prices you see in the app."""
+    """Used prices of listings Gear Scout itself has found for this piece
+    (every source, live or sold): the used prices you see in the app."""
+    return _scouted(query)[0]
+
+
+def scouted_new(query: str) -> list[float]:
+    """Listings Gear Scout found that say they're brand new / sealed (gear
+    sold new only by its maker shows up this way)."""
+    return _scouted(query)[1]
+
+
+_scouted_cache: dict[str, tuple[list, list]] = {}
+
+
+def _scouted(query: str) -> tuple[list[float], list[float]]:
     from scrapers.enrich import parse_price
     from scrapers.market import _GENERIC
     from scrapers.store import _conn
     words = [w for w in re.findall(r"[\w-]+", query.lower()) if w not in _GENERIC]
     if not words:
-        return []
+        return [], []
+    if query in _scouted_cache:
+        return _scouted_cache[query]
     anchor = max(words, key=lambda w: (bool(re.search(r"\d", w)) and bool(re.search(r"[a-z]", w)), len(w)))
     with _conn() as conn:
         rows = conn.execute("SELECT title, price FROM seen WHERE lower(title) LIKE ? AND price IS NOT NULL "
                             "AND COALESCE(duplicate, 0) = 0 ORDER BY first_seen DESC LIMIT 400",
                             (f"%{anchor}%",)).fetchall()
-    out, seen = [], set()
+    used, new, seen = [], [], set()
     for title, price in rows:
         value = parse_price(str(price))
         if (title.lower(), value) in seen or not _whole_piece(title, query, value):
             continue
         seen.add((title.lower(), value))
-        out.append(_unit(title, value))
-    return out
+        (new if _SAYS_NEW.search(title) else used).append(_unit(title, value))
+    if len(_scouted_cache) > 500:
+        _scouted_cache.clear()
+    _scouted_cache[query] = (used, new)
+    return used, new
 
 
 def _ebay_new(query: str) -> list[float]:
@@ -325,7 +350,7 @@ def prices(item: str, refresh: bool = False) -> dict:
     loosened step by step like Gear Scout's market lookups. Cached a month.
     {new, new_basis, used, used_basis, rough}"""
     q = _query(item)
-    key = "v10:" + q.lower()
+    key = "v12:" + q.lower()
     cache = _load_cache()
     hit = cache.get(key)
     if hit and not refresh and time.time() - hit.get("at", 0) < NEW_MAX_AGE:
@@ -333,7 +358,7 @@ def prices(item: str, refresh: bool = False) -> dict:
     tv, tbasis, term = telex_value(q)
     if term and len(term) >= len(q) - 2:
         q = term.lower()  # "vanguard 13" searches as your term "vanguard v13"
-    out = {"new": None, "new_basis": "not sold new (no new listings found)", "used": None,
+    out = {"new": None, "new_basis": "no new price found", "used": None,
            "used_basis": "no used listings found", "rough": False}
     first_used = None
     try:
@@ -347,21 +372,26 @@ def prices(item: str, refresh: bool = False) -> dict:
             except Exception as e:
                 logger.debug("eBay new lookup failed for %s: %s", attempt, e)
                 new_e = []
-            scouted = scouted_used(attempt)
+            scouted, new_s = _scouted(attempt)
             if out["used"] is None:
                 pick = _used_pick(tv, tbasis, scouted, used)
                 if pick:
                     out["used"], out["used_basis"] = round(pick[0], 2), pick[1]
                 elif first_used is None and (scouted or used):
                     first_used = (scouted or used)[0]
-            if out["new"] is None and (new_r or new_e):
+            if out["new"] is None and (new_r or new_e or new_s):
                 # Yardstick for junk: the going used price, else Reverb's
                 # new listings (dealers), else everything new.
-                ref = out["used"] or (statistics.median(new_r) if new_r else statistics.median(new_r + new_e))
-                keep_r = [v for v in new_r if 0.5 * ref <= v <= 4 * ref]
-                keep_e = [v for v in new_e if 0.5 * ref <= v <= 4 * ref]
-                if len(keep_r) + len(keep_e) >= 2 or keep_r:
-                    where = " + ".join(n for n, v in (("Reverb", keep_r), ("eBay", keep_e)) if v)
+                ref = out["used"] or statistics.median(new_r or (new_r + new_e + new_s))
+                ok = lambda vs, lo=0.5: [v for v in vs if lo * ref <= v <= 4 * ref]
+                # A private "brand new" ad under the used price is a bargain,
+                # not what new costs: only count those at or over used.
+                keep_r, keep_e = ok(new_r), ok(new_e)
+                keep_s = ok(new_s, 1.0 if out["used"] else 0.5)
+                if len(keep_r) + len(keep_e) + len(keep_s) >= 2 or keep_r or keep_s:
+                    where = " + ".join(n for n, v in (("Reverb", keep_r), ("eBay", keep_e),
+                                                      ("Gear Scout listings", keep_s)) if v)
+                    keep_r = keep_r + keep_s
                     n = len(keep_r) + len(keep_e)
                     out["new"] = round(statistics.median(keep_r + keep_e), 2)
                     out["new_basis"] = f"{where} new, median of {n}" + (" (rough)" if n == 1 else "")
@@ -387,7 +417,7 @@ def prices(item: str, refresh: bool = False) -> dict:
 
 def build(sheet_url: str, refresh: bool = False) -> dict:
     """Everything the page and the slides show. Per item: new price (or the
-    used price when it isn't sold new — that's what "saved" uses), the going
+    used price when no new price can be found — that's what "saved" uses), the going
     used price, saved vs new, saved vs the used market, and overpaid."""
     rows, error = read_sheet(sheet_url)
     items, running = [], 0.0
@@ -414,7 +444,7 @@ def build(sheet_url: str, refresh: bool = False) -> dict:
         p = {"rough": any(x["rough"] for x in priced)}
         if r["new"]:
             new_v, new_basis = r["new"], "from your sheet"
-        # "Saved" is against new; gear that isn't sold new compares to used
+        # "Saved" is against new; gear with no new price compares to used
         # (part by part when a row is several things).
         if new_v:
             compare, against = new_v, "new"
@@ -427,7 +457,7 @@ def build(sheet_url: str, refresh: bool = False) -> dict:
             running += saved
         vs_market = round(used_v - r["paid"], 2) if used_v else None
         items.append({**r, "qty": qty, "new": compare, "against": against, "new_only": new_v,
-                      "basis": new_basis if against == "new" else used_basis + " (not sold new)" if against == "used"
+                      "basis": new_basis if against == "new" else used_basis + " (no new price found)" if against == "used"
                       else "new where still made, used market average where not",
                       "new_basis": new_basis, "used": used_v, "used_basis": used_basis, "rough": p["rough"],
                       "saved": saved, "pct": round(100 * saved / compare) if saved is not None and compare else None,
