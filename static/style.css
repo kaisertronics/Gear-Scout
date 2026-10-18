@@ -1047,3 +1047,22 @@ input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 
 .telex-term-body .when-open { display: none; }
 .telex-term-body[open] .when-open { display: inline; }
 .telex-term-body[open] .when-closed { display: none; }
+
+/* Front-page market analytics */
+.an-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 10px 0 14px; }
+.an-board { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
+.an-board h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.an-board ol { margin: 0; padding-left: 20px; line-height: 1.6; font-size: 14px; }
+.an-trend { font-weight: 700; white-space: nowrap; }
+.an-trend.down { color: #1f7a4a; }   /* falling prices are good news for a buyer */
+.an-trend.up { color: #b3261e; }
+.an-trend.flat { color: var(--muted); }
+.an-spark { color: var(--orange-ink); display: block; }
+.an-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.an-table th { text-align: left; padding: 8px 10px; background: var(--bg); color: var(--muted); font-size: 12px; position: sticky; top: 0; }
+.an-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.an-table td, .an-table th { white-space: nowrap; }
+.an-table td:last-child { white-space: normal; min-width: 200px; }
+.an-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.an-all > summary { list-style: none; display: inline-block; margin-bottom: 8px; }
+.an-all > summary::-webkit-details-marker { display: none; }

@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
 {% block title %}Gear Scout — Inbox{% endblock %}
+{% macro money(v) %}{% if v is not none %}${{ '{:,.0f}'.format(v) }}{% else %}—{% endif %}{% endmacro %}
+{% macro trend(d) %}{% if d.trend is not none and not d.mixed %}<span class="an-trend {{ 'down' if d.trend <= -8 else 'up' if d.trend >= 8 else 'flat' }}">{{ '▼' if d.trend <= -8 else '▲' if d.trend >= 8 else '▬' }} {{ '+' if d.trend > 0 else '' }}{{ d.trend }}%</span>{% elif d.mixed and d.trend is not none %}<span class="muted" title="This term covers different kinds of gear, so its average price moving isn't a real trend">mixed</span>{% else %}<span class="muted">—</span>{% endif %}{% endmacro %}
+{% macro spark(ws) %}{% set pts = [] %}{% set vals = ws|reject('none')|list %}{% if vals|length >= 2 %}{% set lo, hi = vals|min, vals|max %}{% for v in ws %}{% if v is not none %}{% set _ = pts.append(((loop.index0 * 16) ~ ',' ~ (2 + (18 if hi == lo else 18 * (hi - v) / (hi - lo)))|round(1))) %}{% endif %}{% endfor %}<svg class="an-spark" viewBox="-2 0 84 22" width="84" height="22" role="img" aria-label="Weekly typical price, last 6 weeks"><polyline points="{{ pts|join(' ') }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>{% else %}<span class="muted">—</span>{% endif %}{% endmacro %}
+{% macro days(v) %}{% if v is none %}—{% elif v < 1 %}under a day{% elif v < 2 %}1 day{% elif v < 365 %}{{ v|round|int }} days{% else %}1 yr+{% endif %}{% endmacro %}
 {% block content %}
 
   <section class="panel inbox-head">
@@ -22,7 +26,8 @@
     </div>
     <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     {% set jump = sections|selectattr('rows')|list %}
-    {% if jump %}<div class="feed-filters">{% for s in jump %}<a class="btn btn-sm" href="#inbox-{{ s.id }}">{{ s.title }} <span class="muted">{{ s.rows|length }}</span></a>{% endfor %}</div>{% endif %}
+    <div class="feed-filters">{% for s in jump %}<a class="btn btn-sm" href="#inbox-{{ s.id }}">{{ s.title }} <span class="muted">{{ s.rows|length }}</span></a>{% endfor %}
+      <a class="btn btn-sm" href="#analytics">📊 Market analytics</a></div>
   </section>
 
   {% for s in sections if s.rows %}
@@ -52,6 +57,63 @@
     {% endif %}
   </section>
   {% endfor %}
+
+
+  <section class="panel" id="analytics">
+    <h2>📊 Market analytics <span class="muted">— your Telex terms{% if stats %} · {{ '{:,}'.format(stats.listings) }} listings since {{ stats.since[:10] }} · updated {{ stats_ago }}{% endif %}</span></h2>
+    {% if not stats %}
+      <p class="muted">Working it out for the first time (about a minute). Refresh shortly.</p>
+    {% else %}
+    <p class="muted">From every ad Gear Scout has seen for your terms, sold or still for sale. Prices are per piece;
+      auctions, broken units and parts are left out. Trends compare ads posted in the last 2 weeks with the 4 weeks before.
+      Terms that cover different kinds of gear (cables, “ribbon mic”, a whole brand) are marked <i>mixed</i> instead of given a trend.</p>
+    <div class="an-boards">
+      <div class="an-board"><h3>▼ Prices falling</h3>
+        <ol>{% for d in stats.falling %}<li><b>{{ d.term }}</b> {{ trend(d) }} <span class="muted">now ~{{ money(d.median_now) }}</span></li>{% else %}<li class="muted">Nothing falling 8%+ right now.</li>{% endfor %}</ol></div>
+      <div class="an-board"><h3>▲ Prices rising</h3>
+        <ol>{% for d in stats.rising %}<li><b>{{ d.term }}</b> {{ trend(d) }} <span class="muted">now ~{{ money(d.median_now) }}</span></li>{% else %}<li class="muted">Nothing rising 8%+ right now.</li>{% endfor %}</ol></div>
+      <div class="an-board"><h3>⚡ Sells fastest</h3>
+        <ol>{% for d in stats.fastest %}<li><b>{{ d.term }}</b> — {{ days(d.days_to_sell) }} <span class="muted">({{ d.n_timed }} sales)</span></li>{% else %}<li class="muted">Not enough sales yet.</li>{% endfor %}</ol>
+        <small class="muted">Typical time from posting to sold. Message sellers fast on these.</small></div>
+      <div class="an-board"><h3>🤝 Best to haggle</h3>
+        <ol>{% for d in stats.haggle %}<li><b>{{ d.term }}</b> — {{ d.cut_pct }}% of sellers cut{% if d.avg_cut %} ~{{ d.avg_cut }}%{% endif %}</li>{% else %}<li class="muted">Not enough data yet.</li>{% endfor %}</ol></div>
+      <div class="an-board"><h3>📦 Most for sale now</h3>
+        <ol>{% for d in stats.supply %}<li><b>{{ d.term }}</b> — {{ d.live }} ads <span class="muted">from {{ money(d.cheapest) }}</span></li>{% endfor %}</ol></div>
+    </div>
+    <details class="an-all">
+      <summary class="btn btn-sm">▸ Every term ({{ stats.terms|length }})</summary>
+      <div class="table-scroll">
+      <table class="an-table">
+        <thead><tr><th>Term</th><th>For sale</th><th>Cheapest</th><th>Typical now</th><th>Trend</th><th>6 weeks</th>
+          <th>Time to sell</th><th>Sold in a week</th><th>New / week</th><th>Price cuts</th><th>Ads sitting</th><th>Tip</th></tr></thead>
+        <tbody>
+        {% for d in stats.terms %}
+          {% if d.count %}
+          <tr>
+            <td><a href="{{ url_for('feed', term=d.term) }}" title="Every ad for {{ d.term }}"><b>{{ d.term }}</b></a></td>
+            <td class="n">{{ d.live }}</td>
+            <td class="n">{{ money(d.cheapest) }}</td>
+            <td class="n">{{ money(d.median_now) }}{% if d.median_before and not d.mixed %}<br><small class="muted">was {{ money(d.median_before) }}</small>{% endif %}</td>
+            <td>{{ trend(d) }}</td>
+            <td class="an-spark-cell">{{ spark(d.weekly) }}</td>
+            <td>{{ days(d.days_to_sell) }}{% if d.days_to_sell is not none %}<br><small class="muted">{{ d.n_timed }} sales</small>{% endif %}</td>
+            <td class="n">{% if d.sold_week_pct is not none %}{{ d.sold_week_pct }}%{% else %}—{% endif %}</td>
+            <td class="n">{{ d.new_per_week }}</td>
+            <td class="n">{% if d.cut_pct is not none %}{{ d.cut_pct }}%{% if d.avg_cut %}<br><small class="muted">~{{ d.avg_cut }}% off</small>{% endif %}{% else %}—{% endif %}</td>
+            <td>{{ days(d.sitting_days) }}</td>
+            <td><small>{{ d.tip }}</small></td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      <p class="muted"><small><b>Time to sell</b>: median days from the seller posting to the ad selling (only ads whose posting date is known).
+        <b>Sold in a week</b>: share of those that sold within 7 days. <b>Price cuts</b>: share of ads whose seller lowered the price, and by how much.
+        <b>Ads sitting</b>: typical age of the ads for sale now (dealer ads on Reverb can sit for years).</small></p>
+    </details>
+    {% endif %}
+  </section>
 
 <script>
   (function () {

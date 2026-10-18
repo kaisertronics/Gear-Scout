@@ -2098,9 +2098,12 @@ def feed():
         except Exception:
             pass
         _verify_feed([l["url"] for s in sections for l, _ in s["rows"]][:80])
+        from scrapers import analytics
+        stats = analytics.load(cfg)
         return render_template("feed.html", sections=sections, total=len(items), terms=terms,
                                since_label=_ago(since), first_visit=since is None, sweep=sweep,
-                               waiting=sum(len(s["rows"]) for s in sections))
+                               waiting=sum(len(s["rows"]) for s in sections),
+                               stats=stats, stats_ago=_ago(stats["built"]) if stats else None)
     since = _feed_visit()
     show = request.args.get("show") or "all"
     term = request.args.get("term") or ""
