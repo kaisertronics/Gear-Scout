@@ -126,6 +126,35 @@ def is_cable_term(term: str) -> bool:
     return bool(_CABLE_TERM.search(term))
 
 
+# Gear that merely comes with a cable ("Shure PGA48 Microphone with XLR
+# Cable", "Mackie 1402 Mixer + (14) XLR Cables", "Shure 55S … w XLR cable"):
+# the mic or mixer is for sale, not cables. Decided by what comes before the
+# first "with" / "+" / "," — a unit there ("Microphone") and nothing cable-ish
+# ("XLR Mic & Instrument Cable", "Neutrik … Mic Female Panel Connectors",
+# "Lot of XLR Microphone cables" stay cables).
+_COMES_WITH = re.compile(r"\bw/|\bw\s|\bwith\b|\bincl(?:udes?|uded|uding|\.)?\b|\bplus\b|\band\b|\+|&|,|\s[-–]\s", re.I)
+_STRONG_WITH = re.compile(r"^(?:w/|w\s|with|incl)", re.I)
+_UNIT_WORD = re.compile(
+    r"\b(?:microphones?|mics?|mixers?|recorders?|interfaces?|pre-?amps?|compressors?|consoles?|channel strips?|"
+    r"speakers?|monitors?|headphones?|amplifiers?|amps?|synth(?:esizer)?s?|keyboards?|turntables?|modules?|"
+    r"headsets?|switchers?)\b"
+    r"(?!\s*(?:cables?|cords?|leads?|snakes?|splitters?|adapters?|connectors?))", re.I)
+_CABLEISH = re.compile(r"\b(?:cables?|cabling|cords?|leads?|snakes?|looms?|connectors?|plugs?|jacks?|panels?|"
+                       r"adapters?|interconnects?|pins?|female|male|lot|pack|set|canare|mogami|gotham|belden|"
+                       r"neutrik|switchcraft|rean|hosa|pro-?co|monster|seismic|patch ?bays?|patchbays?|wall ?plates?|"
+                       r"plates?|multicores?|breakouts?)\b", re.I)
+
+
+def is_gear_with_cable(title: str) -> bool:
+    m = _COMES_WITH.search(title)
+    if not m:
+        return False
+    head = title[:m.start()]
+    if not head.strip() or _CABLEISH.search(head):
+        return False
+    return bool(_UNIT_WORD.search(head) or _STRONG_WITH.match(m.group(0)))
+
+
 def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] = None) -> list[str]:
     """Wanted terms a listing title matches (empty = not wanted). Parts,
     accessories, and pedal/plugin versions (unless the term asks) never
@@ -145,6 +174,8 @@ def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] 
     for term, _, term_form, specific in hits:
         cable = is_cable_term(term)
         if accessory and not cable:
+            continue
+        if cable and not _UNIT_WORD.search(term) and is_gear_with_cable(title):
             continue
         if form in ("pedal", "plugin") and form != term_form:
             continue

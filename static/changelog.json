@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-10-18",
+    "title": "Nightly: cleaner Feed, and your emails need a look",
+    "items": [
+      "Two forestry tillers ($42,500 and $85,419, model “SSL-175”) were showing on your Feed under “ssl”. Forestry and tiller ads are now filtered out.",
+      "Your “XLR cable” and snake terms no longer bring up microphones, mixers and recorders that just come “with XLR cable” (Shure SM58s, a Zoom H4n, a Mackie mixer bundle…). Real cables, snakes, patchbays, wall plates and connector lots still show.",
+      "Checked the top 40 Feed ads by hand: every one I could open was still for sale, and new ads reach you fast (half within 20 minutes of being posted).",
+      "Please look: Gear Scout's emails (daily digest and email alerts) haven't gone out since Oct 15. Gmail closes the connection when Gear Scout tries to send. Phone alerts still work. Check that Gmail hasn't flagged the account, or make a new app password and put it in Settings. The Health page now shows whether emails are going out.",
+      "Facebook has paused Marketplace search on your account again (until about 4:30 pm today). Your groups are still searched in the meantime."
+    ]
+  },
+  {
+    "date": "2026-10-18",
     "title": "Code review: about 80 missing Wanted ads are back",
     "items": [
       "Since Oct 7, a check meant to keep junk out of broad terms was also hiding real gear: “SSL Big Six”, “SSL Fusion”, “SSL AWS 948”, Peluso, Audioscape, Stam Audio, BeesNeez, Sebatron, Warm Audio WA-19 and Golden Age GA-47 listings never reached your Feed, alerts or Price Board. About 80 of them are back; pianos, comics and paintings that share those names stay out.",

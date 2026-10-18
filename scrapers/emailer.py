@@ -416,13 +416,17 @@ def send_html_email(html: str, subject_line: str, cfg: dict) -> bool:
     msg["To"] = cfg["to"]
     msg.attach(MIMEText(html, "html"))
 
+    step = "connecting"
     try:
-        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"]) as server:
+        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"], timeout=60) as server:
             server.ehlo()
             server.starttls()
+            step = "signing in"
             server.login(cfg["from"], cfg["password"])
+            step = "sending"
             server.sendmail(cfg["from"], [cfg["to"]], msg.as_string())
         logger.info("Email sent: %s", msg["Subject"])
+        _record_status(True, subject_line)
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error(
@@ -430,10 +434,35 @@ def send_html_email(html: str, subject_line: str, cfg: dict) -> bool:
             "Make sure you're using an App Password, not your regular password. "
             "Get one at: https://myaccount.google.com/apppasswords"
         )
+        _record_status(False, subject_line, "Gmail refused the sign-in (app password)")
         return False
     except smtplib.SMTPException as e:
-        logger.error("SMTP error: %s", e)
+        logger.error("SMTP error while %s: %s", step, e)
+        _record_status(False, subject_line, f"Gmail closed the connection while {step}")
         return False
     except Exception as e:
-        logger.error("Failed to send email: %s", e)
+        logger.error("Failed to send email while %s: %s", step, e)
+        _record_status(False, subject_line, f"couldn't reach Gmail while {step}")
         return False
+
+
+EMAIL_STATUS = "/data/email_status.json"
+
+
+def _record_status(ok: bool, subject: str, why: str = "") -> None:
+    """Last sent / last failed email, for the Health page."""
+    import json
+    from pathlib import Path
+    try:
+        p = Path(EMAIL_STATUS)
+        st = json.loads(p.read_text()) if p.exists() else {}
+        now = datetime.now(timezone.utc).isoformat()
+        if ok:
+            st.update(last_ok=now, last_ok_subject=subject, failing_since=None)
+        else:
+            st.update(last_fail=now, last_fail_subject=subject, last_fail_why=why)
+            st.setdefault("failing_since", None)
+            st["failing_since"] = st["failing_since"] or now
+        p.write_text(json.dumps(st))
+    except Exception:
+        logger.debug("Couldn't record email status", exc_info=True)

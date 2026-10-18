@@ -2166,8 +2166,17 @@ def health():
         refresh = {"ago": _ago(refresh["finished"]), "new": refresh.get("new_count", 0)}
     except Exception:
         refresh = None
+    email = None
+    try:
+        es = json.loads(Path("/data/email_status.json").read_text())
+        email = {"ok_ago": _ago(es["last_ok"]) if es.get("last_ok") else None,
+                 "failing_ago": _ago(es["failing_since"]) if es.get("failing_since") else None,
+                 "why": es.get("last_fail_why") or ""}
+    except Exception:
+        pass
     return render_template("health.html", sites=sites, term_rows=term_rows, lag=lag, checks=checks,
-                           sweep=sweep, refresh=refresh, fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
+                           sweep=sweep, refresh=refresh, email=email,
+                           fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
 
 
 @app.route("/dashboard")
