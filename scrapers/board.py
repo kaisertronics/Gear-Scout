@@ -217,11 +217,16 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         conn.executemany("INSERT OR REPLACE INTO board_history VALUES (?, ?, ?)",
                          [(r["term"], today.isoformat(), r["cheapest"]["unit"]) for r in board if r.get("cheapest")])
         conn.commit()
+    built = datetime.now(timezone.utc).isoformat()
     if only is not None:
-        merged = {r["term"]: r for r in load().get("rows") or []}
+        prev = load()
+        merged = {r["term"]: r for r in prev.get("rows") or []}
         merged.update({r["term"]: r for r in board})
         board = [merged[t] for t in wanted if t in merged]
-    BOARD_PATH.write_text(json.dumps({"built": datetime.now(timezone.utc).isoformat(), "rows": board}))
+        # A few terms redone isn't the hourly full rebuild: keep its time, or
+        # frequent partial updates keep putting the full one off.
+        built = prev.get("built") or built
+    BOARD_PATH.write_text(json.dumps({"built": built, "rows": board}))
     logger.info("Price Board: %d rows", len(board))
     return board
 

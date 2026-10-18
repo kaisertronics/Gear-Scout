@@ -128,7 +128,7 @@ def split_qty(item: str) -> tuple[str, int]:
     m = _QTY.search(item or "")
     if not m:
         # "Hedd type 20's", "mixcubes", "NS10s", "mics" = a pair of them.
-        if re.search(r"\d['’]s\b", item or "") or any(
+        if re.search(r"\d['’]s\b|\b[a-z]+\d+s\b", item or "", re.I) or any(
                 (re.fullmatch(r"[a-z]{3,}[^su'’]s", w) or w == "mics") and w not in _NOT_PLURAL
                 for w in re.findall(r"[a-z'’]+", (item or "").lower())):
             return item.strip(), 2
@@ -142,6 +142,7 @@ def _query(name: str) -> str:
     """Shorthand → a search: "Hedd type 20's" → "hedd type 20",
     "la-2a audioscape" → "audioscape la-2a", "distressors" → "distressor"."""
     q = re.sub(r"(?<=\w)['’]s\b", "", name)
+    q = re.sub(r"(?i)\b([a-z]+\d+)s\b", r"\1", q)  # "NS10s" → "NS10"
     q = re.sub(r"[^\w\s\-.]", " ", q)
     q = re.sub(r"\b([a-z]{5,}[^s\W])s\b", r"\1", q, flags=re.I)
     q = re.sub(r"\s+", " ", q).strip()

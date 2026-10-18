@@ -2018,6 +2018,9 @@ def feed():
         view = [l for l in view if l.get("is_steal")]
     if within:
         view = [l for l in view if l.get("distance") is None or l["distance"] <= within]
+    # The pinned cheapest still have to pass the Deals / Steals / distance filters.
+    in_view = {id(l) for l in view}
+    pinned = [l for l in pinned if id(l) in in_view]
     for l in view:
         l["is_new"] = bool(since and (l.get("first_seen") or "") > since)
     # "New" = new to you AND recently posted; an old ad Gear Scout only just

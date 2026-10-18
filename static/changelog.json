@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-10-18",
+    "title": "Code review: about 80 missing Wanted ads are back",
+    "items": [
+      "Since Oct 7, a check meant to keep junk out of broad terms was also hiding real gear: “SSL Big Six”, “SSL Fusion”, “SSL AWS 948”, Peluso, Audioscape, Stam Audio, BeesNeez, Sebatron, Warm Audio WA-19 and Golden Age GA-47 listings never reached your Feed, alerts or Price Board. About 80 of them are back; pianos, comics and paintings that share those names stay out.",
+      "Picking a term on the Feed and then Deals or Steals now shows only deals or steals. Before, every model's cheapest ad was pinned on top whether it was a deal or not (for “ssl” + Steals, about 48 ads instead of 1).",
+      "The Price Board's full hourly refresh runs on time again. Quick fixes to a few rows (when a cheapest ad sells) kept pushing it back; overnight it went about 4 hours without one.",
+      "Saved page: names like “NS10s” or “C414s” count as a pair and are looked up as NS10 / C414."
+    ]
+  },
+  {
     "date": "2026-10-14",
     "title": "Saved: more pieces priced",
     "items": [

@@ -67,14 +67,28 @@ _GEAR_SITES = ("vintage king", "long & mcquade", "alto music", "rudy", "perfect 
                "kijiji — pro audio", "groupdiy", "gear page", "fb — pro audio", "fb — vintage pro audio")
 
 
-def _looks_like_gear(title: str, source: Optional[str]) -> bool:
-    from scrapers.enrich import canonical_brand
+# A model written with a space ("Peluso SR 14", "Warm Audio Wa 19 N",
+# "SSL AWS 948") — not "set of 6" / "no 5".
+_SPACED_MODEL = re.compile(r"\b(?!(?:of|no|nr|x|and|for|to|in|at|by|on|or|the|qty|lot|set|pk|pcs?|ch|vol|ep|lp)\b)"
+                           r"[a-z]{1,3}[\s-]\d{1,4}[a-z]?\b", re.I)
+
+
+def _looks_like_gear(title: str, source: Optional[str], term: Optional[str] = None) -> bool:
+    from scrapers.enrich import canonical_brand, is_generic_term
     if source and any(s in source.lower() for s in _GEAR_SITES):
         return True
     if _GEAR_WORD.search(title) or re.search(r"\bse electronics\b", title, re.I):
         return True
-    has_model = any(not _NOT_MODEL.match(m.group(0)) for m in _MODEL_CODE.finditer(title))
-    return bool(has_model and canonical_brand(title))
+    has_model = any(not _NOT_MODEL.match(m.group(0)) for m in _MODEL_CODE.finditer(title)) \
+        or bool(_SPACED_MODEL.search(title))
+    if has_model and canonical_brand(title):
+        return True
+    # The ad leads with the one-word maker you asked for ("SSL Big Six",
+    # "2 SSL Sixes", "Audioscape EQPA") — unlike "Bruce R. Stam oil painting".
+    # Not phrases ("Golden age" pianos and comics) or kinds of gear ("DIY").
+    if term and re.fullmatch(r"[A-Za-z]+", term.strip()) and not is_generic_term(term):
+        return bool(re.match(r"\W*(?:\d+\s*x?\s+)?" + re.escape(term.strip().lower()) + r"\b", title.lower()))
+    return False
 
 
 def _needs_gear_check(term: str, specific: bool) -> bool:
@@ -136,7 +150,7 @@ def match(title: Optional[str], price: Optional[str], ms, source: Optional[str] 
             continue
         if not specific and value < (20 if cable else BROAD_MIN_PRICE):
             continue
-        if _needs_gear_check(term, specific) and not _looks_like_gear(title, source):
+        if _needs_gear_check(term, specific) and not _looks_like_gear(title, source, term):
             continue
         out.append(term)
     return out
