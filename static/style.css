@@ -1023,3 +1023,27 @@ button:not([class]), input[type=submit]:not([class]) {
 }
 button:not([class]):hover, input[type=submit]:not([class]):hover { border-color: var(--orange); box-shadow: inset 0 -2px 0 var(--orange); }
 input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+
+/* Search bar: black text on a light field. */
+.topbar-search input { background: #FFFDF8; color: #000; border-color: #FFFDF8; }
+.topbar-search input::placeholder { color: #6B6457; }
+.topbar-search input:focus { background: #fff; color: #000; }
+
+/* Front-page inbox */
+.inbox-item { position: relative; display: flex; flex-direction: column; }
+.inbox-item .listing-card { flex: 1; }
+.inbox-note { font-size: 12px; font-weight: 700; color: var(--orange-ink); margin: 0 0 4px 2px; }
+.inbox-done { margin-top: 6px; width: 100%; font: inherit; font-size: 14px; font-weight: 700; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; background: var(--charcoal); color: var(--cream); border: none; }
+.inbox-done:hover { box-shadow: inset 0 -3px 0 var(--orange); }
+.inbox-section h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.inbox-clear { margin-left: auto; font-family: 'GS Plex', sans-serif; font-style: normal; }
+.scrape-now-row .btn { text-decoration: none; }
+
+/* Telex List: each term's listings start collapsed. */
+.telex-expand-all { display: flex; gap: 8px; margin: 0 0 14px; }
+.telex-term-body > summary { list-style: none; display: inline-block; margin: 2px 0 10px; }
+.telex-term-body > summary::-webkit-details-marker { display: none; }
+.telex-term-body .when-open { display: none; }
+.telex-term-body[open] .when-open { display: inline; }
+.telex-term-body[open] .when-closed { display: none; }

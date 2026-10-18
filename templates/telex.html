@@ -70,6 +70,10 @@
   </section>
   {% endif %}
 
+  {% if view %}<div class="telex-expand-all">
+    <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('details.telex-term-body').forEach(d => d.open = true)">▾ Expand all terms</button>
+    <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('details.telex-term-body').forEach(d => d.open = false)">▸ Collapse all</button>
+  </div>{% endif %}
   {% for v in view %}{% set term, items, unpriced = v.term, v.all_items, v.unpriced %}
   <section class="panel" id="t-{{ loop.index }}">
     <h2>{{ term }} <span class="muted">— {{ items|length }} ·
@@ -83,6 +87,13 @@
     <p class="search-yourself muted">Search it yourself:
       {% for label, url in search_links(term) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
     {% set fresh, old = v.fresh, v.old %}
+    {% if items or unpriced %}
+    <details class="telex-term-body">
+      <summary class="btn btn-sm telex-expand">
+        <span class="when-closed">▸ Show {{ items|length + (unpriced|length if unpriced else 0) }} listing{{ '' if items|length + (unpriced|length if unpriced else 0) == 1 else 's' }}</span>
+        <span class="when-open">▾ Hide listings</span>
+      </summary>
+    {% endif %}
     {% if items %}
       {% if fresh %}
       <div class="listing-grid">
@@ -110,6 +121,7 @@
         <div class="listing-grid"></div>
       </details>
     {% endif %}
+    {% if items or unpriced %}</details>{% endif %}
   </section>
   {% endfor %}
 

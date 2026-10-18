@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
-{% block title %}Gear Scout — Feed{% endblock %}
+{% block title %}Gear Scout — Inbox{% endblock %}
 {% block content %}
 
-  <section class="panel">
-    <h2>📬 Feed <span class="muted">— {{ total }} for sale on your Wanted list</span></h2>
+  <section class="panel inbox-head">
+    <h2>📬 Your inbox <span class="muted">— {{ waiting }} thing{{ '' if waiting == 1 else 's' }} to look at</span></h2>
     <p class="muted">
-      Everything still for sale that matches a term on your <a href="{{ url_for('telex') }}">Telex List</a> —
-      at any price, newest post first. Deals are marked, not filtered.
+      Only what needs your attention from your <a href="{{ url_for('telex') }}">Telex List</a>: auctions ending,
+      steals, price drops, changes on your favorites, and new ads since you last looked.
+      Tap <b>✓ Done</b> when you've seen one and it leaves the inbox (the ad stays on the Telex List).
       {% if sweep %}Last searched {{ sweep.ago }}.{% endif %}
       <a href="{{ url_for('health') }}">Is everything being searched?</a>
     </p>
@@ -16,78 +17,68 @@
         <input type="hidden" name="next" value="{{ request.full_path }}">
         <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
       </form>
-      <span class="muted">Re-reads every site, then searches each of your terms on Reverb, eBay, Craigslist and the
-        other quick sites (about 5–8 minutes). Facebook is covered by the all-day rotation.</span>
+      <a class="btn" href="{{ url_for('telex') }}">📋 Everything on your Telex List →</a>
+      <a class="btn" href="{{ url_for('feed', all=1) }}" title="All {{ total }} ads for sale, newest first">All {{ total }} ads →</a>
     </div>
     <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
-    <div class="feed-filters">
-      {% set base = {'term': term} if term else {} %}
-      <a href="{{ url_for('feed', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'all' else '' }}">All</a>
-      <a href="{{ url_for('feed', show='deals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'deals' else '' }}">🔥 Deals (10%+ under)</a>
-      <a href="{{ url_for('feed', show='steals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'steals' else '' }}">💥 Steals ({{ steal_pct }}%+)</a>
-      {% set keep = dict(base, show=show) if show != 'all' else base %}
-      <a href="{{ url_for('feed', **keep) }}" class="btn btn-sm{{ ' btn-primary' if sort == 'new' else '' }}">Newest first</a>
-      <a href="{{ url_for('feed', sort='cheap', **keep) }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">💲 Cheapest first (any age)</a>
+    {% set jump = sections|selectattr('rows')|list %}
+    {% if jump %}<div class="feed-filters">{% for s in jump %}<a class="btn btn-sm" href="#inbox-{{ s.id }}">{{ s.title }} <span class="muted">{{ s.rows|length }}</span></a>{% endfor %}</div>{% endif %}
+  </section>
+
+  {% for s in sections if s.rows %}
+  <section class="panel inbox-section" id="inbox-{{ s.id }}">
+    <h2>{{ s.title }} <span class="muted">— <span class="inbox-count">{{ s.rows|length }}</span> · {{ s.note }}</span>
+      <button type="button" class="btn btn-sm inbox-clear" title="Mark every card in this section as done">✓ All done</button></h2>
+    <div class="listing-grid">
+      {% for l, key in s.rows[:60] %}
+      <div class="inbox-item" data-key="{{ key }}">
+        {% if l.inbox_note %}<div class="inbox-note">{{ l.inbox_note }}</div>{% endif %}
+        {{ listing_card(l) }}
+        <button type="button" class="inbox-done">✓ Done</button>
+      </div>
+      {% endfor %}
     </div>
-    <details class="feed-terms"{{ ' open' if term else '' }}>
-      <summary>{% if term %}Showing only “{{ term }}” — <a href="{{ url_for('feed', show=show if show != 'all' else None) }}">show all terms</a>{% else %}Filter by term{% endif %}</summary>
-      <div class="feed-filters">
-        {% for t in terms %}
-          <a href="{{ url_for('feed', term=t, show=show if show != 'all' else None, sort=sort if sort == 'cheap' else None) }}"
-             class="btn btn-sm{{ ' btn-primary' if t == term else '' }}{{ ' feed-term-empty' if not counts[t] else '' }}">{{ t }} <span class="muted">{{ counts[t] }}</span></a>
-        {% endfor %}
-      </div>
-    </details>
+    {% if s.rows|length > 60 %}<p class="muted">…and {{ s.rows|length - 60 }} more. Mark some done to see the rest.</p>{% endif %}
   </section>
-
+  {% else %}
   <section class="panel">
-    <h2>🆕 New since you last looked <span class="muted">— {{ new|length }}{% if since_label %} · last visit {{ since_label }}{% endif %}</span></h2>
-    {% if new %}
-      <div class="listing-grid">
-        {% for l in new[:60] %}{{ listing_card(l) }}{% endfor %}
-      </div>
-      {% if new|length > 60 %}
-        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new[60:])) }}">
-          <summary>Show all {{ new|length }}</summary>
-          <div class="listing-grid"></div>
-        </details>
-      {% endif %}
-    {% elif first_visit %}
-      <p class="muted">This is your first visit — from now on, everything found after you leave shows up here.</p>
+    {% if first_visit %}
+      <p>This is your first visit. From now on, new ads, steals, price drops and auctions ending soon land here.</p>
     {% else %}
-      <p class="muted">Nothing new since your last visit. Gear Scout keeps searching every 30 minutes and pushes new matches to your phone.</p>
+      <h2>All caught up ✓</h2>
+      <p class="muted">Nothing new since your last visit{% if since_label %} ({{ since_label }}){% endif %}. Gear Scout keeps
+        searching every 30 minutes and pushes new matches to your phone.
+        Browse everything on the <a href="{{ url_for('telex') }}">Telex List</a>.</p>
     {% endif %}
   </section>
+  {% endfor %}
 
-  <section class="panel">
-    <h2>{% if sort == 'cheap' %}Cheapest first — every ad still for sale, any age{% else %}Posted in the last {{ recent_days }} days{% endif %} <span class="muted">— {{ recent|length }}</span></h2>
-    {% if recent %}
-      <div class="listing-grid">
-        {% for l in recent[:48] %}{{ listing_card(l) }}{% endfor %}
-      </div>
-      {% if recent|length > 48 %}
-        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(recent[48:])) }}">
-          <summary>Show all {{ recent|length }}</summary>
-          <div class="listing-grid"></div>
-        </details>
-      {% endif %}
-    {% else %}
-      <p class="muted">Nothing posted in the last {{ recent_days }} days{{ ' for this filter' if term or show != 'all' else '' }}.</p>
-    {% endif %}
-  </section>
-
-  {% if older %}
-  <section class="panel">
-    <h2>Older ads <span class="muted">— {{ older|length }} posted more than {{ recent_days }} days ago</span></h2>
-    <p class="muted">Still for sale. Ads that have sat a while are often open to an offer.</p>
-    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(older[:300])) }}">
-      <summary>Show {{ [older|length, 300]|min }}</summary>
-      <div class="listing-grid"></div>
-    </details>
-  </section>
-  {% endif %}
 <script>
   (function () {
+    function send(keys) {
+      return fetch("{{ url_for('inbox_done') }}", {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+        body: JSON.stringify({keys: keys})});
+    }
+    function drop(item) {
+      const sec = item.closest('.inbox-section');
+      item.remove();
+      if (!sec) return;
+      const left = sec.querySelectorAll('.inbox-item').length;
+      sec.querySelector('.inbox-count').textContent = left;
+      if (!left) sec.remove();
+    }
+    document.querySelectorAll('.inbox-done').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const item = b.closest('.inbox-item');
+        send([item.dataset.key]).then(function () { drop(item); });
+      });
+    });
+    document.querySelectorAll('.inbox-clear').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const items = Array.from(b.closest('.inbox-section').querySelectorAll('.inbox-item'));
+        send(items.map(function (i) { return i.dataset.key; })).then(function () { items.forEach(drop); });
+      });
+    });
     const banner = document.getElementById('scrape-status-banner');
     const btn = document.getElementById('scrape-now-btn');
     let sawRunning = false;
@@ -101,8 +92,7 @@
         gsProgress(banner, data.total ? what : 'Starting scrape…', data);
         setTimeout(poll, 1000);
       } else if (data.state === 'done' && sawRunning) {
-        const w = data.wanted_new || 0;
-        gsProgress(banner, `Done — ${w} new on your Wanted list (${data.new_count} new listings found in all). Reloading…`, null);
+        gsProgress(banner, `Done — ${data.wanted_new || 0} new on your Wanted list. Reloading…`, null);
         setTimeout(() => window.location.reload(), 2500);
       } else if (data.state === 'failed' && sawRunning) {
         btn.disabled = false;
