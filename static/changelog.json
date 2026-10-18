@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-10-18",
+    "title": "Gentler on Facebook, so Marketplace search stops getting paused",
+    "items": [
+      "Facebook pauses Marketplace search on an account that searches constantly. Gear Scout was running about 95–115 Facebook searches an hour, around the clock. It's now about 40 an hour in the daytime and none overnight.",
+      "Price Board trackers (api 550, audioscape) were searching every Facebook region every 30 minutes. They now include Facebook every 6 hours; the other sites are still every 30 minutes, and your Telex sweep covers Facebook in between. A check you start yourself always includes Facebook.",
+      "1–7 AM Pacific: no background Marketplace searching or feed reading. Groups, posts and anything you start yourself carry on. (Change or turn off with facebook_quiet_hours in config.yaml.)",
+      "One-term searches load one Facebook page at a time instead of two at once.",
+      "Your Telex terms are still searched on Facebook 2 at a time every 30 minutes in the daytime, so new Marketplace ads reach you as quickly as before."
+    ]
+  },
+  {
+    "date": "2026-10-18",
     "title": "New front page: your inbox",
     "items": [
       "The front page is now an inbox of only what needs your attention: auctions ending in the next 48 hours, steals, price cuts of 10%+ in the last 3 days, changes on gear you starred, and new ads since you last looked.",

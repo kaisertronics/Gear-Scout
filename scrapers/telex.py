@@ -231,6 +231,9 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
         sites = {s for s, m in (("fast", FAST_EVERY_MIN), ("ebay", EBAY_EVERY_MIN)) if due(term, s, m)}
         if sites:
             out.append(run(term, sites, "+".join(sorted(sites))))
+    from scrapers.fb_posts_background import marketplace_quiet_hours
+    if marketplace_quiet_hours(cfg):
+        fb_per_cycle = 0  # overnight: Facebook gets a rest (see marketplace_quiet_hours)
     for term in sorted(ts, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
         out.append(run(term, {"fb"}, "fb"))
     typos = list(dict.fromkeys(q for t in ts for q in misspellings(t)))

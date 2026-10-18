@@ -148,9 +148,11 @@ def run_refresh_cycle(cfg: dict):
         if s.get("enabled", True) and s.get("type") != "facebook_posts"
     ]
     sources, skipped = skip_on_light_runs(sources)
-    from scrapers.fb_posts_background import facebook_paused
+    from scrapers.fb_posts_background import facebook_paused, marketplace_quiet_hours
     if facebook_paused():  # Facebook asked the account to slow down
         sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
+    elif marketplace_quiet_hours(cfg):  # overnight: leave Marketplace alone
+        sources = [s for s in sources if s.get("type") != "facebook_marketplace_region"]
     if skipped:
         logger.info("Background refresh skipping (failing or never matching lately): %s", ", ".join(skipped))
     start = time.time()

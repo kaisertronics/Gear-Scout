@@ -12,6 +12,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
 
@@ -161,6 +162,31 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
     return sorted(out, key=lambda c: c["value"])
 
 
+TRACKER_FB_EVERY_HOURS = 6
+_TRACKER_FB = Path("/data/lowest_fb.json")
+
+
+def _fb_due(q: str) -> bool:
+    try:
+        last = json.loads(_TRACKER_FB.read_text()).get(q)
+        return not last or (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() \
+            >= TRACKER_FB_EVERY_HOURS * 3600
+    except Exception:
+        return True
+
+
+def _fb_mark(q: str) -> None:
+    try:
+        d = json.loads(_TRACKER_FB.read_text())
+    except Exception:
+        d = {}
+    d[q] = datetime.now(timezone.utc).isoformat()
+    try:
+        _TRACKER_FB.write_text(json.dumps(d))
+    except OSError:
+        pass
+
+
 def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     """Runs the search, updates the stored top 10 and returns
     {'top': [...], 'alert': candidate-or-None, 'previous_lowest': float|None}.
@@ -172,7 +198,14 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     from scrapers.store import all_priced_rows
 
     q = normalize(query)
-    results = run_live_search(q, cfg, on_progress=on_progress)
+    # Background checks every 30 minutes search Facebook only every 6 hours
+    # (Facebook throttles an account that searches Marketplace constantly;
+    # your Telex sweep and the regional feeds cover it in between). A check
+    # you start yourself (on_progress set) always includes Facebook.
+    skip_fb = on_progress is None and not _fb_due(q)
+    results = run_live_search(q, cfg, on_progress=on_progress, skip_facebook=skip_fb)
+    if not skip_fb:
+        _fb_mark(q)
     listings = [l for r in results for l in r.listings]
     # eBay by lowest price first (the regular eBay source reads the newest
     # listings, which can miss the cheapest). Needs the free eBay API keys.

@@ -98,6 +98,22 @@ def facebook_paused() -> bool:
 
 
 MARKETPLACE_SEARCH_PAUSE_HOURS = 48
+QUIET_HOURS = (1, 7)  # 1–7 AM Pacific: no background Marketplace searching
+
+
+def marketplace_quiet_hours(cfg: Optional[dict] = None) -> bool:
+    """True overnight, when Gear Scout leaves Facebook Marketplace alone in
+    the background. Searching one account around the clock is what gets its
+    Marketplace search throttled, and few ads are posted overnight anyway.
+    Groups/posts and anything you start yourself carry on. Set
+    facebook_quiet_hours: [start, end] (Pacific, 24h) or false in config.yaml."""
+    from zoneinfo import ZoneInfo
+    span = (cfg or {}).get("facebook_quiet_hours", QUIET_HOURS)
+    if not span:
+        return False
+    start, end = int(span[0]), int(span[1])
+    h = datetime.now(ZoneInfo("America/Los_Angeles")).hour
+    return start <= h < end if start < end else (h >= start or h < end)
 
 
 def marketplace_search_paused() -> bool:
