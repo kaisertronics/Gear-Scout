@@ -54,5 +54,6 @@ Last reviewed commit: 795fb94 (reviewed 2026-10-18; the review's own fix commit 
 ### Left for the owner (2026-10-18)
 - Steals threshold: steals.MIN_PCT = 50 (your Oct 11 choice). The review checklist still says 60% — tell me if 50 stands so the checklist can be updated.
 - Price Board "still for sale" check (board.verify_cheapest, every 30 min) opens every unconfirmed cheapest Facebook ad (~70 of the ~300 it watches) in the Facebook browser every ~3 h. That's extra Facebook load; it could be limited to each term's overall cheapest if you want it gentler.
+- Deployed 2026-10-18 ~06:40 as code-only overlay images built from d6428ea, which also includes the nightly fixes (8d22518) and the merged "inbox front page" branch (451a7a3). Those two weren't part of this review; the next run's diff from 795fb94 covers them. Rollback images: gear-scout-{scout,dashboard}:pre-review-1018.
 - Ran in parallel with the nightly accuracy task, which had its own uncommitted edits (cable terms, forestry filter, email status on Health). This review committed only its own changes.
 - Small, not changed: steals.MIN_REF comment still says "60% off"; Saved slides "PIECES OF GEAR" counts rows, not pieces; Saved running-total chart assumes the total stays positive.
