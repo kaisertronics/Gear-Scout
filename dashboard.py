@@ -1985,12 +1985,122 @@ def _build_feed(cfg, key) -> list[dict]:
     return out
 
 
+INBOX_DONE_FILE = Path("/data/inbox_done.json")
+INBOX_DROP_DAYS = 3      # a price drop stays in the inbox this long
+INBOX_DROP_PCT = 10      # ...and only cuts this big count
+INBOX_AUCTION_HOURS = 48  # auctions ending within this show up
+
+
+def _inbox_done() -> dict:
+    try:
+        return json.loads(INBOX_DONE_FILE.read_text())
+    except Exception:
+        return {}
+
+
+@app.route("/inbox/done", methods=["POST"])
+def inbox_done():
+    """✓ Done on a front-page card (or a whole section): it leaves the inbox
+    for good. The listing itself stays everywhere else."""
+    keys = request.form.getlist("key") or (request.get_json(silent=True) or {}).get("keys") or []
+    done = _inbox_done()
+    now = datetime.now(timezone.utc)
+    for k in keys:
+        if k:
+            done[str(k)[:600]] = now.isoformat()
+    # Forget entries older than 120 days so the file stays small.
+    cutoff = (now - timedelta(days=120)).isoformat()
+    done = {k: v for k, v in done.items() if v >= cutoff}
+    try:
+        INBOX_DONE_FILE.write_text(json.dumps(done))
+    except OSError:
+        pass
+    if request.is_json or request.headers.get("X-Requested-With"):
+        return jsonify(ok=True)
+    return redirect(url_for("feed"))
+
+
+def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
+    """The front page: only what needs your attention, most urgent first.
+    Each listing shows in one section; ✓ Done removes it from the inbox."""
+    done = _inbox_done()
+    now = datetime.now(timezone.utc)
+    age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
+    used, sections = set(), []
+
+    def add(key, title, note, rows, keyf):
+        out = []
+        for l in rows:
+            k = keyf(l)
+            if l.get("url") in used or k in done or l.get("sold") or l.get("hidden"):
+                continue
+            used.add(l.get("url"))
+            out.append((l, k))
+        sections.append({"id": key, "title": title, "note": note, "rows": out})
+
+    def ends(l):
+        m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", l.get("description") or "")
+        if not m:
+            return None
+        try:  # auction end times are written in Pacific time
+            from zoneinfo import ZoneInfo
+            return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+        except ValueError:
+            return None
+
+    soon = sorted((l for l in items if l.get("is_auction") and ends(l)
+                   and now < ends(l) <= now + timedelta(hours=INBOX_AUCTION_HOURS)), key=ends)
+    for l in soon:
+        l["inbox_note"] = "ends " + ends(l).strftime("%a %-I:%M %p").replace(":00 ", " ") + " PT"
+    add("auctions", "⏰ Auctions ending soon", f"Ending in the next {INBOX_AUCTION_HOURS} hours.", soon,
+        lambda l: f"auction:{l['url']}")
+    steals = sorted((l for l in items if l.get("is_steal")), key=lambda l: -(l.get("deal_pct") or 0))
+    add("steals", "💥 Steals", f"{FEED_STEAL_PCT}%+ under what this gear usually sells for.", steals,
+        lambda l: f"steal:{l['url']}")
+    drop_cut = (now - timedelta(days=INBOX_DROP_DAYS)).isoformat()
+    def cut(l):
+        from scrapers.enrich import parse_price
+        a, b = parse_price(l.get("previous_price")), parse_price(l.get("price"))
+        return round(100 * (a - b) / a) if a and b and b < a else 0
+
+    drops = sorted((l for l in items if l.get("previous_price") and (l.get("price_dropped_at") or "") >= drop_cut
+                    and cut(l) >= INBOX_DROP_PCT), key=lambda l: l.get("price_dropped_at") or "", reverse=True)
+    for l in drops:
+        l["inbox_note"] = f"{cut(l)}% cut · was {l['previous_price']}"
+    add("drops", "📉 Price drops", f"Cut {INBOX_DROP_PCT}%+ in the last {INBOX_DROP_DAYS} days.", drops,
+        lambda l: f"drop:{l['url']}:{l.get('price')}")  # a further cut shows again
+    favs = [l for l in items if l.get("favorite") and (l.get("pending")
+            or (l.get("previous_price") and (l.get("price_dropped_at") or "") >= drop_cut))]
+    for l in favs:
+        l["inbox_note"] = "sale pending" if l.get("pending") else f"price cut, was {l['previous_price']}"
+    add("favorites", "★ Your favorites", "Something changed on gear you starred.", favs,
+        lambda l: f"fav:{l['url']}:{l.get('price')}:{bool(l.get('pending'))}")
+    new = [l for l in items if since and (l.get("first_seen") or "") > since and age(l) <= FEED_RECENT_DAYS]
+    add("new", "🆕 New since you last looked", "Newest post first.", new, lambda l: f"new:{l['url']}")
+    return sections
+
+
 @app.route("/")
 def feed():
     from scrapers import wanted
     cfg = load_config_raw()
     terms = wanted.terms(cfg)
     items = _feed_items(cfg)
+    if not (request.args.get("term") or request.args.get("show") or request.args.get("sort") or request.args.get("all")):
+        # The front page: an inbox of what needs your attention. Every
+        # listing for a term lives on the Telex List (and ?all=1).
+        since = _feed_visit()
+        sections = _inbox(items, since)
+        sweep = None
+        try:
+            info = json.loads(Path("/data/last_sweep.json").read_text())
+            sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+        except Exception:
+            pass
+        _verify_feed([l["url"] for s in sections for l, _ in s["rows"]][:80])
+        return render_template("feed.html", sections=sections, total=len(items), terms=terms,
+                               since_label=_ago(since), first_visit=since is None, sweep=sweep,
+                               waiting=sum(len(s["rows"]) for s in sections))
     since = _feed_visit()
     show = request.args.get("show") or "all"
     term = request.args.get("term") or ""
@@ -2049,7 +2159,7 @@ def feed():
     except Exception:
         pass
     _verify_feed([l["url"] for l in (new + recent)[:80]])
-    return render_template("feed.html", new=new, recent=recent, older=older, total=len(items),
+    return render_template("feed_all.html", new=new, recent=recent, older=older, total=len(items),
                            terms=terms, counts=counts, term=term, show=show, since_label=_ago(since),
                            sweep=sweep, recent_days=FEED_RECENT_DAYS, steal_pct=FEED_STEAL_PCT, sort=sort,
                            first_visit=since is None)

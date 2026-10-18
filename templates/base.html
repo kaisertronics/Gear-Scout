@@ -23,7 +23,7 @@
         <button type="submit" class="topbar-search-btn" aria-label="Search">&rarr;</button>
       </form>
       <nav>
-        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' else '' }}">📬 Feed</a>
+        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' else '' }}">📬 Inbox</a>
         <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('health') }}" class="{{ 'active' if request.endpoint == 'health' else '' }}">Health</a>
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}" title="Everything Gear Scout has collected, not just your Wanted list">Browse all</a>

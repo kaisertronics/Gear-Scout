@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-10-18",
+    "title": "New front page: your inbox",
+    "items": [
+      "The front page is now an inbox of only what needs your attention: auctions ending in the next 48 hours, steals, price cuts of 10%+ in the last 3 days, changes on gear you starred, and new ads since you last looked.",
+      "Tap “✓ Done” on a card (or “✓ All done” on a section) and it leaves the inbox for good. The ad itself stays on the Telex List.",
+      "Every ad for a term still lives on the Telex List. “All N ads” on the inbox shows the old full list.",
+      "Telex List: each term's listings start collapsed. Tap “Show N listings”, or “Expand all terms” at the top.",
+      "The search bar now has black text on a light field so it's easy to read."
+    ]
+  },
+  {
+    "date": "2026-10-18",
     "title": "Nightly: cleaner Feed, and your emails need a look",
     "items": [
       "Two forestry tillers ($42,500 and $85,419, model “SSL-175”) were showing on your Feed under “ssl”. Forestry and tiller ads are now filtered out.",
