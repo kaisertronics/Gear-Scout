@@ -5,7 +5,8 @@
     "items": [
       "Sweetwater's used gear (Gear Exchange) blocks automated browsers with a “press & hold” human check, so Gear Scout can't search it on its own.",
       "The new Sweetwater page walks your Telex terms one at a time and opens each search in a Sweetwater tab in your own browser: automatically every 15–90 seconds, or with Next and Back.",
-      "Mark each term “Found something” (with an optional note like a price) or “Nothing”. Gear Scout remembers, and starts the next pass with the terms you checked longest ago."
+      "Mark each term “Found something” (with an optional note like a price) or “Nothing”. Gear Scout remembers, and starts the next pass with the terms you checked longest ago.",
+      "Sweetwater page: a one-time setup checklist for automatic alerts. 25 saved searches (Sweetwater's limit) that cover 56 of your 84 Telex terms. Each has a one-tap link; save it on Sweetwater, turn on the bell, tick it off here."
     ]
   },
   {

@@ -1380,6 +1380,57 @@ def _sw_state() -> dict:
         return {}
 
 
+# Sweetwater allows 25 saved searches with email alerts. These 25 cover 57 of
+# the Telex terms (one brand search catches several terms); "covers" is
+# matched against your current Telex List so the page stays accurate.
+SWEETWATER_SAVED = [
+    ("Golden Age", ["Golden age", "Ga-47", "Golden age premier", "Golden Age Project R1", "Golden Age Project R1 ST", "golden age r1 tube"]),
+    ("Neutrik", ["Neutrik NC3FXX", "Neutrik NC3MXX", "Neutrik NC3FD", "Neutrik NC3MD", "Neutrik NA3FDM", "Neutrik NP3X", "Neutrik NE8FDP", "Neutrik NYS-SPP-L1"]),
+    ("Audioscape", ["audioscape", "Audioscape SSL", "audioscape opto", "audioscape as-2a"]),
+    ("Hosa", ["Hosa DTP-805", "Hosa CSS-805", "Hosa STX-807F", "Hosa XLR-807"]),
+    ("snake", ["DB25 snake", "TRS snake", "XLR snake", "XLR to TRS snake"]),
+    ("United Studio Technologies", ["united audio mic", "United twin 48", "united fet 47"]),
+    ("Stam", ["stam", "stam sa-47"]),
+    ("Peluso", ["peluso", "peluso p24"]),
+    ("CAPI", ["CAPI BT-50", "CAPI VM28"]),
+    ("Voodoo VR2", ["se voodoo vr2", "Vr2 voodoo pair"]),
+    ("WA-19", ["Wa-19", "warm wa-19"]),
+    ("BeesNeez", ["beesneez", "beezneez"]),
+    ("Flickinger", ["flickinger", "flick 500"]),
+    ("ribbon microphone", ["Ribbon mic", "stereo ribbon mic"]),
+    ("Distressor", ["Distressor"]),
+    ("Avalon 737", ["Avalon 737"]),
+    ("HEDD Type 20", ["HEDD 20 MKII"]),
+    ("Neumann KH 310", ["KH 310 II"]),
+    ("Telefunken TF17", ["telefunken tf17"]),
+    ("Tonelux", ["tonelux jc37"]),
+    ("AKG D12", ["d12 akg"]),
+    ("Vanguard V13", ["Vanguard V13"]),
+    ("Seventh Circle Audio", ["seventh circle audio"]),
+    ("Sebatron", ["sebatron"]),
+    ("Cloudlifter", ["Cloudlifter cl-4"]),
+]
+
+
+@app.route("/sweetwater/setup", methods=["POST"])
+def sweetwater_setup():
+    """Ticks a saved search off the one-time Sweetwater alert setup list."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("search") or "")[:100]
+    if name:
+        st = _sw_state()
+        done = st.setdefault("setup", {})
+        if data.get("done"):
+            done[name] = datetime.now(timezone.utc).isoformat()
+        else:
+            done.pop(name, None)
+        try:
+            SWEETWATER_FILE.write_text(json.dumps(st))
+        except OSError:
+            pass
+    return jsonify(ok=True)
+
+
 @app.route("/sweetwater")
 def sweetwater():
     from urllib.parse import quote_plus
@@ -1394,8 +1445,16 @@ def sweetwater():
     # Least recently checked first, so each pass picks up where you left off.
     rows.sort(key=lambda r: r["checked"] or "")
     checked = sum(1 for r in rows if r["checked"])
+    have = {t.lower(): t for t in (r["term"] for r in rows)}
+    done = st.get("setup") or {}
+    saved = [{"search": s, "url": SWEETWATER_URL.format(q=quote_plus(s)), "done": s in done,
+              "covers": [have[c.lower()] for c in cov if c.lower() in have]} for s, cov in SWEETWATER_SAVED]
+    covered = {c.lower() for s in saved for c in s["covers"]}
+    uncovered = [r["term"] for r in rows if r["term"].lower() not in covered]
     return render_template("sweetwater.html", rows=rows, checked=checked,
-                           found=sum(1 for r in rows if r["result"] == "found"))
+                           found=sum(1 for r in rows if r["result"] == "found"),
+                           saved=saved, n_covered=len(covered), uncovered=sorted(uncovered, key=str.lower),
+                           n_setup=sum(1 for s in saved if s["done"]))
 
 
 @app.route("/sweetwater/mark", methods=["POST"])

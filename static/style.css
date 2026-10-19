@@ -1073,3 +1073,6 @@ input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 
 .sw-mark input[type=text] { flex: 1 1 220px; min-width: 0; padding: 7px 10px; }
 .sw-table tr.sw-current td { background: #FCEBD6; }
 .sw-found { color: #1f7a4a; font-weight: 700; }
+.sw-setup tr.sw-done td { opacity: .55; }
+.sw-setup td:nth-child(3) { white-space: normal; min-width: 260px; }
+.sw-setup input[type=checkbox] { width: 20px; height: 20px; }

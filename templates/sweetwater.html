@@ -1,6 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Gear Scout — Sweetwater sweep{% endblock %}
 {% block content %}
+<section class="panel" id="sw-setup">
+  <h2>⚡ Automatic Sweetwater alerts: one-time setup <span class="muted">— {{ n_setup }} of {{ saved|length }} done ·
+    covers {{ n_covered }} of {{ rows|length }} Telex terms</span></h2>
+  <p class="muted">Sweetwater emails you when a new used listing matches a saved search (up to 25 per account).
+    Sign in at sweetwater.com first, then for each row: tap <b>Open ↗</b>, tap <b>Save this Search</b> on Sweetwater,
+    turn on its <b>🔔 bell</b>, and tick it here. Once Gear Scout reads those emails, new Sweetwater listings show
+    up on their own.</p>
+  <div class="table-scroll">
+  <table class="an-table sw-setup">
+    <thead><tr><th></th><th>Saved search</th><th>Covers your Telex terms</th><th></th></tr></thead>
+    <tbody>
+    {% for s in saved %}
+      <tr class="{{ 'sw-done' if s.done }}">
+        <td><input type="checkbox" class="sw-setup-box" data-search="{{ s.search }}" aria-label="{{ s.search }} saved"{{ ' checked' if s.done }}></td>
+        <td><b>{{ s.search }}</b></td>
+        <td><small>{{ s.covers|join(', ') if s.covers else '—' }}</small></td>
+        <td><a href="{{ s.url }}" target="gs-sweetwater" rel="noopener">Open ↗</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if uncovered %}<p class="muted"><small><b>Not covered by the 25</b> ({{ uncovered|length }}, mostly gear that rarely
+    shows up on Sweetwater, broad phrases or plain cables). Check these with the sweep below:
+    {{ uncovered|join(', ') }}.</small></p>{% endif %}
+</section>
+
 <section class="panel">
   <h2>🎸 Sweetwater used-gear sweep <span class="muted">— {{ rows|length }} Telex terms · {{ checked }} checked · {{ found }} with finds</span></h2>
   <p class="muted">Sweetwater's used gear (Gear Exchange) blocks automated browsers with a “press &amp; hold” human check,
@@ -49,6 +76,13 @@
 </section>
 
 <script>
+document.querySelectorAll('.sw-setup-box').forEach(function (b) {
+  b.addEventListener('change', function () {
+    b.closest('tr').classList.toggle('sw-done', b.checked);
+    fetch("{{ url_for('sweetwater_setup') }}", {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({search: b.dataset.search, done: b.checked})});
+  });
+});
 (function () {
   const rows = Array.from(document.querySelectorAll('.sw-table tbody tr'));
   if (!rows.length) return;
