@@ -417,6 +417,30 @@ def require_login():
     return None
 
 
+def _ensure_login_password():
+    """Gear Scout's sign-in used to share the email app password, so making
+    a new app password for email changed your sign-in (and the sign-in page,
+    reachable through the phone link, guarded your Gmail credential). Now
+    the sign-in has its own password, kept only as a hash: the first time,
+    it's set to the password you sign in with today, so nothing changes."""
+    try:
+        cfg = load_config_raw()
+        if (cfg.get("login") or {}).get("password_hash"):
+            return
+        current = str((cfg.get("email") or {}).get("password") or "")
+        if not current:
+            return
+        from werkzeug.security import generate_password_hash
+        cfg["login"] = {"password_hash": generate_password_hash(current)}
+        save_config_raw(cfg)
+        logging.info("Gear Scout sign-in now has its own password (kept as a hash)")
+    except Exception:
+        logging.exception("Couldn't set up the separate sign-in password")
+
+
+_ensure_login_password()
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -427,8 +451,13 @@ def login():
         real_password = str(email_cfg.get("password", ""))
         given_email = request.form.get("email", "")
         given_password = request.form.get("password", "")
-        email_ok = bool(real_email) and secrets.compare_digest(given_email, real_email)
-        password_ok = bool(real_password) and secrets.compare_digest(given_password, real_password)
+        email_ok = bool(real_email) and secrets.compare_digest(given_email.strip().lower(), real_email.strip().lower())
+        login_hash = (cfg.get("login") or {}).get("password_hash")
+        if login_hash:
+            from werkzeug.security import check_password_hash
+            password_ok = check_password_hash(login_hash, given_password)
+        else:  # before Gear Scout had its own sign-in password
+            password_ok = bool(real_password) and secrets.compare_digest(given_password, real_password)
         if email_ok and password_ok:
             session["authenticated"] = True
             return redirect(request.args.get("next") or url_for("feed"))
@@ -3108,9 +3137,22 @@ def settings_email():
     # Only overwrite the saved app password if a new one was actually typed
     # — the field ships blank (not pre-filled) so this never round-trips
     # the real secret back into the page source.
-    new_password = request.form.get("password", "").strip()
+    # Google shows app passwords as "abcd efgh ijkl mnop": the spaces go.
+    new_password = re.sub(r"\s+", "", request.form.get("password", ""))
+    pw_warning = False
     if new_password:
         email_cfg["password"] = new_password
+        gmail = "gmail" in (email_cfg.get("smtp_host") or "smtp.gmail.com").lower()
+        pw_warning = gmail and not re.fullmatch(r"[a-zA-Z]{16}", new_password)
+    # Gear Scout's own sign-in password (separate from the email one).
+    new_login = request.form.get("login_password", "")
+    login_short = False
+    if new_login:
+        if len(new_login) >= 8:
+            from werkzeug.security import generate_password_hash
+            cfg["login"] = {**(cfg.get("login") or {}), "password_hash": generate_password_hash(new_login)}
+        else:
+            login_short = True
 
     try:
         email_cfg["max_listings_per_source"] = max(1, int(request.form.get("max_listings_per_source", "").strip()))
@@ -3129,7 +3171,7 @@ def settings_email():
         schedule_cfg["cron"] = cron
 
     save_config_raw(cfg)
-    return redirect(url_for("settings", saved="email"))
+    return redirect(url_for("settings", saved="email_pw_warn" if pw_warning else "login_short" if login_short else "email"))
 
 
 @app.route("/settings/keywords", methods=["POST"])

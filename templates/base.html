@@ -105,7 +105,9 @@
         try {
           const resp = await fetch(form.action, { method: 'POST', body: new FormData(form) });
           if (!resp.ok) throw new Error('bad status');
-          card.remove();
+          // On the inbox the card sits in a box with its ✓ Done button: take the whole box.
+          const box = card.closest('.inbox-item');
+          if (box && window.gsInboxDrop) window.gsInboxDrop(box); else card.remove();
         } catch (err) {
           card.style.opacity = '';
           form.submit();

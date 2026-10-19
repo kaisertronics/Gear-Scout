@@ -129,6 +129,7 @@
       sec.querySelector('.inbox-count').textContent = left;
       if (!left) sec.remove();
     }
+    window.gsInboxDrop = drop;  // the ✕ (hide) button on a card uses it too
     document.querySelectorAll('.inbox-done').forEach(function (b) {
       b.addEventListener('click', function () {
         const item = b.closest('.inbox-item');

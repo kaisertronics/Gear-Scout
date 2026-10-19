@@ -15,6 +15,11 @@
 
     {% if saved == 'email' %}
       <div class="settings-saved">✓ Email &amp; schedule settings saved.</div>
+    {% elif saved == 'email_pw_warn' %}
+      <div class="settings-warning">Saved, but that doesn't look like a Gmail app password (16 letters). Gmail won't accept your
+        regular Google password from Gear Scout. Make one at myaccount.google.com/apppasswords and paste it here.</div>
+    {% elif saved == 'login_short' %}
+      <div class="settings-warning">Email settings saved. The new sign-in password wasn't changed: it needs at least 8 characters.</div>
     {% elif saved == 'fbposts' %}
       <div class="settings-saved">✓ Facebook post search list saved — it runs with the next scheduled scrape.</div>
     {% elif saved == 'notifications' %}
@@ -59,8 +64,16 @@
           </label>
         </div>
         <div class="form-row">
-          <label class="grow">App password
+          <label class="grow">Gmail app password <span class="muted">— only for sending email. 16 letters from
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>
+            (needs 2-Step Verification on). Not your Google password.</span>
             <input type="password" name="password" placeholder="Leave blank to keep the current one" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="grow">Gear Scout sign-in password <span class="muted">— what you type to log in to Gear Scout
+            (with your email address). Separate from the app password; at least 8 characters.</span>
+            <input type="password" name="login_password" placeholder="Leave blank to keep the current one" autocomplete="new-password">
           </label>
         </div>
         <div class="form-row">
