@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-19",
+    "title": "New: 🎸 Sweetwater used-gear sweep",
+    "items": [
+      "Sweetwater's used gear (Gear Exchange) blocks automated browsers with a “press & hold” human check, so Gear Scout can't search it on its own.",
+      "The new Sweetwater page walks your Telex terms one at a time and opens each search in a Sweetwater tab in your own browser: automatically every 15–90 seconds, or with Next and Back.",
+      "Mark each term “Found something” (with an optional note like a price) or “Nothing”. Gear Scout remembers, and starts the next pass with the terms you checked longest ago."
+    ]
+  },
+  {
+    "date": "2026-10-19",
     "title": "Emails: the fix is yours to finish, plus a safer sign-in",
     "items": [
       "Why emails stopped: the saved email password isn't a Gmail app password (those are always 16 letters). Gmail refuses anything else from Gear Scout. Make one at myaccount.google.com/apppasswords (2-Step Verification needs to be on) and paste it in Settings → Email. Google shows it with spaces; Gear Scout removes them.",

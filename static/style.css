@@ -1066,3 +1066,10 @@ input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 
 .an-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .an-all > summary { list-style: none; display: inline-block; margin-bottom: 8px; }
 .an-all > summary::-webkit-details-marker { display: none; }
+
+/* Sweetwater sweep */
+.sw-controls, .sw-mark { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0; }
+.sw-auto { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.sw-mark input[type=text] { flex: 1 1 220px; min-width: 0; padding: 7px 10px; }
+.sw-table tr.sw-current td { background: #FCEBD6; }
+.sw-found { color: #1f7a4a; font-weight: 700; }

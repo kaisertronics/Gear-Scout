@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Sweetwater sweep{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>🎸 Sweetwater used-gear sweep <span class="muted">— {{ rows|length }} Telex terms · {{ checked }} checked · {{ found }} with finds</span></h2>
+  <p class="muted">Sweetwater's used gear (Gear Exchange) blocks automated browsers with a “press &amp; hold” human check,
+    so Gear Scout can't search it for you. This page does the next best thing: it opens each of your Telex terms on
+    Sweetwater's used gear in a <b>Sweetwater tab in your own browser</b>, one at a time, oldest-checked first. Mark each
+    one and Gear Scout remembers where you are. If Sweetwater asks you to press &amp; hold, do it once in that tab.</p>
+
+  <div class="sw-controls">
+    <button type="button" class="btn btn-primary" id="sw-start">▶ Open <span id="sw-cur-term"></span></button>
+    <button type="button" class="btn" id="sw-prev">◂ Back</button>
+    <button type="button" class="btn" id="sw-next">Next ▸</button>
+    <label class="sw-auto"><input type="checkbox" id="sw-auto"> Auto-advance every
+      <select id="sw-secs">{% for s in (15, 20, 30, 45, 60, 90) %}<option value="{{ s }}"{{ ' selected' if s == 30 }}>{{ s }}</option>{% endfor %}</select> s</label>
+    <span class="muted" id="sw-pos"></span>
+  </div>
+  <div class="sw-mark">
+    <span>On Sweetwater for <b id="sw-mark-term">—</b>:</span>
+    <button type="button" class="btn btn-sm" data-result="found">✓ Found something</button>
+    <button type="button" class="btn btn-sm" data-result="none">✗ Nothing worth it</button>
+    <input type="text" id="sw-note" placeholder="Note (price, condition…) — optional" maxlength="300">
+    <span class="muted" id="sw-countdown"></span>
+  </div>
+  <p class="muted"><small>Auto-advance works while this page stays open (on a phone, use Next: phones pause background tabs).
+    The first ▶ Open needs a tap so your browser allows the Sweetwater tab.</small></p>
+</section>
+
+<section class="panel">
+  <h2>Your terms <span class="muted">— least recently checked first</span></h2>
+  <div class="table-scroll">
+  <table class="an-table sw-table">
+    <thead><tr><th>#</th><th>Term</th><th>Last checked</th><th>Result</th><th>Note</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr data-i="{{ loop.index0 }}" data-term="{{ r.term }}" data-url="{{ r.url }}">
+        <td class="muted">{{ loop.index }}</td>
+        <td><b>{{ r.term }}</b></td>
+        <td class="sw-ago">{{ r.ago or '—' }}</td>
+        <td class="sw-res">{% if r.result == 'found' %}<span class="sw-found">✓ found</span>{% elif r.result == 'none' %}<span class="muted">nothing</span>{% elif r.result == 'opened' %}<span class="muted">opened</span>{% else %}—{% endif %}</td>
+        <td class="sw-note-cell"><small>{{ r.note }}</small></td>
+        <td><a href="{{ r.url }}" target="gs-sweetwater" rel="noopener" class="sw-open">open ↗</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<script>
+(function () {
+  const rows = Array.from(document.querySelectorAll('.sw-table tbody tr'));
+  if (!rows.length) return;
+  let i = 0, win = null, timer = null, left = 0;
+  const $ = id => document.getElementById(id);
+  function show() {
+    rows.forEach((r, k) => r.classList.toggle('sw-current', k === i));
+    $('sw-cur-term').textContent = '“' + rows[i].dataset.term + '”';
+    $('sw-mark-term').textContent = rows[i].dataset.term;
+    $('sw-pos').textContent = 'Term ' + (i + 1) + ' of ' + rows.length;
+    $('sw-note').value = '';
+    rows[i].scrollIntoView({block: 'nearest'});
+  }
+  function mark(result, row) {
+    row = row || rows[i];
+    const note = result === 'opened' ? null : $('sw-note').value;
+    fetch("{{ url_for('sweetwater_mark') }}", {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({term: row.dataset.term, result: result, note: note})});
+    row.querySelector('.sw-ago').textContent = 'just now';
+    if (result !== 'opened') {
+      row.querySelector('.sw-res').innerHTML = result === 'found' ? '<span class="sw-found">✓ found</span>' : '<span class="muted">nothing</span>';
+      if (note !== null) row.querySelector('.sw-note-cell').innerHTML = '<small></small>', row.querySelector('.sw-note-cell small').textContent = note;
+    } else if (!row.querySelector('.sw-found')) {
+      row.querySelector('.sw-res').innerHTML = '<span class="muted">opened</span>';
+    }
+  }
+  function open() {
+    const url = rows[i].dataset.url;
+    // The first open needs your tap; after that the same Sweetwater tab is reused.
+    if (win && !win.closed) { try { win.location.href = url; } catch (e) { win = window.open(url, 'gs-sweetwater'); } }
+    else { win = window.open(url, 'gs-sweetwater'); }
+    mark('opened');
+  }
+  function go(step) { i = (i + step + rows.length) % rows.length; show(); if (win && !win.closed) open(); restart(); }
+  function restart() {
+    clearInterval(timer); timer = null; $('sw-countdown').textContent = '';
+    if (!$('sw-auto').checked) return;
+    left = +$('sw-secs').value;
+    timer = setInterval(function () {
+      left -= 1; $('sw-countdown').textContent = 'next in ' + left + 's';
+      if (left <= 0) {
+        if (!win || win.closed) { $('sw-auto').checked = false; restart(); $('sw-countdown').textContent = 'Sweetwater tab closed: auto stopped'; return; }
+        go(1);
+      }
+    }, 1000);
+  }
+  $('sw-start').onclick = function () { open(); restart(); };
+  $('sw-next').onclick = function () { go(1); };
+  $('sw-prev').onclick = function () { go(-1); };
+  $('sw-auto').onchange = restart; $('sw-secs').onchange = restart;
+  document.querySelectorAll('.sw-mark [data-result]').forEach(b => b.onclick = function () { mark(b.dataset.result); go(1); });
+  rows.forEach((r, k) => r.querySelector('.sw-open').addEventListener('click', function () { i = k; show(); mark('opened', r); }));
+  show();
+})();
+</script>
+{% endblock %}

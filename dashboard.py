@@ -1361,6 +1361,63 @@ def telex_group_remove():
     return redirect(url_for("telex"))
 
 
+# ---------------------------------------------------------------------------
+# Sweetwater stepper: Sweetwater's used gear (Gear Exchange) blocks automated
+# browsers with a "press & hold" human check, so Gear Scout can't search it
+# itself. This page walks your Telex terms one at a time and opens each
+# search in a Sweetwater tab in YOUR browser (on a timer or with Next), and
+# remembers which terms you've checked and what you found.
+# ---------------------------------------------------------------------------
+
+SWEETWATER_FILE = Path("/data/sweetwater_stepper.json")
+SWEETWATER_URL = "https://www.sweetwater.com/used/listings?query={q}"
+
+
+def _sw_state() -> dict:
+    try:
+        return json.loads(SWEETWATER_FILE.read_text())
+    except Exception:
+        return {}
+
+
+@app.route("/sweetwater")
+def sweetwater():
+    from urllib.parse import quote_plus
+    from scrapers import wanted
+    st = _sw_state()
+    marks = st.get("terms") or {}
+    rows = []
+    for t in wanted.terms(load_config_raw()):
+        m = marks.get(t) or {}
+        rows.append({"term": t, "url": SWEETWATER_URL.format(q=quote_plus(t)), "checked": m.get("at"),
+                     "ago": _ago(m.get("at")), "result": m.get("result"), "note": m.get("note", "")})
+    # Least recently checked first, so each pass picks up where you left off.
+    rows.sort(key=lambda r: r["checked"] or "")
+    checked = sum(1 for r in rows if r["checked"])
+    return render_template("sweetwater.html", rows=rows, checked=checked,
+                           found=sum(1 for r in rows if r["result"] == "found"))
+
+
+@app.route("/sweetwater/mark", methods=["POST"])
+def sweetwater_mark():
+    data = request.get_json(silent=True) or request.form
+    term = str(data.get("term") or "").strip()[:200]
+    result = data.get("result") if data.get("result") in ("found", "none", "opened") else "opened"
+    if term:
+        st = _sw_state()
+        terms = st.setdefault("terms", {})
+        prev = terms.get(term) or {}
+        terms[term] = {"at": datetime.now(timezone.utc).isoformat(),
+                       # Just opening it doesn't undo an earlier "found".
+                       "result": prev.get("result") if result == "opened" and prev.get("result") == "found" else result,
+                       "note": str(data.get("note") if data.get("note") is not None else prev.get("note", ""))[:300]}
+        try:
+            SWEETWATER_FILE.write_text(json.dumps(st))
+        except OSError:
+            pass
+    return jsonify(ok=True)
+
+
 @app.route("/telex")
 def telex():
     """Your Telex List (= Wanted list) term by term. Built from the same

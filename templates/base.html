@@ -32,6 +32,7 @@
         <a href="{{ url_for('favorites') }}" class="nav-favorites {{ 'active' if request.endpoint == 'favorites' else '' }}">★ Favorites</a>
         <a href="{{ url_for('savings_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('savings') else '' }}">💰 Saved</a>
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Price Board</a>
+        <a href="{{ url_for('sweetwater') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sweetwater') else '' }}">🎸 Sweetwater</a>
         <a href="{{ url_for('fb_posts_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('fb_posts') else '' }}">FB Posts</a>
         <a href="{{ url_for('ask_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('ask') else '' }}">Ask AI</a>
         <a href="{{ url_for('learning_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('learning') else '' }}">Learning</a>
