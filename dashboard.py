@@ -1225,10 +1225,12 @@ def _steals(min_pct: int, background: bool = False) -> dict:
 
 @app.route("/deals")
 def deals():
-    age = request.args.get("age") or "3"
-    age = age if age in dict(DEAL_AGES) else "3"
-    price = request.args.get("price") or "500-2000"
-    price = price if price in dict(DEAL_PRICES) else "500-2000"
+    # Opens on every deal, newest post first (the filters narrow it down).
+    # It used to open on "last 3 days, $500–$2,000", which was often empty.
+    age = request.args.get("age") or "all"
+    age = age if age in dict(DEAL_AGES) else "all"
+    price = request.args.get("price") or "any"
+    price = price if price in dict(DEAL_PRICES) else "any"
     sort = request.args.get("sort") or "new"
     d = _all_deals()
     lo, _, hi = price.partition("-")

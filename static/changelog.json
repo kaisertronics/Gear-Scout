@@ -6,7 +6,8 @@
       "Why emails stopped: the saved email password isn't a Gmail app password (those are always 16 letters). Gmail refuses anything else from Gear Scout. Make one at myaccount.google.com/apppasswords (2-Step Verification needs to be on) and paste it in Settings → Email. Google shows it with spaces; Gear Scout removes them.",
       "Gear Scout's sign-in has its own password now. Before, logging in used the same field as the email app password, so a new app password would have changed your login, and the sign-in page (reachable through your phone link) guarded your Gmail credential. Your sign-in password stays exactly what it is today; change it any time in Settings → Email.",
       "Settings warns if a pasted email password doesn't look like an app password.",
-      "Inbox: hiding a card with ✕ now removes the whole card, including its ✓ Done button."
+      "Inbox: hiding a card with ✕ now removes the whole card, including its ✓ Done button.",
+      "Deals and Steals pages weren't empty, just filtered: Deals opened on “posted in the last 3 days, $500–$2,000” (none right now, out of 99 deals), and Steals only counted ones posted this week. Deals now opens on every deal, newest first, with the filters still there. Steals counts everything in its headline and shows the older and double-check ones right away when nothing new was posted this week."
     ]
   },
   {

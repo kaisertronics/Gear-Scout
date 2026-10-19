@@ -5,7 +5,9 @@
 {% block content %}
 
   <section class="panel">
-    <h2>🔥 Steals <span class="muted">— {{ trusted|length }} listing{{ '' if trusted|length == 1 else 's' }} {{ min_pct }}%+ under used prices</span></h2>
+    {% set n_all = trusted|length + old|length + rough|length %}
+    <h2>🔥 Steals <span class="muted">— {{ n_all }} listing{{ '' if n_all == 1 else 's' }} {{ min_pct }}%+ under used prices
+      ({{ trusted|length }} posted this week{% if old %}, {{ old|length }} older{% endif %}{% if rough %}, {{ rough|length }} to double-check{% endif %})</span></h2>
     <p class="muted">
       Everything Gear Scout has collected for your Wanted list (Telex List), still for sale, priced
       at least {{ min_pct }}% under what the gear really goes for used. Newest posts first.
@@ -44,7 +46,8 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">No steals at {{ min_pct }}%+ off right now. Try a lower level above.</p>
+      <p class="muted">{% if old or rough %}Nothing {{ min_pct }}%+ off posted this week. The older ones and the ones to
+        double-check are below.{% else %}No steals at {{ min_pct }}%+ off right now. Try a lower level above.{% endif %}</p>
     {% endif %}
   </section>
 
@@ -53,10 +56,15 @@
     <h2>Posted more than a week ago <span class="muted">— {{ old|length }}</span></h2>
     <p class="muted">Still for sale and {{ min_pct }}%+ under, but posted more than a week ago. A real steal rarely sits
       that long, so the comparison may be off (or the seller is open to an offer).</p>
+    {% if not trusted %}
+      {# Nothing fresh: show these right away instead of behind a button. #}
+      <div class="listing-grid">{% for l in old[:48] %}{{ listing_card(l) }}{% endfor %}</div>
+    {% else %}
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(old)) }}">
       <summary>Show {{ old|length }}</summary>
       <div class="listing-grid"></div>
     </details>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -67,10 +75,14 @@
       it's a clone or "style" copy, it's 80%+ off (too good to be true?), or there's no other listing of the same
       gear to confirm the price.
       Some are real finds and some are mix-ups, so check before you jump.</p>
+    {% if not trusted and rough|length <= 24 %}
+      <div class="listing-grid">{% for l in rough %}{{ listing_card(l) }}{% endfor %}</div>
+    {% else %}
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(rough[:150])) }}">
       <summary>Show {{ [rough|length, 150]|min }}</summary>
       <div class="listing-grid"></div>
     </details>
+    {% endif %}
   </section>
   {% endif %}
 <script>
