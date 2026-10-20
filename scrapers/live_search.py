@@ -35,7 +35,8 @@ def run_live_search(
     scheduled run's email — but ALL current matches are returned here, not
     just ones that are new."""
     sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
-    if skip_facebook:
+    from scrapers.fb_posts_background import facebook_paused
+    if skip_facebook or facebook_paused():  # Facebook asked the account to slow down
         sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
 
     # A live, on-demand search should mean "search everything right now" —

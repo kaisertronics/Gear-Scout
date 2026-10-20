@@ -187,6 +187,22 @@ def _fb_mark(q: str) -> None:
         pass
 
 
+def _carry_facebook(q: str, have: set) -> list[dict]:
+    prev = get_state(q)
+    out = []
+    with _conn() as conn:
+        for c in (prev or {}).get("top") or []:
+            url = c.get("url") or ""
+            if "facebook.com" not in url or url in have or c.get("value") is None:
+                continue
+            row = conn.execute("SELECT hidden, sold, pending FROM seen WHERE url = ? ORDER BY sold DESC LIMIT 1",
+                               (url,)).fetchone()
+            if row and (row[0] or row[1] or row[2]):
+                continue
+            out.append(c)
+    return out
+
+
 def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     """Runs the search, updates the stored top 10 and returns
     {'top': [...], 'alert': candidate-or-None, 'previous_lowest': float|None}.
@@ -201,10 +217,12 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     # Background checks every 30 minutes search Facebook only every 6 hours
     # (Facebook throttles an account that searches Marketplace constantly;
     # your Telex sweep and the regional feeds cover it in between). A check
-    # you start yourself (on_progress set) always includes Facebook.
-    skip_fb = on_progress is None and not _fb_due(q)
+    # you start yourself (on_progress set) always includes Facebook. Nothing
+    # in the background overnight or while Facebook has paused the account.
+    from scrapers.fb_posts_background import facebook_paused, marketplace_quiet_hours
+    skip_fb = on_progress is None and (not _fb_due(q) or marketplace_quiet_hours(cfg))
     results = run_live_search(q, cfg, on_progress=on_progress, skip_facebook=skip_fb)
-    if not skip_fb:
+    if not skip_fb and not facebook_paused():
         _fb_mark(q)
     listings = [l for r in results for l in r.listings]
     # eBay by lowest price first (the regular eBay source reads the newest
@@ -219,6 +237,11 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     index, market = build_price_index(all_priced_rows()), load_market()
     typical = item_typical(q, index, market, api_cfg)
     cands = _candidates(listings, index, market, typical, q)
+    if skip_fb or facebook_paused():
+        # Facebook wasn't searched this time: its ads from the last check
+        # stay in the running (unless sold, pending or hidden since), so the
+        # lowest doesn't jump up and a pricier ad isn't announced as a new low.
+        cands = sorted(cands + _carry_facebook(q, {c["url"] for c in cands}), key=lambda c: c["value"])
     top = cands[:TOP_N]
 
     alert = None

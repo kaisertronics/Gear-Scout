@@ -2174,12 +2174,21 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
     now = datetime.now(timezone.utc)
     age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
     used, sections = set(), []
+    # Listings marked done in any section ("steal:<url>", "drop:<url>:<price>",
+    # "fav:<url>:<price>:<pending>"): they don't come back as a steal or as
+    # new — only a fresh event (an auction ending, another price cut) does.
+    done_urls = set()
+    for k in done:
+        kind, _, rest = k.partition(":")
+        extra = {"drop": 1, "fav": 2}.get(kind)
+        done_urls.add(rest.rsplit(":", extra)[0] if extra else rest)
 
-    def add(key, title, note, rows, keyf):
+    def add(key, title, note, rows, keyf, once=False):
         out = []
         for l in rows:
             k = keyf(l)
-            if l.get("url") in used or k in done or l.get("sold") or l.get("hidden"):
+            if l.get("url") in used or k in done or l.get("sold") or l.get("hidden") \
+                    or (once and l.get("url") in done_urls):
                 continue
             used.add(l.get("url"))
             out.append((l, k))
@@ -2203,7 +2212,7 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
         lambda l: f"auction:{l['url']}")
     steals = sorted((l for l in items if l.get("is_steal")), key=lambda l: -(l.get("deal_pct") or 0))
     add("steals", "💥 Steals", f"{FEED_STEAL_PCT}%+ under what this gear usually sells for.", steals,
-        lambda l: f"steal:{l['url']}")
+        lambda l: f"steal:{l['url']}", once=True)
     drop_cut = (now - timedelta(days=INBOX_DROP_DAYS)).isoformat()
     def cut(l):
         from scrapers.enrich import parse_price
@@ -2223,7 +2232,7 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
     add("favorites", "★ Your favorites", "Something changed on gear you starred.", favs,
         lambda l: f"fav:{l['url']}:{l.get('price')}:{bool(l.get('pending'))}")
     new = [l for l in items if since and (l.get("first_seen") or "") > since and age(l) <= FEED_RECENT_DAYS]
-    add("new", "🆕 New since you last looked", "Newest post first.", new, lambda l: f"new:{l['url']}")
+    add("new", "🆕 New since you last looked", "Newest post first.", new, lambda l: f"new:{l['url']}", once=True)
     return sections
 
 

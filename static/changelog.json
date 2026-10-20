@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-20",
+    "title": "Code review",
+    "items": [
+      "Inbox: ✓ Done now really clears an ad — a steal you marked done no longer pops back under “New since you last looked”. A further price cut or an auction about to end still shows.",
+      "All-ads page: the All, Newest first and “show all terms” buttons stay on the full list instead of jumping back to the inbox.",
+      "Price Board: between its 6-hourly Facebook checks, the Facebook ads it already found stay in the top 10, so the lowest price no longer jumps around and you won't get a “new lowest” alert for an ad that's pricier than a Facebook one.",
+      "Price Board and saved searches leave Facebook alone 1–7 AM and while Facebook has asked the account to slow down."
+    ]
+  },
+  {
+    "date": "2026-10-20",
     "title": "Follow-ups from the Oct 18 code review",
     "items": [
       "Gentler on Facebook: the Price Board's “still for sale?” check now opens only each term's single cheapest Facebook ad (about 20, not up to 72), at most every 6 hours, and never 1–7 AM.",

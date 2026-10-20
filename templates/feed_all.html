@@ -21,7 +21,7 @@
     </div>
     <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     <div class="feed-filters">
-      {% set base = {'term': term} if term else {} %}
+      {% set base = {'term': term} if term else {'all': 1} %}
       <a href="{{ url_for('feed', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'all' else '' }}">All</a>
       <a href="{{ url_for('feed', show='deals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'deals' else '' }}">🔥 Deals (10%+ under)</a>
       <a href="{{ url_for('feed', show='steals', **base) }}" class="btn btn-sm{{ ' btn-primary' if show == 'steals' else '' }}">💥 Steals ({{ steal_pct }}%+)</a>
@@ -30,7 +30,7 @@
       <a href="{{ url_for('feed', sort='cheap', **keep) }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">💲 Cheapest first (any age)</a>
     </div>
     <details class="feed-terms"{{ ' open' if term else '' }}>
-      <summary>{% if term %}Showing only “{{ term }}” — <a href="{{ url_for('feed', show=show if show != 'all' else None) }}">show all terms</a>{% else %}Filter by term{% endif %}</summary>
+      <summary>{% if term %}Showing only “{{ term }}” — <a href="{{ url_for('feed', all=1, show=show if show != 'all' else None) }}">show all terms</a>{% else %}Filter by term{% endif %}</summary>
       <div class="feed-filters">
         {% for t in terms %}
           <a href="{{ url_for('feed', term=t, show=show if show != 'all' else None, sort=sort if sort == 'cheap' else None) }}"

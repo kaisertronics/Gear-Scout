@@ -4,14 +4,14 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: 795fb94 (reviewed 2026-10-18; the review's own fix commit follows it)
+Last reviewed commit: ba581a9 (reviewed 2026-10-20; 55b5869…071053e from other sessions landed during the review and are NOT yet reviewed — next run's diff starts at ba581a9)
 
 ## Files — last fully read
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
-| scrapers/store.py | 2026-10-06 | purge by last_seen, price raise, sold undo |
-| scrapers/runner.py | 2026-10-06 | |
+| scrapers/store.py | 2026-10-20 | |
+| scrapers/runner.py | 2026-10-20 | one-term = 1 FB worker |
 | scrapers/dispatch.py | 2026-10-06 | |
 | scrapers/reverb_api.py | 2026-10-06 | term search newest first |
 | scrapers/ebay_api.py | 2026-10-06 | specific terms on all of eBay |
@@ -34,6 +34,12 @@ Last reviewed commit: 795fb94 (reviewed 2026-10-18; the review's own fix commit 
 | scrapers/savings.py | 2026-10-18 | new |
 | scrapers/savings_slides.py | 2026-10-18 | new |
 | scrapers/shipping_backfill.py | 2026-10-18 | new |
+| scrapers/lowest.py | 2026-10-20 | FB every 6 h, carry-over |
+| scrapers/base.py | 2026-10-20 | keyword_match Wanted fallback only for ScrapeKeywords ✓ |
+| scrapers/price_drops.py | 2026-10-20 | |
+| scrapers/auctions.py | 2026-10-20 | |
+| scrapers/analytics.py | 2026-10-20 | new |
+| templates/feed.html, feed_all.html | 2026-10-20 (diff) | inbox |
 | everything else | never | |
 
 ## Findings
@@ -50,6 +56,16 @@ Last reviewed commit: 795fb94 (reviewed 2026-10-18; the review's own fix commit 
 | 2026-10-18 | Price Board partial rebuilds (verify_cheapest, term adds) reset "built", so the hourly full rebuild was put off (03:18 → 07:10 overnight) | partial builds keep the last full build time |
 | 2026-10-18 | enrich._JUNK "(LP)" / "[LP]" patterns could never match (wrapped in \b…\b) | lp(?=[)\]]) |
 | 2026-10-18 | Saved: "NS10s" / "C414s" counted as 1 (docstring said pair) | letter+digits+s = pair, searched without the s (note: a model really ending in S, e.g. Yamaha HS8S sub, would read as a pair) |
+| 2026-10-20 | Inbox: ✓ Done on a steal (or any card) brought the same ad straight back under "New since you last looked" until your next visit | Done anywhere keeps it out of Steals/New; a further price cut or an auction ending still shows |
+| 2026-10-20 | All-ads page (/?all=1): "All", "Newest first" and "show all terms" sent you back to the inbox | links keep all=1 |
+| 2026-10-20 | Price Board trackers (Oct 19 change) skipped Facebook 5 checks in 6 and rebuilt the top 10 without it: the lowest jumped up and a pricier ad could be pushed as a "new lowest" | last Facebook results carried over between Facebook checks (unless sold/pending/hidden) |
+| 2026-10-20 | Background tracker / saved-search searches ignored the Facebook pause and the 1–7 AM quiet hours | live search drops Facebook while paused; trackers/watches skip it overnight |
+| 2026-10-20 | Analytics: two page loads at once could both start the hourly rebuild | flag set before the thread starts |
+
+### Left for the owner (2026-10-20)
+- Price-drop alerts and auction alerts judge "deal" with comps.evaluate (15%/40% thresholds), not steals.find. That's separate from the one-deal-calculation rule; it looks deliberate (different thresholds, bids), so left alone — say if they should use the same numbers as Deals.
+- Analytics "for sale now" = seen in the last 3 days and not sold (not confirmed_live_at). Fine for counts; noted only.
+- A live search you start yourself while Facebook has paused the account now skips Facebook (it used to search it anyway).
 
 ### Left for the owner (2026-10-18)
 - Steals threshold: steals.MIN_PCT = 50 (your Oct 11 choice). The review checklist still says 60% — tell me if 50 stands so the checklist can be updated.

@@ -209,12 +209,12 @@ def load(cfg: dict, background: bool = True) -> Optional[dict]:
         import threading
 
         def run():
-            _state["running"] = True
             try:
                 build(cfg)
             except Exception:
                 logger.exception("Analytics build failed")
             finally:
                 _state["running"] = False
+        _state["running"] = True  # before the thread starts, so two page loads don't both build
         threading.Thread(target=run, daemon=True).start()
     return data
