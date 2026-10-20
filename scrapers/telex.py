@@ -107,7 +107,8 @@ def search_links(term: str) -> list[tuple[str, str]]:
 FAST_EVERY_MIN = 30      # Reverb, Craigslist, Kijiji, ShopGoodwill, Long & McQuade, OfferUp
 EBAY_EVERY_MIN = 120     # eBay's API has a daily allowance (sold checks use it too)
 TYPO_EVERY_MIN = 360
-FB_TERMS_PER_CYCLE = 2   # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
+FB_CABLE_EVERY_MIN = 72 * 60  # cable/connector terms on Facebook (see run_wanted_sweep)
+FB_TERMS_PER_CYCLE = 2  # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
 TYPOS_PER_CYCLE = 2
 FAST_BUDGET_SECONDS = 600
 SWEEP_MARKER = "/data/last_sweep.json"
@@ -119,6 +120,14 @@ def _site(source: dict) -> str:
     if "ebay.com" in (source.get("url") or "") or source.get("type") == "ebay":
         return "ebay"
     return "fast"
+
+
+def _cable_part_number(term: str) -> bool:
+    """A cable / connector term naming a part number ("Neutrik NC3FXX",
+    "Hosa DTP-805", "Canare L-4E6S"), not a kind of cable ("XLR cable")."""
+    from scrapers.wanted import is_cable_term
+    return is_cable_term(term) and any(re.search(r"\d", w) and re.search(r"[a-z]", w, re.I) and
+                                       not re.fullmatch(r"db-?25", w, re.I) for w in term.split())
 
 
 def _ensure_sweep(conn):
@@ -234,7 +243,13 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     from scrapers.fb_posts_background import marketplace_quiet_hours
     if marketplace_quiet_hours(cfg):
         fb_per_cycle = 0  # overnight: Facebook gets a rest (see marketplace_quiet_hours)
-    for term in sorted(ts, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
+    # Cable / connector part numbers ("Neutrik NC3MXX", "Hosa DTP-805")
+    # almost never turn up on Facebook (most had no Facebook match in 30
+    # days), so they're searched there every 3 days and their turns go to
+    # mics and outboard gear — same number of Facebook searches, mics come
+    # round sooner. Plain "XLR cable" / "DB25 snake" stay in the rotation.
+    fb_due = [t for t in ts if not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN)]
+    for term in sorted(fb_due, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
         out.append(run(term, {"fb"}, "fb"))
     typos = list(dict.fromkeys(q for t in ts for q in misspellings(t)))
     for q in sorted(typos, key=lambda q: (st.get((q, "fast")) or {}).get("searched_at") or "")[:TYPOS_PER_CYCLE]:

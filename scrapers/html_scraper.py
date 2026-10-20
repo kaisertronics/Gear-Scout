@@ -920,66 +920,35 @@ def scrape_audiogon(source: dict, keywords: list[str]) -> ScrapeResult:
 
 
 # ---------------------------------------------------------------------------
-# Vintage King — Used Gear
+# Vintage King — Used Gear / Demo Deals
 # ---------------------------------------------------------------------------
 
+# Vintage King moved to Shopify (Oct 2026): its old pages are now
+# collections, read through Shopify's product JSON like Alto Music.
+_VK_COLLECTIONS = {"used-and-vintage": "used-and-vintage", "sale/demo-deals": "sale-demo-deals",
+                   "demo-deals": "sale-demo-deals"}
+# Each collection holds thousands of long-sold products (~1 MB per 250);
+# new stock is listed on the first pages, so only those are read hourly.
+VK_PAGES = 4
+
+
 def scrape_vintageking(source: dict, keywords: list[str]) -> ScrapeResult:
-    name = source["name"]
-    url = source["url"]
-    start = time.time()
-
-    html, error = _get_html(url)
-    if not html:
-        return ScrapeResult(
-            source_name=name, source_url=url, success=False,
-            error=error or "Failed to fetch Vintage King page",
-            fix_hint="Vintage King may be blocking scrapers. Try again next run.",
-            duration_seconds=time.time() - start,
-        )
-
-    soup = BeautifulSoup(html, "html.parser")
-    listings = []
-
-    cards = soup.select(".product-item")
-    if not cards:
-        return ScrapeResult(
-            source_name=name, source_url=url, success=False,
-            error="Could not find product cards on Vintage King page.",
-            fix_hint=(
-                "Vintage King may have updated their layout. Open the URL in a browser, "
-                "inspect a product card, and update the selector in "
-                "scrapers/html_scraper.py → scrape_vintageking()."
-            ),
-            duration_seconds=time.time() - start,
-        )
-
-    for card in cards:
-        title_el = card.select_one(".product-item-link")
-        price_el = card.select_one(".price")
-        link_el = card.select_one("a.product-item-link") or card.select_one("a.product-item-photo")
-        img_el = card.select_one("img")
-
-        title = title_el.get_text(strip=True) if title_el else ""
-        if not title or not keyword_match(title, keywords):
-            continue
-
-        href = link_el["href"] if link_el else ""
-        if href and not href.startswith("http"):
-            href = "https://vintageking.com" + href
-
-        listings.append(Listing(
-            source_name=name,
-            title=truncate(title, 120),
-            url=href,
-            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
-            image_url=img_el.get("src") if img_el else None,
-            listing_id=re.sub(r'[^a-z0-9]', '', title.lower())[:32],
-        ))
-
-    return ScrapeResult(
-        source_name=name, source_url=url, success=True,
-        listings=listings, duration_seconds=time.time() - start,
-    )
+    from scrapers.shopify_store import scrape_shopify_collection
+    url = source["url"].split("?")[0].rstrip("/")
+    path = url.split("vintageking.com/", 1)[-1]
+    if not path.startswith("collections/"):
+        path = "collections/" + _VK_COLLECTIONS.get(path, path)
+    result = scrape_shopify_collection({**source, "url": f"https://vintageking.com/{path}",
+                                        "max_pages": source.get("max_pages") or VK_PAGES}, keywords)
+    result.source_url = source["url"]
+    for l in result.listings:
+        # Same ID as before the move (from the title), so gear already seen
+        # there doesn't come back as "new".
+        l.listing_id = re.sub(r'[^a-z0-9]', '', l.title.lower())[:32]
+    if not result.success:
+        result.fix_hint = ("Vintage King's product list didn't load. Usually temporary; if it keeps "
+                           "failing, see scrapers/html_scraper.py → scrape_vintageking().")
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-20",
+    "title": "Vintage King is back, and Facebook searches your mics more often",
+    "items": [
+      "Vintage King had been failing for about 2 weeks because their site moved to a new shop system. Gear Scout reads the new one now: about 180 used and demo items in stock, including 4 on your Wanted list you hadn't seen (SSL Origin console, SSL 2+, Soyuz Silver 17, Mojave MA-37). Some may show up as new on your Feed.",
+      "Facebook: the connector part numbers (Neutrik NC3FXX, Hosa DTP-805 and so on) almost never turn up there, so they're searched on Facebook every 3 days instead. Your mic and outboard terms get those turns. Facebook load stays the same.",
+      "Spot check of the top 40 Feed ads: all 40 still for sale, 39 were real matches, and new ads reached you within about 20 minutes (26 of 27 within an hour).",
+      "Your call: the \"ssl\" term also catches SSL-style gear (Warm Audio and Tegler bus compressors, and a Soundcraft console with \"SSL style modules\"). Do you want those? If not, they can be dropped. Stam and Audioscape ones would still show under those terms."
+    ]
+  },
+  {
+    "date": "2026-10-20",
     "title": "Code review",
     "items": [
       "Inbox: ✓ Done now really clears an ad — a steal you marked done no longer pops back under “New since you last looked”. A further price cut or an auction about to end still shows.",

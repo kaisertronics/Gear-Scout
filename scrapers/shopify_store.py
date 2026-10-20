@@ -49,7 +49,7 @@ def scrape_shopify_collection(source: dict, keywords: list[str]) -> ScrapeResult
 
     products = []
     try:
-        for page in range(1, MAX_PAGES + 1):
+        for page in range(1, int(source.get("max_pages") or MAX_PAGES) + 1):
             resp = requests.get(f"{url}/products.json", params={"limit": 250, "page": page},
                                 headers=HEADERS, timeout=40)
             resp.raise_for_status()
