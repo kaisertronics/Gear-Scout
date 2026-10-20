@@ -375,7 +375,10 @@ _OFF_TOPIC = re.compile(
     # more clothing and records ("Harley-Davidson Women's … Short Sleeve",
     # "Whirr – Distressor EP … Records 2020", "Tri Coloured Vinyl")
     r"short sleeve|long sleeve|women'?s|men'?s (?:tee|shirt)|(?<![\w-])ep(?![\w-])|records \d{4}|"
-    r"colou?red vinyl|vinyl (?:lp|record|ep|album|single|7\"|12\"))\b", re.I)
+    r"colou?red vinyl|vinyl (?:lp|record|ep|album|single|7\"|12\")|"
+    # postcards, prints and flowers ("Flowerpower No.1 Tulips Art Unlimited
+    # Amsterdam Holland Postcard P16" matched the "ART P16" term)
+    r"post ?cards?|greeting cards?|art prints?|posters?|lithographs?|flowers?|floral|bouquets?|tulips?)\b", re.I)
 
 
 @functools.lru_cache(maxsize=100_000)
