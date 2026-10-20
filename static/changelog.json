@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-20",
+    "title": "Follow-ups from the Oct 18 code review",
+    "items": [
+      "Gentler on Facebook: the Price Board's “still for sale?” check now opens only each term's single cheapest Facebook ad (about 20, not up to 72), at most every 6 hours, and never 1–7 AM.",
+      "A Trek bike and a rack shelf that matched “ssl” are filtered out.",
+      "Saved slides: the cover counts pieces of gear (a pair is 2), and the running-total chart stays readable if an early buy cost more than new."
+    ]
+  },
+  {
+    "date": "2026-10-20",
     "title": "Flower postcards off your Feed",
     "items": [
       "eBay postcards like “Flowerpower No.1 Tulips Art Unlimited Amsterdam Holland Postcard P16” were matching your “ART P16” term (the publisher is Art Unlimited, the card number is P16). Postcards, greeting cards, art prints, posters, lithographs and flowers are now filtered out everywhere, the same way tractors and T-shirts already are.",

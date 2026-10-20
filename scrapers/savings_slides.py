@@ -69,7 +69,7 @@ def cover(d, n, total):
          + _serif(70, 362, 116, "You saved")
          + _serif(62, 566, 230 if len(amt) <= 7 else 196 if len(amt) <= 8 else 168, amt, ORANGE)
          + _serif(70, 664, 84, "using Gear Scout.")
-         + _stat(72, str(d["count"]), "PIECES OF GEAR")
+         + _stat(72, str(sum(i.get("qty") or 1 for i in d["items"] if i["saved"] is not None)), "PIECES OF GEAR")
          + _stat(390, f'{d["pct"]}%', "UNDER NEW")
          + _stat(708, _money(d["total_paid"]), "PAID", f'vs {_money(d["total_new"])} new', size=48))
     return _frame(b, n, total)
@@ -152,15 +152,19 @@ def market(d, n, total):
 
 def running(d, n, total):
     pts = [i for i in d["items"] if i["saved"] is not None]
-    mx = max([p["running"] for p in pts] or [1]) or 1
+    # Scaled from the lowest point (0, or below if an early buy cost more
+    # than new) to the highest, so a dip below zero stays on the chart.
+    lo = min([0] + [p["running"] for p in pts])
+    span = (max([p["running"] for p in pts] or [0]) - lo) or 1
     x0, x1, y0, y1 = 100, 1000, 880, 420
     step = (x1 - x0) / max(len(pts) - 1, 1)
-    coords = [(x0 + k * step, y0 - (y0 - y1) * p["running"] / mx) for k, p in enumerate(pts)]
+    coords = [(x0 + k * step, y0 - (y0 - y1) * (p["running"] - lo) / span) for k, p in enumerate(pts)]
+    yz = y0 - (y0 - y1) * (0 - lo) / span  # the $0 line
     line = " ".join(f"{x:.0f},{y:.0f}" for x, y in coords)
-    area = f"{x0},{y0} " + line + f" {coords[-1][0]:.0f},{y0}" if coords else ""
+    area = f"{x0},{yz:.0f} " + line + f" {coords[-1][0]:.0f},{yz:.0f}" if coords else ""
     b = (_sans(72, 236, 28, "RUNNING TOTAL SAVED", ORANGE, spacing=6)
          + _serif(64, 372, 140, _money(d["total_saved"]), ORANGE)
-         + f'<line x1="{x0}" y1="{y0}" x2="{x1}" y2="{y0}" stroke="#3d3a33" stroke-width="3"/>')
+         + f'<line x1="{x0}" y1="{yz:.0f}" x2="{x1}" y2="{yz:.0f}" stroke="#3d3a33" stroke-width="3"/>')
     if coords:
         b += (f'<polygon points="{area}" fill="{ORANGE}" fill-opacity=".14"/>'
               f'<polyline points="{line}" fill="none" stroke="{ORANGE}" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>')

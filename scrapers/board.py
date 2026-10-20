@@ -23,6 +23,7 @@ BOARD_PATH = Path("/data/price_board.json")
 FRESH_DAYS = 7
 # "Cheapest anywhere": any ad still for sale, however long ago it was posted.
 VERIFY_HOURS = 3            # re-check the cheapest is still up if not confirmed this recently
+VERIFY_FB_HOURS = 6         # Facebook: only each term's overall cheapest, and less often
 MIN_GENERIC = 300  # owner's budget is $500–$2,000; a little room below
 
 
@@ -242,6 +243,7 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
     for _ in range(rounds):
         rows = load().get("rows") or []
         cheapest = {r["cheapest"]["url"]: r["term"] for r in rows if r.get("cheapest") and r["cheapest"].get("url")}
+        top = set(cheapest)  # each term's overall cheapest
         try:  # and what the Feed / Telex page mark as each model's cheapest
             for u in Path("/data/lowest_picks.txt").read_text().split("\n"):
                 if u.startswith("http"):
@@ -261,6 +263,19 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
                 f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(urls))}) AND confirmed_live_at >= ?",
                 (*urls, cutoff))}
         todo = [u for u in urls if u not in fresh]
+        # Facebook ads are opened in its browser, which is what gets the
+        # account throttled: only each term's overall cheapest, every 6 h,
+        # and never overnight (same quiet hours as Marketplace searching).
+        from scrapers.fb_posts_background import marketplace_quiet_hours
+        fb_cutoff = (datetime.now(timezone.utc) - timedelta(hours=VERIFY_FB_HOURS)).isoformat()
+        fb_todo = [] if marketplace_quiet_hours(cfg) else [u for u in todo if u in top and "facebook.com/marketplace/item" in u]
+        if fb_todo:
+            with _conn() as conn:
+                fb_fresh = {u for (u,) in conn.execute(
+                    f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(fb_todo))}) AND confirmed_live_at >= ?",
+                    (*fb_todo, fb_cutoff))}
+            fb_todo = [u for u in fb_todo if u not in fb_fresh]
+        todo = [u for u in todo if "facebook.com" not in u] + fb_todo
         if not todo:
             return gone_total
         gone = []
@@ -272,7 +287,7 @@ def verify_cheapest(cfg: dict, rounds: int = 3) -> int:
             _record(u, g)
             if g:
                 gone.append(u)
-        for u, g in check_fb([u for u in todo if "facebook.com/marketplace/item" in u]):
+        for u, g in check_fb(fb_todo):
             _record(u, g)
             if g:
                 gone.append(u)

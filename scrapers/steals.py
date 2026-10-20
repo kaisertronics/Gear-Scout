@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 MIN_PCT = 50  # owner chose 50%+ (Oct 11)
 MIN_PRICE = 20.0   # under this it's a placeholder ("$1 — make an offer") or a part
-MIN_REF = 100.0    # 60% off a $60 item isn't a steal worth a page
+MIN_REF = 100.0    # 50% off a $60 item isn't a steal worth a page
 MAX_PCT = 92       # beyond this it's almost always the wrong comp
 
 # Parts and pieces that the general parts check lets through but that pull

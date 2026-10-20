@@ -296,7 +296,7 @@ _ACCESSORY_ONLY = re.compile(
     r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|arms?|pop filters?|windscreens?|wind ?shields?|"
     r"blimp|dead ?cat|shock ?mounts?|clips?|cases?|road case|flight case|gig bag|bags?|covers?|"
     r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
-    r"rack rails|rack shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
+    r"rack rails|rack ?shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
     r"suspensions?|desktop enclosure|(?:usb|adat|dante|madi|option|expansion)(?:\s*/\s*\w+)?\s+cards?|"
     r"goosenecks?|gooseneck module|(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
 _MAIN_GEAR = re.compile(
@@ -365,7 +365,7 @@ _OFF_TOPIC = re.compile(
     r"forklifts?|trailers?|semi[\s-]?trucks?|pickup trucks?|4wd|awd|\d+\s?hrs|mowers?|(?<![\w-])(?:atvs?|utvs?)(?![\w-])|snowmobiles?|"
     r"kubota|john deere|bobcat|caterpillar|great dane|forestry|tillers?|stump grinders?|wood chippers?|"
     r"brush cutters?|(?<![\w-])fae(?![\w-])|camcorders?|video cameras?|xdcam|"
-    r"anhydrous|double[\s-]?din|backup camera|comics?|comic books?|"
+    r"anhydrous|trek|bikes?|bicycles?|double[\s-]?din|backup camera|comics?|comic books?|"
     r"stratocaster|telecaster|jazzmaster|jazz bass|precision bass|les paul|(?<![\w-])strat(?![\w-])|"
     r"(?:guitar |bass |strat(?:ocaster)? |tele(?:caster)? |single[\s-]?coil |humbucker )?pick-?ups? set|"
     r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"

@@ -57,3 +57,8 @@ Last reviewed commit: 795fb94 (reviewed 2026-10-18; the review's own fix commit 
 - Deployed 2026-10-18 ~06:40 as code-only overlay images built from d6428ea, which also includes the nightly fixes (8d22518) and the merged "inbox front page" branch (451a7a3). Those two weren't part of this review; the next run's diff from 795fb94 covers them. Rollback images: gear-scout-{scout,dashboard}:pre-review-1018.
 - Ran in parallel with the nightly accuracy task, which had its own uncommitted edits (cable terms, forestry filter, email status on Health). This review committed only its own changes.
 - Small, not changed: steals.MIN_REF comment still says "60% off"; Saved slides "PIECES OF GEAR" counts rows, not pieces; Saved running-total chart assumes the total stays positive.
+
+### 2026-10-20 follow-ups (owner said "fix")
+- Price Board verify_cheapest: Facebook only for each term's overall cheapest, 6 h window, skipped in marketplace_quiet_hours (tested: 20 of 72 FB ads opened when all were due).
+- Trek bike / Rackshelf junk under "ssl" filtered; MIN_REF comment; slide cover counts pieces; running chart scaled with a $0 line.
+- Email: working again (digest sent Oct 20); steals threshold 50% kept per owner's Oct 11 choice.
