@@ -8,7 +8,7 @@ under price one has to be to push to the phone. The yardstick is today's
 NEW price (Reverb Brand New + eBay New, median) when the mic is still made,
 else the used-market price; "% off" is figured on the delivered price
 (listing + listed shipping). Pushes and the page's list go by price now: every listing under $1,000
-delivered and at least $220 (owner's call, Oct 22); C12-style under $375, AKG D12 under $500. The % off is shown alongside.
+delivered and at least $300 (owner's call, Oct 22); C12-style under $375, AKG D12 under $500. The % off is shown alongside.
 
 US listings only (tariffs on Canadian ones). Parts, capsules, power
 supplies, repair jobs and auctions are left out.
@@ -29,7 +29,7 @@ LIVE_DAYS = 10          # still listed by a site within this many days
 NEW_HOURS = 6           # "new" for alerts: first found within this many hours
 ALERT_MAX_SINGLE = 8    # more than this in one pass → one summary push
 MIN_PRICE = 40.0        # under this it's a placeholder or a part
-MIN_PUSH_PRICE = 220    # owner's floor (Oct 22): nothing under $220 delivered pushes or makes the list
+MIN_PUSH_PRICE = 300    # owner's floor (Oct 22): nothing under $300 delivered pushes or makes the list
 
 _TUBE = r"\btube\b|\bvalve\b|\bvacuum\b"
 _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\b|\b47 ?fet\b|\bu-?47 ?fet\b", re.I)
