@@ -2294,6 +2294,11 @@ def mics_settings():
             continue
         targets[k] = dict(targets.get(k) or {}, max_price=price, on=request.form.get(f"on_{k}") == "1")
     mf["targets"] = targets
+    if "min_price" in request.form:
+        try:
+            mf["min_price"] = max(0, int(float(re.sub(r"[^\d.]", "", request.form.get("min_price") or "") or 0)))
+        except ValueError:
+            pass
     data["mic_focus"] = mf
     save_config_raw(data)
     return redirect(url_for("mics_page", saved=1))

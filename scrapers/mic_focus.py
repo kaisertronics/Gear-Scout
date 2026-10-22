@@ -8,7 +8,7 @@ under price one has to be to push to the phone. The yardstick is today's
 NEW price (Reverb Brand New + eBay New, median) when the mic is still made,
 else the used-market price; "% off" is figured on the delivered price
 (listing + listed shipping). Pushes and the page's list go by price now: every listing under $1,000
-delivered (owner's call, Oct 22); C12-style under $375, AKG D12 under $500. The % off is shown alongside.
+delivered and at least $220 (owner's call, Oct 22); C12-style under $375, AKG D12 under $500. The % off is shown alongside.
 
 US listings only (tariffs on Canadian ones). Parts, capsules, power
 supplies, repair jobs and auctions are left out.
@@ -29,6 +29,7 @@ LIVE_DAYS = 10          # still listed by a site within this many days
 NEW_HOURS = 6           # "new" for alerts: first found within this many hours
 ALERT_MAX_SINGLE = 8    # more than this in one pass → one summary push
 MIN_PRICE = 40.0        # under this it's a placeholder or a part
+MIN_PUSH_PRICE = 220    # owner's floor (Oct 22): nothing under $220 delivered pushes or makes the list
 
 _TUBE = r"\btube\b|\bvalve\b|\bvacuum\b"
 _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\b|\b47 ?fet\b|\bu-?47 ?fet\b", re.I)
@@ -153,7 +154,11 @@ def settings(cfg: dict) -> dict:
             pass
         t["on"] = bool(o.get("on", True))
         out.append(t)
-    return {"enabled": bool(mf.get("enabled")), "targets": out}
+    try:
+        floor = max(0, int(mf.get("min_price", MIN_PUSH_PRICE)))
+    except (TypeError, ValueError):
+        floor = MIN_PUSH_PRICE
+    return {"enabled": bool(mf.get("enabled")), "targets": out, "min_price": floor}
 
 
 def enabled(cfg: dict) -> bool:
@@ -245,7 +250,9 @@ def find(cfg: dict) -> list[dict]:
     from scrapers.comps import evaluate, price_index, similar_index, similar_price
     from scrapers.enrich import exclude_match, is_accessory_only, is_partial, needs_repair, parse_price, price_basis
     from scrapers.market import load_market
-    targets = [t for t in settings(cfg)["targets"] if t["on"]]
+    st = settings(cfg)
+    targets = [t for t in st["targets"] if t["on"]]
+    floor = st["min_price"]
     exclude_words = cfg.get("exclude_words") or []
     market = index = similar = None
     out, seen_ads = [], set()
@@ -295,7 +302,7 @@ def find(cfg: dict) -> list[dict]:
         ref = new or used
         ref_kind = "new" if new else ("used" if used else None)
         pct = round((1 - delivered / ref) * 100) if ref else None
-        hit = delivered < t["max_price"]  # by price (Oct 22), not % off
+        hit = floor <= delivered < t["max_price"]  # by price (Oct 22), not % off
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,

@@ -4,12 +4,12 @@
 {% block content %}
 
   <section class="panel">
-    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic{{ '' if hits|length == 1 else 's' }} for sale under your prices</span></h2>
+    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic{{ '' if hits|length == 1 else 's' }} for sale in your price range</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
     <p class="muted">
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
       OfferUp, ShopGoodwill and the other fast sites every time, eBay every 30 minutes, Facebook in rotation) and pushes
-      each one under its price limit to your phone, once per price (a price drop sends it again). Everything else is paused: Telex matches, steals,
+      each one between your ${{ '{:,}'.format(st.min_price) }} minimum and its price limit to your phone, once per price (a price drop sends it again). Everything else is paused: Telex matches, steals,
       price drops, auctions, the daily AI briefing. Your Telex List is kept, just not searched.
       {% else %}<strong>Off.</strong> Gear Scout is searching your whole Telex List as usual; this page still lists the mics.{% endif %}
       Prices are delivered (with listed shipping). The "% under" on each card compares that with today's <b>new</b> price when
@@ -24,8 +24,9 @@
   </section>
 
   <section class="panel">
-    <h2>Push when… <span class="muted">— delivered price under</span></h2>
+    <h2>Push when… <span class="muted">— delivered price between your minimum and each mic's limit</span></h2>
     <form method="post" action="{{ url_for('mics_settings') }}">
+      <p>Minimum for every mic: $<input type="number" name="min_price" value="{{ st.min_price }}" min="0" step="25" inputmode="numeric" style="width:6em;color:#111"> <span class="muted">(cheaper ones are usually parts, capsules or lookalikes)</span></p>
       <table class="mic-targets">
         <thead><tr><th>Push</th><th>Mic</th><th>Under</th><th>Listed now</th></tr></thead>
         <tbody>
@@ -45,7 +46,7 @@
   </section>
 
   <section class="panel">
-    <h2>Under your price <span class="muted">— cheapest first</span></h2>
+    <h2>In your price range <span class="muted">— ${{ '{:,}'.format(st.min_price) }} and up, under each mic's limit, cheapest first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}
@@ -61,7 +62,7 @@
   {% for t in st.targets %}
     {% set ls = by.get(t.key) or [] %}
     <details class="panel" id="t-{{ t.key }}">
-      <summary><h2 style="display:inline">{{ t.name }} <span class="muted">— {{ ls|length }} for sale · push under ${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2></summary>
+      <summary><h2 style="display:inline">{{ t.name }} <span class="muted">— {{ ls|length }} for sale · push ${{ '{:,}'.format(st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2></summary>
       {% if ls %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
           <summary>Show all {{ ls|length }}, cheapest first</summary><div class="listing-grid"></div>
