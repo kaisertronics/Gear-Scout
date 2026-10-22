@@ -2265,10 +2265,7 @@ def mics_page():
     by = {t["key"]: [] for t in st["targets"]}
     for l in rows:
         by.setdefault(l["mic"]["target"], []).append(l)
-    # The page's top list is real discounts only: a push-every-listing mic
-    # (0%) shows here when it's 25%+ under; the rest are in its own section.
-    hits = [l for l in rows if l["mic"]["hit"] and l["mic"]["pct"] is not None
-            and l["mic"]["pct"] >= (l["mic"]["min_pct"] or 25)]
+    hits = [l for l in rows if l["mic"]["hit"]]  # under each mic's price limit, cheapest first
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
@@ -2289,13 +2286,13 @@ def mics_settings():
     from scrapers.mic_focus import TARGETS
     for t in TARGETS:
         k = t["key"]
-        if f"pct_{k}" not in request.form:
+        if f"price_{k}" not in request.form:
             continue
         try:
-            pct = max(0, min(95, int(request.form.get(f"pct_{k}") or 0)))
+            price = max(0, int(float(re.sub(r"[^\d.]", "", request.form.get(f"price_{k}") or "") or 0)))
         except ValueError:
             continue
-        targets[k] = {"min_pct": pct, "on": request.form.get(f"on_{k}") == "1"}
+        targets[k] = dict(targets.get(k) or {}, max_price=price, on=request.form.get(f"on_{k}") == "1")
     mf["targets"] = targets
     data["mic_focus"] = mf
     save_config_raw(data)

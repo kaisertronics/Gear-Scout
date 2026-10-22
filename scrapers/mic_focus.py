@@ -7,7 +7,8 @@ Each target says which listings count (brand / model / tube) and how far
 under price one has to be to push to the phone. The yardstick is today's
 NEW price (Reverb Brand New + eBay New, median) when the mic is still made,
 else the used-market price; "% off" is figured on the delivered price
-(listing + listed shipping). Every target pushes at 60%+ off (owner's call, Oct 22); 0% would push every listing.
+(listing + listed shipping). Pushes and the page's list go by price now: every listing under $1,000
+delivered (owner's call, Oct 22); C12-style under $375, AKG D12 under $500. The % off is shown alongside.
 
 US listings only (tariffs on Canadian ones). Parts, capsules, power
 supplies, repair jobs and auctions are left out.
@@ -44,58 +45,71 @@ _PART = re.compile(
 # key, name, min_pct, brand/model regex, extra requirement, exclusions,
 # sweep queries, model-code regex, brand name used for price lookups
 TARGETS = [
-    dict(key="peluso", name="Peluso", min_pct=60,
-         match=r"\bpeluso\b", require=None, exclude=None,
+    dict(key="peluso", name="Peluso", min_pct=60, max_price=1000,
+         match=r"\bpeluso\b", require=None,
+         # capsules (CK-2, CK-21, CEK 12…), the PADB direct box, stereo-matching / power-supply parts
+         exclude=r"\bck-?\d|\bp-?k\d|\bcek\b|\bpadb\b|direct box|stereo matching|\bmt-?\d|\bps-?\d",
          queries=["peluso", "peluso microphone", "peluso 22 47", "peluso p-12"],
          model=r"\b(22\s?-?47\s?(?:le|se)?|22\s?-?251|2247\s?(?:le|se)?|22251|p-?\d{2,3}[a-z]{0,2}|cemc-?\d|r-?\d{2})\b",
          brand="Peluso"),
-    dict(key="golden_age", name="Golden Age tube mics", min_pct=60,
+    dict(key="golden_age", name="Golden Age tube mics", min_pct=60, max_price=1000,
          match=r"golden\s*age|\bga[\s-]?(?:47|251|12|8000)\b",
          require=_TUBE + r"|\bga[\s-]?(?:47|251|12|8000)\b|ela ?-?m ?-?251|\br-?1 ?tube\b",
          exclude=r"\b(?:pre[\s-]?73|pre[\s-]?ns|pre[\s-]?573|comp[\s-]?54|comp[\s-]?2a|eq[\s-]?73|eq[\s-]?81|ga[\s-]?73|ns[\s-]?73|d[\s-]?2)\b|\bfet\b|ribbon(?! ?tube)|\br-?1 ?a\b",
          queries=["golden age premier ga-47", "golden age premier ga-251", "golden age r1 tube", "golden age tube mic"],
          model=r"\b(ga[\s-]?47\s?(?:mk\s?ii|mkii|mk2)?|ga[\s-]?251|ga[\s-]?12|ga[\s-]?8000|r-?1\s?tube)\b",
          brand="Golden Age Premier"),
-    dict(key="stam", name="Stam tube mics", min_pct=60,
+    dict(key="stam", name="Stam tube mics", min_pct=60, max_price=1000,
          match=r"\bstam\b",
          require=_TUBE + r"|\bsa[\s-]?(?:47|251|12|67|800|87t)\b",
          exclude=r"\bsa-?(?:73|4000|2a|76|n73|80|500|1176|3a|cl|81|n?2)\b|\bfet\b|\bsa-?87\b",
          queries=["stam sa-47", "stam audio mic", "stam tube microphone"],
          model=r"\b(sa[\s-]?\d{2,3}t?\s?(?:mk\s?(?:iii|ii|3|2)|mkiii|mkii)?)\b",
          brand="Stam Audio"),
-    dict(key="warm", name="Warm Audio tube mics", min_pct=60,
+    dict(key="warm", name="Warm Audio tube mics", min_pct=60, max_price=1000,
          match=r"warm\s*audio|\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b",
          require=r"\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b|warm\s*audio.{0,30}(?:" + _TUBE + r")",
          exclude=r"\bwa-?47 ?jr\b|\bwa-?47 ?f\b|\bwa-?(?:12|73|76|2a|412|273|2mpx|1b|84|87|14|ma)\b",
          queries=["warm audio wa-47", "warm audio wa-251", "warm audio wa-8000", "warm audio wa-cx12", "warm audio wa-67"],
          model=r"\b(wa[\s-]?47|wa[\s-]?251|wa[\s-]?8000|wa[\s-]?cx-?12|wa[\s-]?67)\b",
          brand="Warm Audio"),
-    dict(key="lauten", name="Lauten Audio", min_pct=60,
+    dict(key="lauten", name="Lauten Audio", min_pct=60, max_price=1000,
          match=r"\blauten\b", require=None, exclude=None,
          queries=["lauten audio", "lauten atlantis", "lauten eden", "lauten oceanus"],
          model=r"\b(atlantis|eden|oceanus|clarion|horizon|torch|synergy|la-?\d{3}|ft-?\d{3}|ls-?\d{3})\b",
          brand="Lauten Audio"),
-    dict(key="bees_neez", name="Bees Neez tube mics", min_pct=60,
+    dict(key="bees_neez", name="Bees Neez tube mics", min_pct=60, max_price=1000,
          match=r"bees?[\s'-]?neez|beezneez|bee'?s knees mic",
          require=None, exclude=r"\bfet\b",
          queries=["bees neez microphone", "beesneez", "beezneez"],
          model=r"\b(lulu|arya|jumbo|vivian|ursa|mona|honey|queen|cleo|ada|willa|tiara|dolly|ruby|ella)\b",
          brand="Bees Neez"),
-    dict(key="d12", name="AKG D12", min_pct=60,
+    dict(key="d12", name="AKG D12", min_pct=60, max_price=500,
          match=r"(?<![\w-])d-?12\b(?![-\s]?\d)",
          require=r"\bakg\b",
          exclude=r"\bd-?112\b|\bd-?12\d\b|\btype\b|\bstyle\b|\bclone\b|nikon|canon|camera|lens|drone|dji|truck|hydraulic|\bc-?12\b",
          queries=["akg d12", "akg d12 vr", "akg d12e"],
          model=r"\b(d-?12 ?vr|d-?12 ?e|d-?12)\b",
          brand="AKG"),
-    dict(key="classic_tube", name="C12 / U47 / ELA M 251-style tube mics", min_pct=60,
-         match=r"\bc-?12\b|\bu-?\s?47\b|\bela ?-?m ?-?251\b|\b251\b",
-         require=_TUBE + r"|\bc-?12\b|\bu-?\s?47\b|\bela ?-?m ?-?251\b",
+    dict(key="c12", name="C12-style tube mics", min_pct=60, max_price=375,
+         match=r"\bc-?12\b|\bcv-?12\b",
+         require=_TUBE + r"|\bc-?12\b",
+         exclude=r"\bc-?12 ?a\b|\bfet\b|\bd-?12\b|\bbehringer\b|\bmxl\b|socket",
+         queries=["c12 tube mic", "c12 tube microphone", "c12 clone"],
+         model=None, brand=None),
+    dict(key="classic_tube", name="U47 / ELA M 251-style tube mics", min_pct=60, max_price=1000,
+         match=r"\bu-?\s?47\b|\bela ?-?m ?-?251\b|\b251\b",
+         require=_TUBE + r"|\bu-?\s?47\b|\bela ?-?m ?-?251\b",
          exclude=r"\bc-?12 ?a\b|\bc-?12 ?vr\b(?=.*\bfet\b)|\bfet\b|\bd-?12\b|\bnt-?\d|\bb-?\d{2,3}\b(?=.*behringer)|"
                  r"\bbehringer\b|\bmxl\b|socket|\b251(?:st|nd)\b",
-         queries=["c12 tube mic", "u47 tube microphone", "ela m 251", "251 tube microphone", "u47 tube"],
+         queries=["u47 tube microphone", "ela m 251", "251 tube microphone", "u47 tube"],
          model=None, brand=None),
 ]
+
+
+_BRANDS = re.compile(r"\b(aea|akg|avantone|lauten|royer|sennheiser|shure|neumann|peluso|warm audio|golden age|stam|"
+                     r"beesneez|bees neez|telefunken|rode|audio-technica|mojave|blue|electro-voice|ev|beyerdynamic|"
+                     r"coles|cad|mxl|soyuz|wunder|chandler|manley|ua|universal audio|josephson|schoeps|sony)\b", re.I)
 
 
 def settings(cfg: dict) -> dict:
@@ -108,6 +122,10 @@ def settings(cfg: dict) -> dict:
         t = dict(t)
         try:
             t["min_pct"] = max(0, min(95, int(o.get("min_pct", t["min_pct"]))))
+        except (TypeError, ValueError):
+            pass
+        try:
+            t["max_price"] = max(0, int(o.get("max_price", t["max_price"])))
         except (TypeError, ValueError):
             pass
         t["on"] = bool(o.get("on", True))
@@ -136,6 +154,9 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
     if is_spare_tube(title) or (re.search(r"6au6|ef ?94|6072|12ay7|ef ?86|6sj7|vf ?14", title, re.I)
                                 and re.search(r"nos|new old stock|^\s*\d+\s?x\b|\bpairs?\b|matched", title, re.I)):
         return None  # a spare tube for one of these mics
+    # A "studio microphones: AEA, AKG, Avantone, Lauten, Royer…" lot isn't one mic.
+    if len(set(m.lower() for m in _BRANDS.findall(title))) >= 3:
+        return None
     for t in cfg_targets or TARGETS:
         if not re.search(t["match"], title, re.I):
             continue
@@ -143,7 +164,7 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
             continue
         if t.get("exclude") and re.search(t["exclude"], title, re.I):
             continue
-        if t["key"] in ("warm", "classic_tube", "golden_age", "stam", "bees_neez") and _FET.search(title):
+        if t["key"] in ("warm", "c12", "classic_tube", "golden_age", "stam", "bees_neez") and _FET.search(title):
             continue
         return t
     return None
@@ -251,13 +272,13 @@ def find(cfg: dict) -> list[dict]:
         ref = new or used
         ref_kind = "new" if new else ("used" if used else None)
         pct = round((1 - delivered / ref) * 100) if ref else None
-        hit = (t["min_pct"] == 0) or (pct is not None and pct >= t["min_pct"])
-        r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "pct": pct,
+        hit = delivered < t["max_price"]  # by price (Oct 22), not % off
+        r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,
                     "model": q, "basis": basis, "check": bool(pct is not None and pct >= 85)}
         out.append(r)
-    out.sort(key=lambda r: (-(r["mic"]["pct"] if r["mic"]["pct"] is not None else -999), r["mic"]["delivered"]))
+    out.sort(key=lambda r: r["mic"]["delivered"])  # cheapest first
     return out
 
 
@@ -321,7 +342,7 @@ def alert(cfg: dict) -> int:
         else:
             for r in todo:
                 m = r["mic"]
-                head = f"{m['pct']}% off {m['ref_kind']}" if m["pct"] is not None else "new listing"
+                head = f"${m['delivered']:,.0f}" + (f" ({m['pct']}% off {m['ref_kind']})" if m["pct"] and m["pct"] > 0 else "")
                 chk = " (double-check)" if m["check"] else ""
                 send_push(cfg, f"🎤 {m['name']}: {head}{chk}", f"{r['title'][:100]}\n{_line(r)}",
                           url=r["url"], tags=["microphone"], image=r.get("image_url"))

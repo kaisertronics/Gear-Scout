@@ -4,8 +4,8 @@
     "title": "Mic Focus: Gear Scout hunts only your mics now",
     "items": [
       "New 🎤 Mics page, now the front page. It covers Peluso, Golden Age tube mics, Stam tube mics, Warm Audio tube mics, Lauten, Bees Neez tube mics, the AKG D12, and any C12 / U47 / ELA M 251-style tube mic.",
-      "Every 15 minutes Gear Scout searches just those mics: the fast sites every time, eBay every 30 minutes, and Facebook in rotation. Any one that's 60%+ off goes to your phone, once per price.",
-      "60% off means the delivered price (with listed shipping) against today's new price when the mic is still made, or else against what it sells for used. US listings only; spare tubes, parts, power supplies, repair jobs and toys named 'GA-47' are left out.",
+      "Every 15 minutes Gear Scout searches just those mics: the fast sites every time, eBay every 30 minutes, and Facebook in rotation. Any one under its price goes to your phone, once per price (a price drop sends it again).",
+      "Prices are delivered (with listed shipping): under $1,000 for each mic, under $375 for C12-style tube mics and under $500 for the AKG D12. You can change any of them on the Mics page. Each card also shows how far under the new price it is (or the used price, for mics no longer made). US listings only; spare tubes, capsules, parts, power supplies, repair jobs and multi-mic lots are left out.",
       "Everything else is paused while Mic Focus is on: Telex List matches, steals, price drops, auctions and the AI briefing. Your Telex List is kept. Turn Mic Focus off on the Mics page to go back. The other pages are under More."
     ]
   },

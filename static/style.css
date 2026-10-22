@@ -1080,7 +1080,7 @@ input[type=url], input[type=text]:not([class]), textarea:not([class]) { border: 
 /* Mic Focus (Oct 22) */
 .mic-targets { border-collapse: collapse; margin: 6px 0 12px; }
 .mic-targets th, .mic-targets td { padding: 6px 10px; border-bottom: 1px solid var(--border, #e5e7eb); text-align: left; }
-.mic-targets input[type=number] { width: 4.5em; padding: 4px 6px; color: #111; }
+.mic-targets input[type=number] { width: 6em; padding: 4px 6px; color: #111; }
 .nav-more { position: relative; display: inline-block; }
 .nav-more > summary { cursor: pointer; list-style: none; padding: 6px 10px; }
 .nav-more > summary::-webkit-details-marker { display: none; }
