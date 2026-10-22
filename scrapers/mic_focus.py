@@ -84,6 +84,29 @@ TARGETS = [
          queries=["bees neez microphone", "beesneez", "beezneez"],
          model=r"\b(lulu|arya|jumbo|vivian|ursa|mona|honey|queen|cleo|ada|willa|tiara|dolly|ruby|ella)\b",
          brand="Bees Neez"),
+    dict(key="advanced_audio", name="Advanced Audio", min_pct=60, max_price=1000,
+         match=r"advanced\s*audio|\bcm[\s-]?(?:47|12|251|49|269|800|67|87|414)\w*\b(?=.*\b(?:mic|tube|condenser))",
+         require=r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bcm[\s-]?\d",
+         exclude=r"\bcar\b|amplifier|speaker|subwoofer|stereo receiver",
+         queries=["advanced audio microphone"],
+         model=r"\b(cm[\s-]?\d{2,3}[a-z]{0,3})\b", brand="Advanced Audio"),
+    dict(key="united", name="United Studio Technologies", min_pct=60, max_price=1000,
+         match=r"united\s*studio\s*tech|\but[\s-]?(?:twin[\s-]?\d{2}|fet[\s-]?47|tube[\s-]?67|vintage[\s-]?87|47|251|12|67)\b",
+         require=r"united\s*studio|\bmic(?:rophone)?s?\b|condenser",
+         exclude=r"la-?2a|1176|turntable|record player|teletronix",
+         queries=["united microphone", "united studio technologies microphone"],
+         model=r"\b(ut[\s-]?(?:twin[\s-]?\d{2}|fet[\s-]?47|tube[\s-]?67|vintage[\s-]?87|\d{2,3})|twin[\s-]?\d{2}|vintage[\s-]?87)\b",
+         brand="United Studio Technologies"),
+    dict(key="signal_art", name="Signal Art", min_pct=60, max_price=1000,
+         match=r"signal\s*arts?\b",
+         require=r"\bmic(?:rophone)?s?\b|condenser|ribbon|\btube\b|\bpreamp\b(?!.*painted)",
+         exclude=r"painted|wooden|wear|shirt|crew neck|hoodie|sign\b|canvas|print",
+         queries=["signal arts microphone", "signal art microphone"],
+         model=None, brand=None),
+    dict(key="dachman", name="Dachman Audio", min_pct=60, max_price=1000,
+         match=r"\bdachman\b", require=None, exclude=None,
+         queries=["dachman microphone"],
+         model=r"\b(da[\s-]?\d{2,3}[a-z]{0,3}|\d{2,3}se)\b", brand="Dachman Audio"),
     dict(key="d12", name="AKG D12", min_pct=60, max_price=500,
          match=r"(?<![\w-])d-?12\b(?![-\s]?\d)",
          require=r"\bakg\b",
@@ -203,7 +226,7 @@ def _model_prices(q: str) -> dict:
 
 def _candidates() -> list[dict]:
     from scrapers.store import _conn
-    likes = ["peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
+    likes = ["advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
              "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251"]
     cut = (datetime.now(timezone.utc) - timedelta(days=LIVE_DAYS)).isoformat()
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"

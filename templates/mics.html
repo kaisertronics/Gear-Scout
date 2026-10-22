@@ -47,7 +47,12 @@
   <section class="panel">
     <h2>Under your price <span class="muted">— cheapest first</span></h2>
     {% if hits %}
-      <div class="listing-grid">{% for l in hits %}{{ listing_card(l) }}{% endfor %}</div>
+      <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if hits|length > 48 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(hits[48:])) }}">
+          <summary>Show all {{ hits|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
     {% else %}
       <p class="muted">Nothing under your prices right now. Every new one goes to your phone the moment a sweep finds it.</p>
     {% endif %}
@@ -58,7 +63,9 @@
     <details class="panel" id="t-{{ t.key }}">
       <summary><h2 style="display:inline">{{ t.name }} <span class="muted">— {{ ls|length }} for sale · push under ${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2></summary>
       {% if ls %}
-        <div class="listing-grid">{% for l in ls %}{{ listing_card(l) }}{% endfor %}</div>
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
+          <summary>Show all {{ ls|length }}, cheapest first</summary><div class="listing-grid"></div>
+        </details>
       {% else %}
         <p class="muted">None for sale in the US right now.</p>
       {% endif %}
