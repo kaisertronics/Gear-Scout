@@ -1,6 +1,18 @@
 [
   {
     "date": "2026-10-22",
+    "title": "Nightly check back on, safer saving, scanners off your Feed",
+    "items": [
+      "The nightly check and the code review had been stuck since Oct 20, waiting for a permission click nobody saw. They're unstuck and will run again tonight. Gear Scout itself kept finding ads the whole time.",
+      "Changing your Telex List or Settings now saves in one step. Before, the file sat empty for a split second, and a page that read it at that moment broke (it happened once today, when you removed a term).",
+      "NASCAR scanner radios (\"RE1000\") and Voltech power analyzers (\"PM1000\") are filtered out. Your Re1000 and Pm1000 terms still find the mic and the Yamaha console.",
+      "Spot check of 40 Feed ads: all still for sale. New ads reached you within about 20 minutes (20 of 25 within an hour).",
+      "Health now marks the connector part numbers that are searched on Facebook every 3 days, so their older times don't look like a problem.",
+      "Still your call: two Calrec consoles list \"SSL modules\" in their titles and show under \"ssl\". That's the same question as SSL-style gear from Oct 20."
+    ]
+  },
+  {
+    "date": "2026-10-22",
     "title": "Mic Focus: Gear Scout hunts only your mics now",
     "items": [
       "New 🎤 Mics page, now the front page. It covers Peluso, Golden Age tube mics, Stam tube mics, Warm Audio tube mics, Lauten, Bees Neez tube mics, Advanced Audio, United Studio Technologies, Signal Art, Dachman Audio, the AKG D12, C12-style tube mics, and U47 / ELA M 251-style tube mics.",

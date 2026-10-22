@@ -378,7 +378,10 @@ _OFF_TOPIC = re.compile(
     r"colou?red vinyl|vinyl (?:lp|record|ep|album|single|7\"|12\")|"
     # postcards, prints and flowers ("Flowerpower No.1 Tulips Art Unlimited
     # Amsterdam Holland Postcard P16" matched the "ART P16" term)
-    r"post ?cards?|greeting cards?|art prints?|posters?|lithographs?|flowers?|floral|bouquets?|tulips?)\b", re.I)
+    r"post ?cards?|greeting cards?|art prints?|posters?|lithographs?|flowers?|floral|bouquets?|tulips?|"
+    # race scanners and test gear sharing a model number ("Racing Electronics
+    # RE1000 Scanner NASCAR", "Voltech PM1000 AC Power Analyzer")
+    r"nascar|racing electronics|race scanners?|scanners?|power analy[sz]ers?|voltech)\b", re.I)
 
 
 @functools.lru_cache(maxsize=100_000)

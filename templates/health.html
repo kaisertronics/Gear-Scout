@@ -18,7 +18,7 @@
 
   <section class="panel">
     <h2>Your Wanted terms</h2>
-    <p class="muted">When each term was last searched on each kind of site (and how many new ads that search found).</p>
+    <p class="muted">When each term was last searched on each kind of site (and how many new ads that search found). Facebook takes a couple of terms every half hour (none 1–7 AM), so each term comes round about once a day; connector part numbers, which almost never show up there, every 3 days.</p>
     <div class="table-scroll">
     <table class="health-table">
       <tr><th>Term</th><th>Quick sites</th><th>eBay</th><th>Facebook</th></tr>
@@ -27,7 +27,7 @@
         <td>{{ r.term }}</td>
         <td>{{ r.fast or '—' }}{% if r.fast_new %} · <strong>{{ r.fast_new }} new</strong>{% endif %}</td>
         <td>{{ r.ebay or '—' }}{% if r.ebay_new %} · <strong>{{ r.ebay_new }} new</strong>{% endif %}</td>
-        <td>{{ r.fb or '—' }}{% if r.fb_new %} · <strong>{{ r.fb_new }} new</strong>{% endif %}</td>
+        <td>{{ r.fb or '—' }}{% if r.fb_new %} · <strong>{{ r.fb_new }} new</strong>{% endif %}{% if r.fb_slow %} <span class="muted">· every 3 days</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </table>

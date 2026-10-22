@@ -16,6 +16,7 @@ import os
 import re
 from collections import OrderedDict
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -265,7 +266,10 @@ def load_config_raw():
     with _config_cache_lock:
         if _config_cache["stamp"] != stamp:
             with open(CONFIG_PATH) as f:
-                _config_cache["data"] = yaml_rt.load(f)
+                data = yaml_rt.load(f)
+            if not isinstance(data, dict) and _config_cache["data"] is not None:
+                return _config_cache["data"]  # caught mid-save: keep the last good copy, re-read next time
+            _config_cache["data"] = data
             _config_cache["stamp"] = stamp
         return _config_cache["data"]
 
@@ -277,8 +281,18 @@ def load_config_for_edit():
 
 
 def save_config_raw(data):
-    with open(CONFIG_PATH, "w") as f:
+    # Written to a temporary file and swapped in at once: writing in place
+    # left config.yaml empty or half-written for a moment, and a page or the
+    # scraper reading it then got nothing (a Telex removal crashed the
+    # deals-for-you box on Oct 22).
+    tmp = f"{CONFIG_PATH}.saving"
+    with open(tmp, "w") as f:
         yaml_rt.dump(data, f)
+    try:
+        shutil.copymode(CONFIG_PATH, tmp)
+    except OSError:
+        pass
+    os.replace(tmp, CONFIG_PATH)
 
 
 def load_run_status():
@@ -2441,7 +2455,7 @@ def health():
     searched it; and how fresh the Feed is."""
     from scrapers import wanted
     from scrapers.store import _conn
-    from scrapers.telex import EBAY_EVERY_MIN, FAST_EVERY_MIN, sweep_state
+    from scrapers.telex import EBAY_EVERY_MIN, FAST_EVERY_MIN, _cable_part_number, sweep_state
     cfg = load_config_raw()
     try:
         run = json.loads(Path("/data/last_run.json").read_text())
@@ -2467,6 +2481,7 @@ def health():
             s = st.get((t, site)) or {}
             row[site] = _ago(s.get("searched_at"))
             row[site + "_new"] = s.get("new") or 0
+        row["fb_slow"] = _cable_part_number(t)  # searched on Facebook every 3 days (see telex.run_wanted_sweep)
         term_rows.append(row)
     items = _feed_items(cfg)
     # Freshness: for Feed listings found in the last day with a known posting
