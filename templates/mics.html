@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "_listing_card.html" import listing_card %}
+{% block title %}Gear Scout — Mics{% endblock %}
+{% block content %}
+
+  <section class="panel">
+    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic{{ '' if hits|length == 1 else 's' }} worth a look right now</span></h2>
+    {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
+    <p class="muted">
+      {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
+      OfferUp, ShopGoodwill and the other fast sites every time, eBay every 30 minutes, Facebook in rotation) and pushes
+      each one that clears its discount to your phone, once per price. Everything else is paused: Telex matches, steals,
+      price drops, auctions, the daily AI briefing. Your Telex List is kept, just not searched.
+      {% else %}<strong>Off.</strong> Gear Scout is searching your whole Telex List as usual; this page still lists the mics.{% endif %}
+      "% off" is the delivered price (with listed shipping) against today's <b>new</b> price when the mic is still made,
+      else against what it goes for <b>used</b>. US listings only. Parts, power supplies, repair jobs and auctions are left out.
+    </p>
+    <p class="muted">Last sweep {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} ·
+      list updated {{ built or 'not yet' }}</p>
+    <form method="post" action="{{ url_for('mics_settings') }}" style="display:inline">
+      <input type="hidden" name="enabled" value="{{ '0' if st.enabled else '1' }}">
+      <button type="submit" class="btn btn-sm{{ '' if st.enabled else ' btn-primary' }}">{{ 'Turn Mic Focus off (back to everything)' if st.enabled else 'Turn Mic Focus on' }}</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Push when… <span class="muted">— 0% = push every listing</span></h2>
+    <form method="post" action="{{ url_for('mics_settings') }}">
+      <table class="mic-targets">
+        <thead><tr><th>Push</th><th>Mic</th><th>At least</th><th>Listed now</th></tr></thead>
+        <tbody>
+        {% for t in st.targets %}
+          <tr>
+            <td><input type="checkbox" name="on_{{ t.key }}" value="1" {{ 'checked' if t.on }} aria-label="Search and push {{ t.name }}"></td>
+            <td><a href="#t-{{ t.key }}">{{ t.name }}</a></td>
+            <td><input type="number" name="pct_{{ t.key }}" value="{{ t.min_pct }}" min="0" max="95" step="5" inputmode="numeric"> % off</td>
+            <td>{{ (by.get(t.key) or [])|length }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      <span class="muted">Searches: {{ terms|join(' · ') }}</span>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Worth a look <span class="muted">— at or past your discount, best first</span></h2>
+    {% if hits %}
+      <div class="listing-grid">{% for l in hits %}{{ listing_card(l) }}{% endfor %}</div>
+    {% else %}
+      <p class="muted">Nothing at your discounts right now. Every new one goes to your phone the moment a sweep finds it.</p>
+    {% endif %}
+  </section>
+
+  {% for t in st.targets %}
+    {% set ls = by.get(t.key) or [] %}
+    <details class="panel" id="t-{{ t.key }}">
+      <summary><h2 style="display:inline">{{ t.name }} <span class="muted">— {{ ls|length }} for sale · push at {{ t.min_pct }}%+ off{{ '' if t.on else ' (off)' }}</span></h2></summary>
+      {% if ls %}
+        <div class="listing-grid">{% for l in ls %}{{ listing_card(l) }}{% endfor %}</div>
+      {% else %}
+        <p class="muted">None for sale in the US right now.</p>
+      {% endif %}
+    </details>
+  {% endfor %}
+
+{% endblock %}

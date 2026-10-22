@@ -480,6 +480,14 @@ def service_worker():
 
 
 @app.context_processor
+def _inject_mic_focus():
+    try:
+        return {"mic_focus_on": bool((load_config_raw().get("mic_focus") or {}).get("enabled"))}
+    except Exception:
+        return {"mic_focus_on": False}
+
+
+@app.context_processor
 def _distance_filter_context():
     try:
         home_zip = str(load_config_raw().get("home_zip") or "")
@@ -2236,10 +2244,70 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
     return sections
 
 
+@app.route("/mics")
+def mics_page():
+    """Mic Focus: the mics being hunted right now, best discount first."""
+    from scrapers import mic_focus
+    cfg = load_config_raw()
+    st = mic_focus.settings(cfg)
+    data = mic_focus.load()
+    rows = _decorate(data.get("rows") or [])
+    for l in rows:
+        l["age_days"] = _age_days(l)
+        m = l["mic"]
+        if m["pct"] is not None and m["pct"] > 0:
+            label = "New" if m["ref_kind"] == "new" else "Used market"
+            l["comp"] = {"pct": m["pct"], "ref": f"${m['ref']:,}", "est": False, "label": label}
+        elif m["ref"]:
+            l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+                f"{'New' if m['ref_kind'] == 'new' else 'Used market'} ~${m['ref']:,}: "
+                + ("about the same" if m["pct"] is not None and m["pct"] > -5 else f"{-m['pct']}% over")))
+    by = {t["key"]: [] for t in st["targets"]}
+    for l in rows:
+        by.setdefault(l["mic"]["target"], []).append(l)
+    # The page's top list is real discounts only: a push-every-listing mic
+    # (0%) shows here when it's 25%+ under; the rest are in its own section.
+    hits = [l for l in rows if l["mic"]["hit"] and l["mic"]["pct"] is not None
+            and l["mic"]["pct"] >= (l["mic"]["min_pct"] or 25)]
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    return render_template("mics.html", st=st, hits=hits, by=by, built=_ago(data.get("built")),
+                           sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+
+
+@app.route("/mics/settings", methods=["POST"])
+def mics_settings():
+    data = load_config_for_edit()
+    mf = data.get("mic_focus") or {}
+    if "enabled" in request.form:
+        mf["enabled"] = request.form.get("enabled") == "1"
+    targets = dict(mf.get("targets") or {})
+    from scrapers.mic_focus import TARGETS
+    for t in TARGETS:
+        k = t["key"]
+        if f"pct_{k}" not in request.form:
+            continue
+        try:
+            pct = max(0, min(95, int(request.form.get(f"pct_{k}") or 0)))
+        except ValueError:
+            continue
+        targets[k] = {"min_pct": pct, "on": request.form.get(f"on_{k}") == "1"}
+    mf["targets"] = targets
+    data["mic_focus"] = mf
+    save_config_raw(data)
+    return redirect(url_for("mics_page", saved=1))
+
+
 @app.route("/")
 def feed():
     from scrapers import wanted
     cfg = load_config_raw()
+    if (cfg.get("mic_focus") or {}).get("enabled") and not request.args:
+        return mics_page()  # Mic Focus: the mics are the front page (the inbox is at /?inbox=1)
     terms = wanted.terms(cfg)
     items = _feed_items(cfg)
     if not (request.args.get("term") or request.args.get("show") or request.args.get("sort") or request.args.get("all")):

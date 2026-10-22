@@ -449,6 +449,29 @@ def run_watch_cycle():
         from scrapers.lowest import run_trackers, tracked_queries
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
+        from scrapers import mic_focus
+        if mic_focus.enabled(cfg):
+            # Mic Focus (Oct 22): every cycle searches only the focus mics and
+            # pushes the ones that clear their discount; the other alerts
+            # (Telex matches, steals, price drops, auctions, trackers) rest.
+            if (cfg.get("schedule") or {}).get("background_refresh", True) and _refresh_due():
+                try:
+                    run_refresh_cycle(cfg)
+                except Exception:
+                    logger.exception("Background refresh failed")
+            try:
+                from scrapers.telex import run_wanted_sweep
+                mic_focus.alert(cfg)  # what the refresh found, without waiting for the sweep
+                run_wanted_sweep(cfg)
+                mic_focus.alert(cfg)
+            except Exception:
+                logger.exception("Mic Focus sweep / alerts failed")
+            try:
+                from scrapers.assistant import check_alerts
+                check_alerts(cfg)
+            except Exception:
+                logger.exception("AI alert check failed")
+            return
         # This cycle runs every 30 minutes; re-reading every site's feed is
         # heavier, so it happens on every other one (hourly).
         if (cfg.get("schedule") or {}).get("background_refresh", True) and _refresh_due():
@@ -513,6 +536,14 @@ def run_watch_cycle():
         _run_lock.release()
 
 
+def _mic_focus_on(cfg=None) -> bool:
+    try:
+        from scrapers import mic_focus
+        return mic_focus.enabled(cfg if cfg is not None else load_config())
+    except Exception:
+        return False
+
+
 def run_fb_posts_batch():
     # Leaves the machine to a scrape that's already running (CPU, memory
     # and the Facebook account) — the next batch is 15 minutes away.
@@ -526,6 +557,8 @@ def run_fb_posts_batch():
 
 
 def run_ai_briefing():
+    if _mic_focus_on():
+        return  # Mic Focus: mic alerts only
     try:
         from scrapers.ai_reports import daily_briefing
         daily_briefing(load_config())
@@ -534,6 +567,8 @@ def run_ai_briefing():
 
 
 def run_ai_weekly():
+    if _mic_focus_on():
+        return  # Mic Focus: mic alerts only
     try:
         from scrapers.ai_reports import weekly_notes
         weekly_notes(load_config())
@@ -547,7 +582,7 @@ def run_fb_posts_roundup():
         from scrapers.fb_posts_background import _local_now, send_roundup, settings
         cfg = load_config()
         s = settings(cfg)
-        if not s["enabled"] or _local_now(cfg).hour != s["roundup_hour"]:
+        if _mic_focus_on(cfg) or not s["enabled"] or _local_now(cfg).hour != s["roundup_hour"]:
             return
         send_roundup(cfg)
     except Exception:

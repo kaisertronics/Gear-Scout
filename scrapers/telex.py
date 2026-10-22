@@ -199,13 +199,18 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     ago on Facebook, then a couple of misspelled versions of your terms."""
     import json
     from pathlib import Path
+    from scrapers import mic_focus
     from scrapers.wanted import terms as wanted_terms
-    ts = wanted_terms(cfg)
+    focus = mic_focus.enabled(cfg)
+    # Mic Focus (Oct 22): only the mics, fast sites every cycle (15 min),
+    # eBay every 30 min; the Telex List is kept but not searched.
+    ts = mic_focus.sweep_terms(cfg) if focus else wanted_terms(cfg)
+    fast_every, ebay_every = (15, 45) if focus else (FAST_EVERY_MIN, EBAY_EVERY_MIN)
     if not ts:
         return []
     try:
         from scrapers.market import refresh_telex_term_values
-        refresh_telex_term_values(terms(cfg))
+        refresh_telex_term_values(ts)
     except Exception:
         logger.exception("Telex term price lookup failed")
     wcfg = cfg.get("wanted") or {}
@@ -237,7 +242,7 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
         if time.time() - start > FAST_BUDGET_SECONDS:
             logger.info("Wanted sweep: time's up for this cycle; the rest go first next time")
             break
-        sites = {s for s, m in (("fast", FAST_EVERY_MIN), ("ebay", EBAY_EVERY_MIN)) if due(term, s, m)}
+        sites = {s for s, m in (("fast", fast_every), ("ebay", ebay_every)) if due(term, s, m)}
         if sites:
             out.append(run(term, sites, "+".join(sorted(sites))))
     from scrapers.fb_posts_background import marketplace_quiet_hours
