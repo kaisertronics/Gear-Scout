@@ -2279,7 +2279,9 @@ def mics_page():
     by = {t["key"]: [] for t in st["targets"]}
     for l in rows:
         by.setdefault(l["mic"]["target"], []).append(l)
-    hits = [l for l in rows if l["mic"]["hit"]]  # under each mic's price limit, cheapest first
+    # In your price range, newest find first (cheapest-first buried new ones
+    # mid-list, so the top never seemed to change); categories stay cheapest first.
+    hits = sorted((l for l in rows if l["mic"]["hit"]), key=lambda l: l.get("first_seen") or "", reverse=True)
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())

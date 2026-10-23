@@ -46,7 +46,7 @@
   </section>
 
   <section class="panel">
-    <h2>In your price range <span class="muted">— ${{ '{:,}'.format(st.min_price) }} and up, under each mic's limit, cheapest first</span></h2>
+    <h2>In your price range <span class="muted">— ${{ '{:,}'.format(st.min_price) }} and up, under each mic's limit, newest find first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}
