@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-10-23",
+    "title": "Mics page refreshes itself; Facebook checks each brand more often",
+    "items": [
+      "An open Mics page checks every minute for a finished sweep and reloads itself, so it no longer sits on what was there when you opened it. It also checks when you come back to the tab, and never reloads while you're typing in the settings.",
+      "Facebook now runs one broad search per mic brand (17 searches instead of about 45), so each brand gets searched there about every 2 hours during the day instead of every 5 to 14, at the same load on the account. Reverb, eBay, Craigslist and the other fast sites still run every mic search every 15 minutes."
+    ]
+  },
+  {
     "date": "2026-10-22",
     "title": "Nightly check back on, safer saving, scanners off your Feed",
     "items": [

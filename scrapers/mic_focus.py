@@ -189,6 +189,27 @@ def sweep_terms(cfg: dict) -> list[str]:
     return out
 
 
+# Facebook gets one broad search per brand (its search is fuzzy, and each
+# term costs ~1 minute of the account's time), so every brand comes round
+# every ~2 hours instead of every 5–14 with all ~45 site searches (Oct 23).
+FB_TERMS = {
+    "peluso": ["peluso microphone"], "golden_age": ["golden age microphone"], "stam": ["stam microphone"],
+    "warm": ["warm audio microphone"], "lauten": ["lauten microphone"], "bees_neez": ["bees neez microphone"],
+    "advanced_audio": ["advanced audio microphone"], "united": ["united microphone"],
+    "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "d12": ["akg d12"],
+    "c12": ["c12 microphone"], "classic_tube": ["u47 microphone", "251 microphone"],
+    "generic": ["47 microphone", "67 microphone", "87 microphone"],
+}
+
+
+def fb_terms(cfg: dict) -> list[str]:
+    out = []
+    for t in settings(cfg)["targets"]:
+        if t["on"]:
+            out += [q for q in FB_TERMS.get(t["key"], t["queries"][:1]) if q not in out]
+    return out
+
+
 def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
     """The first target a listing title belongs to, or None."""
     if not title or _NOT_MIC.search(title) or _PART.search(title):

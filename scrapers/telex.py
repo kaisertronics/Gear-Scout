@@ -254,6 +254,8 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     # mics and outboard gear — same number of Facebook searches, mics come
     # round sooner. Plain "XLR cable" / "DB25 snake" stay in the rotation.
     fb_due = [t for t in ts if not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN)]
+    if focus:
+        fb_due = mic_focus.fb_terms(cfg)  # one broad Facebook search per mic brand
     for term in sorted(fb_due, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
         out.append(run(term, {"fb"}, "fb"))
     typos = list(dict.fromkeys(q for t in ts for q in misspellings(t)))

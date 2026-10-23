@@ -2288,8 +2288,16 @@ def mics_page():
         sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
     except Exception:
         pass
-    return render_template("mics.html", st=st, hits=hits, by=by, built=_ago(data.get("built")),
+    return render_template("mics.html", st=st, hits=hits, by=by, built=_ago(data.get("built")), built_iso=data.get("built"),
                            sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+
+
+@app.route("/mics/built")
+def mics_built():
+    """When the Mics list was last rebuilt — the open page polls this and
+    reloads itself after each sweep instead of going stale."""
+    from scrapers import mic_focus
+    return {"built": mic_focus.load().get("built")}
 
 
 @app.route("/mics/settings", methods=["POST"])

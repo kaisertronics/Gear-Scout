@@ -73,6 +73,22 @@
     </section>
   {% endfor %}
   <script>
+    // Stay current: check every minute for a new sweep and reload when there is
+    // one (not while you're typing in the settings form).
+    (function () {
+      const built = {{ (built_iso or '')|tojson }};
+      setInterval(async () => {
+        if (document.hidden || document.activeElement && document.activeElement.tagName === 'INPUT') return;
+        try {
+          const r = await (await fetch('{{ url_for("mics_built") }}', {cache: 'no-store'})).json();
+          if (r.built && r.built !== built) location.reload();
+        } catch (e) {}
+      }, 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) fetch('{{ url_for("mics_built") }}', {cache: 'no-store'})
+        .then(r => r.json()).then(r => { if (r.built && r.built !== built) location.reload(); }).catch(() => {}); });
+    })();
+  </script>
+  <script>
     // Every category starts open, so fetch its listings now. (Closing and
     // re-opening to trigger the usual on-open loader doesn't work: browsers
     // merge the two toggles into none and the lists stayed empty.)
