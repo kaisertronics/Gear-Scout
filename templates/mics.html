@@ -13,7 +13,7 @@
       price drops, auctions, the daily AI briefing. Your Telex List is kept, just not searched.
       {% else %}<strong>Off.</strong> Gear Scout is searching your whole Telex List as usual; this page still lists the mics.{% endif %}
       Prices are delivered (with listed shipping). The "% under" on each card compares that with today's <b>new</b> price when
-      the mic is still made, else with what it goes for <b>used</b>. US listings only. Parts, power supplies, repair jobs and auctions are left out.
+      the mic is still made, else with what it goes for <b>used</b>. US listings only, anything still for sale that a site showed in the last 90 days (pushes are only for ones seen in the last 10). Parts, power supplies, repair jobs and auctions are left out.
     </p>
     <p class="muted">Last sweep {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} ·
       list updated {{ built or 'not yet' }}</p>
@@ -61,16 +61,20 @@
 
   {% for t in st.targets %}
     {% set ls = by.get(t.key) or [] %}
-    <details class="panel" id="t-{{ t.key }}">
-      <summary><h2 style="display:inline">{{ t.name }} <span class="muted">— {{ ls|length }} for sale · push ${{ '{:,}'.format(st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2></summary>
+    <section class="panel" id="t-{{ t.key }}">
+      <h2>{{ t.name }} <span class="muted">— all {{ ls|length }} for sale, lowest price first · push ${{ '{:,}'.format(st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2>
       {% if ls %}
-        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
-          <summary>Show all {{ ls|length }}, cheapest first</summary><div class="listing-grid"></div>
+        <details class="more-listings" open data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
+          <summary>Hide / show</summary><div class="listing-grid"></div>
         </details>
       {% else %}
         <p class="muted">None for sale in the US right now.</p>
       {% endif %}
-    </details>
+    </section>
   {% endfor %}
+  <script>
+    // Every category starts open: re-open each so its listings load right away.
+    document.querySelectorAll('details.more-listings[open][data-lazy]').forEach(d => { d.open = false; d.open = true; });
+  </script>
 
 {% endblock %}

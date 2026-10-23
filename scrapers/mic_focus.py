@@ -25,7 +25,8 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 SNAPSHOT = Path("/data/mic_focus.json")
-LIVE_DAYS = 10          # still listed by a site within this many days
+LIVE_DAYS = 90          # the page lists everything still for sale seen within this many days (owner, Oct 22)
+FRESH_DAYS = 10         # pushes only for listings a site still showed within this many days
 NEW_HOURS = 6           # "new" for alerts: first found within this many hours
 ALERT_MAX_SINGLE = 8    # more than this in one pass → one summary push
 MIN_PRICE = 40.0        # under this it's a placeholder or a part
@@ -253,6 +254,7 @@ def find(cfg: dict) -> list[dict]:
     st = settings(cfg)
     targets = [t for t in st["targets"] if t["on"]]
     floor = st["min_price"]
+    fresh_cut = (datetime.now(timezone.utc) - timedelta(days=FRESH_DAYS)).isoformat()
     exclude_words = cfg.get("exclude_words") or []
     market = index = similar = None
     out, seen_ads = [], set()
@@ -306,7 +308,8 @@ def find(cfg: dict) -> list[dict]:
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,
-                    "model": q, "basis": basis, "check": bool(pct is not None and pct >= 85)}
+                    "model": q, "basis": basis, "check": bool(pct is not None and pct >= 85),
+                    "fresh": (r.get("last_seen") or "") >= fresh_cut}
         out.append(r)
     out.sort(key=lambda r: r["mic"]["delivered"])  # cheapest first
     return out
@@ -353,7 +356,7 @@ def alert(cfg: dict) -> int:
     from scrapers.notify import push_enabled, send_push
     from scrapers.store import _conn
     data = build(cfg)
-    hits = [r for r in data["rows"] if r["mic"]["hit"]]
+    hits = [r for r in data["rows"] if r["mic"]["hit"] and r["mic"].get("fresh", True)]
     with _conn() as conn:
         _ensure(conn)
         done = {(u, p) for u, p in conn.execute("SELECT url, price FROM mic_alerted")}
