@@ -273,7 +273,7 @@ def _candidates() -> list[dict]:
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND price IS NOT NULL"
            " AND url NOT LIKE '%search/posts%' AND (country IS NULL OR country = 'US')"
-           " AND last_seen >= ? AND (" + " OR ".join("LOWER(title) LIKE ?" for _ in likes) + ")")
+           " AND COALESCE(last_seen, first_seen) >= ? AND (" + " OR ".join("LOWER(title) LIKE ?" for _ in likes) + ")")
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
         return [dict(r) for r in conn.execute(sql, [cut] + [f"%{w}%" for w in likes])]
@@ -361,6 +361,14 @@ def build(cfg: dict) -> dict:
         SNAPSHOT.write_text(json.dumps(data))
     except OSError:
         logger.exception("Couldn't save the Mic Focus list")
+    # The hourly sold check looks at these first (every 4 hours each): your
+    # price range first, then everything else on the page, so an older ad
+    # that sold drops off instead of lingering.
+    try:
+        order = [r["url"] for r in rows if r["mic"]["hit"]] + [r["url"] for r in rows if not r["mic"]["hit"]]
+        Path("/data/shown_mics.txt").write_text("\n".join(dict.fromkeys(order)))
+    except OSError:
+        pass
     return data
 
 

@@ -155,8 +155,8 @@ def check_url(url: str) -> Optional[bool]:
     return bool(_GONE_TEXT.search(html))
 
 
-SHOWN_FILES = ("/data/shown_feed.txt", "/data/shown_dashboard.txt", "/data/shown_steals.txt", "/data/shown_telex.txt",
-               "/data/shown_telex_groups.txt")
+SHOWN_FILES = ("/data/shown_feed.txt", "/data/shown_mics.txt", "/data/shown_dashboard.txt", "/data/shown_steals.txt",
+               "/data/shown_telex.txt", "/data/shown_telex_groups.txt")
 SHOWN_RECHECK_HOURS = 4
 
 

@@ -4,7 +4,8 @@
     "title": "Mics page refreshes itself; Facebook checks each brand more often",
     "items": [
       "An open Mics page checks every minute for a finished sweep and reloads itself, so it no longer sits on what was there when you opened it. It also checks when you come back to the tab, and never reloads while you're typing in the settings.",
-      "Facebook now runs one broad search per mic brand (17 searches instead of about 45), so each brand gets searched there about every 2 hours during the day instead of every 5 to 14, at the same load on the account. Reverb, eBay, Craigslist and the other fast sites still run every mic search every 15 minutes."
+      "Facebook now runs one broad search per mic brand (17 searches instead of about 45), so each brand gets searched there about every 2 hours during the day instead of every 5 to 14, at the same load on the account. Reverb, eBay, Craigslist and the other fast sites still run every mic search every 15 minutes.",
+      "Older mic ads found before Oct 7 (when Gear Scout started noting when it last saw an ad) are back on the Mics page, about 200 of them, like a $399 WA-47 on Facebook. They don't push. The hourly sold check now looks at the Mics page first, your price range first, so the ones that have sold drop off within a few hours."
     ]
   },
   {
