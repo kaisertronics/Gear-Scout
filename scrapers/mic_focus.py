@@ -134,6 +134,15 @@ TARGETS = [
                  r"\bbehringer\b|\bmxl\b|socket|\b251(?:st|nd)\b",
          queries=["u47 tube microphone", "ela m 251", "251 tube microphone", "u47 tube"],
          model=None, brand=None),
+    # Catch-all (owner, Oct 22): any mic, any brand or none, that's sold by its
+    # model number alone — "47 tube mic", "U87 clone", "67 condenser", "C12 style".
+    dict(key="generic", name="Any 47 / 67 / 87 / 251 / C12 mic", min_pct=60, max_price=1000,
+         match=r"(?<![\d.$,])(?:\b|(?<=[a-z]))(?:u|m|k|ela ?m ?|tlm ?)?[\s-]?(?:47|67|87|251)(?:\s?(?:ai|i|fet|tube|se|le|mk\s?i{1,3}))?\b(?![\d.,]|\s?(?:mm|cm|in\b|inch|ft|lbs?|watt|w\b|hp|mph|cc|v\b|year|yr))|\bc[\s-]?12\b",
+         require=r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bvalve\b|\bfet\b|\bclone\b|\bstyle\b|large[\s-]?diaphragm|\bldc\b",
+         exclude=r"\b(?:19|20)\d\d\b(?=.*\b(?:car|truck|chevy|ford|corvette|mustang|jeep|honda|toyota)\b)|\bshure\s?sm\b|\bsm[\s-]?57\b|\bbeta\b|"
+                 r"\bglock\b|\bcaliber\b|\bammo\b|\brifle\b|\bak-?47\b|\bpreamp\b|\binterface\b|\bsocket\b",
+         queries=["47 microphone", "67 microphone", "87 microphone", "251 microphone", "c12 microphone"],
+         model=None, brand=None),
 ]
 
 
@@ -238,7 +247,7 @@ def _model_prices(q: str) -> dict:
 def _candidates() -> list[dict]:
     from scrapers.store import _conn
     likes = ["da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
-             "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251"]
+             "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251", "67", "87"]
     cut = (datetime.now(timezone.utc) - timedelta(days=LIVE_DAYS)).isoformat()
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND price IS NOT NULL"
