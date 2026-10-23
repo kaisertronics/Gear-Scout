@@ -70,7 +70,8 @@ TARGETS = [
          queries=["stam sa-47", "stam audio mic", "stam tube microphone"],
          model=r"\b(sa[\s-]?\d{2,3}t?\s?(?:mk\s?(?:iii|ii|3|2)|mkiii|mkii)?)\b",
          brand="Stam Audio"),
-    dict(key="warm", name="Warm Audio tube mics", min_pct=60, max_price=1000,
+    # Owner (Oct 23): Warm Audio over $500 isn't shown anywhere, not just not pushed.
+    dict(key="warm", name="Warm Audio tube mics", min_pct=60, max_price=500, hide_over_limit=True,
          match=r"warm\s*audio|\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b",
          require=r"\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b|warm\s*audio.{0,30}(?:" + _TUBE + r")",
          exclude=r"\bwa-?47 ?jr\b|\bwa-?47 ?f\b|\bwa-?(?:12|73|76|2a|412|273|2mpx|1b|84|87|14|ma)\b",
@@ -314,6 +315,8 @@ def find(cfg: dict) -> list[dict]:
         unit = price_basis(title, None, value)[2] or value
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         delivered = round(unit + (ship or 0), 2)
+        if t.get("hide_over_limit") and delivered > t["max_price"]:
+            continue
         ad = (title.lower().strip(), round(value))
         if ad in seen_ads:
             continue
@@ -341,7 +344,7 @@ def find(cfg: dict) -> list[dict]:
         ref = new or used
         ref_kind = "new" if new else ("used" if used else None)
         pct = round((1 - delivered / ref) * 100) if ref else None
-        hit = floor <= delivered < t["max_price"]  # by price (Oct 22), not % off
+        hit = floor <= delivered <= t["max_price"]  # by price (Oct 22), not % off
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,

@@ -86,8 +86,11 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
         if focus is not None:
-            if not mic_classify(title, focus):
+            mt = mic_classify(title, focus)
+            if not mt:
                 continue  # Mic Focus: Deals / Steals are your mics
+            if mt.get("hide_over_limit") and value > mt["max_price"]:
+                continue  # e.g. Warm Audio over $500 isn't shown
         elif not wanted_match(title, r.get("price"), terms, r.get("source_name")):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)
