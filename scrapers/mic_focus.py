@@ -106,8 +106,13 @@ TARGETS = [
          queries=["signal arts microphone", "signal art microphone"],
          model=None, brand=None),
     dict(key="dachman", name="Dachman Audio", min_pct=60, max_price=1000,
-         match=r"\bdachman\b", require=None, exclude=None,
-         queries=["dachman microphone"],
+         # "DA" model codes are Dachman's too ("DA 87SE", "DA-87i", "DA FET 47") — owner, Oct 22
+         match=r"\bdachman\b|\bda[\s-]?(?:fet[\s-]?)?(?:87|67|47|251|12|57|414|17|20)[a-z]{0,3}\b",
+         require=r"\bdachman\b|\bmic(?:rophone)?s?\b|condenser|\btube\b|\bfet\b|\b(?:87|47|67)\s?se\b|\b(?:87|67|47)i\b",
+         exclude=r"^(?!.*dachman)(?=.*\b(?:aea|akg|neumann|rode|shure|sennheiser|telefunken|audio-technica|behringer|"
+                 r"mxl|warm audio|golden age|stam|peluso|lauten|united|soyuz|mojave|avantone|blue|cad|sony|yamaha|roland|"
+                 r"boss|korg|digidesign|avid|apogee|focusrite|presonus|motu)\b)",
+         queries=["dachman microphone", "da 87se"],
          model=r"\b(da[\s-]?\d{2,3}[a-z]{0,3}|\d{2,3}se)\b", brand="Dachman Audio"),
     dict(key="d12", name="AKG D12", min_pct=60, max_price=500,
          match=r"(?<![\w-])d-?12\b(?![-\s]?\d)",
@@ -232,7 +237,7 @@ def _model_prices(q: str) -> dict:
 
 def _candidates() -> list[dict]:
     from scrapers.store import _conn
-    likes = ["advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
+    likes = ["da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
              "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251"]
     cut = (datetime.now(timezone.utc) - timedelta(days=LIVE_DAYS)).isoformat()
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"

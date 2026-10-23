@@ -19,7 +19,8 @@
       "Every 15 minutes Gear Scout searches just those mics: the fast sites every time, eBay every 30 minutes, and Facebook in rotation. Any one under its price goes to your phone, once per price (a price drop sends it again).",
       "Prices are delivered (with listed shipping): from $300 (cheaper ones are usually parts or lookalikes) up to under $1,000 for each mic, under $375 for C12-style tube mics and under $500 for the AKG D12. You can change any of them on the Mics page. Each card also shows how far under the new price it is (or the used price, for mics no longer made). US listings only; spare tubes, capsules, parts, power supplies, repair jobs and multi-mic lots are left out.",
       "Everything else is paused while Mic Focus is on: Telex List matches, steals, price drops, auctions and the AI briefing. Your Telex List is kept. Turn Mic Focus off on the Mics page to go back. The other pages are under More.",
-      "Each mic now shows every listing still for sale from the last 90 days, lowest price first, open on the page. Pushes are still only for ones a site showed in the last 10 days."
+      "Each mic now shows every listing still for sale from the last 90 days, lowest price first, open on the page. Pushes are still only for ones a site showed in the last 10 days.",
+      "Dachman: listings that just say 'DA 87SE', 'DA-87i', 'DA FET 47' or 'DA 67' now count as Dachman (unless another brand is named), and 'DA 87SE' is searched too."
     ]
   },
   {
