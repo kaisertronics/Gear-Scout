@@ -37,12 +37,14 @@ _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\
 _NOT_MIC = re.compile(
     r"\b(?:pre-?amps?|preamplifiers?|compressors?|limiters?|equali[sz]ers?|eq|channel ?strips?|500[\s-]?series|"
     r"lunchbox|di box|interface|headphones?|monitors?|speakers?|guitar|pedal|plugin|plug-in|software|t-?shirt|"
-    r"hat|sticker|poster|book|magazine|diecast|die-cast|figures?|toys?|chogokin|popy|robot|lego|model kit|tuner)\b", re.I)
+    r"hat|sticker|poster|book|magazine|diecast|die-cast|figures?|toys?|chogokin|popy|robot|lego|model kit|tuner|"
+    r"headsets?|aviation|intercom|pilot)\b", re.I)
 _PART = re.compile(
     r"\b(?:capsules?(?! (?:included|incl))|power suppl(?:y|ies)|psu|cables? only|cable for|shock ?mounts?|"
     r"spider|mount only|clip|case only|flight case|box only|grille|head ?basket|basket|body only|"
     r"(?:transformer|tube|valve|pcb|board|kit|parts?|socket)s?(?: only| for)|for parts|parts only|replacement|"
-    r"windscreen|pop filter|foam|manual|cradle|holder|adapter|repair|not working|as[- ]is|broken)\b", re.I)
+    r"windscreen|pop filter|foam|manual|cradle|holder|adapter|repair|not working|as[- ]is|broken|attenuators?|"
+    r"(?:\d+\s?db\s)?pads?)\b", re.I)
 
 # key, name, min_pct, brand/model regex, extra requirement, exclusions,
 # sweep queries, model-code regex, brand name used for price lookups

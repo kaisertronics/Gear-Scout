@@ -753,7 +753,7 @@ def model_key(title: Optional[str]) -> Optional[str]:
     return f"{key}|{form}" if form else key
 
 
-_VARIANT = re.compile(r"[\s-]+(vr|xls|xlii|xl|eb|ai|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
+_VARIANT = re.compile(r"[\s-]+[\"“”']?(vr|xls|xlii|xl|eb|ai|jr|junior|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
 
 
 def _model_variant(title: Optional[str], query: str) -> Optional[str]:
@@ -773,7 +773,9 @@ def _model_variant(title: Optional[str], query: str) -> Optional[str]:
     if not m:
         return None
     v = re.sub(r"\W|mark|mk", "", m.group(1).lower())
-    v = {"2": "ii", "3": "iii", "4": "iv", "5": "v"}.get(v, v)
+    # "WA-47 Jr" is the cheaper FET mic, not the WA-47 tube (Oct 23: hiding Jr
+    # ads had disputed the tube WA-47's price, so no WA-47 was ever a deal).
+    v = {"2": "ii", "3": "iii", "4": "iv", "5": "v", "junior": "jr"}.get(v, v)
     return v
 
 

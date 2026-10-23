@@ -5,7 +5,9 @@
     "items": [
       "An open Mics page checks every minute for a finished sweep and reloads itself, so it no longer sits on what was there when you opened it. It also checks when you come back to the tab, and never reloads while you're typing in the settings.",
       "Facebook now runs one broad search per mic brand (17 searches instead of about 45), so each brand gets searched there about every 2 hours during the day instead of every 5 to 14, at the same load on the account. Reverb, eBay, Craigslist and the other fast sites still run every mic search every 15 minutes.",
-      "Older mic ads found before Oct 7 (when Gear Scout started noting when it last saw an ad) are back on the Mics page, about 200 of them, like a $399 WA-47 on Facebook. They don't push. The hourly sold check now looks at the Mics page first, your price range first, so the ones that have sold drop off within a few hours."
+      "Older mic ads found before Oct 7 (when Gear Scout started noting when it last saw an ad) are back on the Mics page, about 200 of them, like a $399 WA-47 on Facebook. They don't push. The hourly sold check now looks at the Mics page first, your price range first, so the ones that have sold drop off within a few hours.",
+      "Cheap WA-47s now show as deals. Gear Scout had been reading 'WA-47 Jr' (the cheaper FET mic) as the WA-47 tube, so hiding Jr ads counted as disputing the tube WA-47's price, and no WA-47 could be a deal. The same thing happened to the AKG D12 with 'D12-type' knockoffs. Fixed, and both disputes cleared: a $300 WA-47 is 45% under the ~$548 they sell for.",
+      "In Mic Focus, the Deals and Steals pages cover your mic list (not the paused Telex List): about 150 mic deals right now. Attenuator pads and aviation headsets are left out."
     ]
   },
   {

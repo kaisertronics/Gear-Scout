@@ -63,6 +63,9 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         rows = [dict(r) for r in conn.execute(sql + " ORDER BY first_seen DESC", args)]
     terms = _terms(cfg)
     from scrapers.wanted import match as wanted_match
+    from scrapers import mic_focus
+    from scrapers.mic_focus import classify as mic_classify
+    focus = [t for t in mic_focus.settings(cfg)["targets"] if t["on"]] if mic_focus.enabled(cfg) else None
     exclude_words = cfg.get("exclude_words") or []
     pedals_ok = wants_pedals(cfg)
     market, index, similar = load_market(), price_index(), similar_index()
@@ -82,7 +85,10 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
-        if not wanted_match(title, r.get("price"), terms, r.get("source_name")):
+        if focus is not None:
+            if not mic_classify(title, focus):
+                continue  # Mic Focus: Deals / Steals are your mics
+        elif not wanted_match(title, r.get("price"), terms, r.get("source_name")):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)
         if not c or c["ref"] < MIN_REF or c["pct"] < min_pct:
