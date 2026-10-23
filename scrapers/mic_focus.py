@@ -142,7 +142,10 @@ TARGETS = [
     dict(key="generic", name="Any 47 / 67 / 87 / 251 / C12 mic", min_pct=60, max_price=1000,
          match=r"(?<![\d.$,])(?:\b|(?<=[a-z]))(?:u|m|k|ela ?m ?|tlm ?)?[\s-]?(?:47|67|87|251)(?:\s?(?:ai|i|fet|tube|se|le|mk\s?i{1,3}))?\b(?![\d.,]|\s?(?:mm|cm|in\b|inch|ft|lbs?|watt|w\b|hp|mph|cc|v\b|year|yr))|\bc[\s-]?12\b",
          require=r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bvalve\b|\bfet\b|\bclone\b|\bstyle\b|large[\s-]?diaphragm|\bldc\b",
-         exclude=r"\b(?:19|20)\d\d\b(?=.*\b(?:car|truck|chevy|ford|corvette|mustang|jeep|honda|toyota)\b)|\bshure\s?sm\b|\bsm[\s-]?57\b|\bbeta\b|"
+         # brands with their own section stay there (a WA-87 FET isn't a "Warm tube mic", and isn't a catch-all one either)
+         exclude=r"warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|united\s*studio|dachman|signal\s*art|"
+                 r"handheld|hand-held|\bdynamic\b|bluetooth|earbuds?|wireless|karaoke|lavalier|gooseneck|"
+                 r"\b(?:19|20)\d\d\b(?=.*\b(?:car|truck|chevy|ford|corvette|mustang|jeep|honda|toyota)\b)|\bshure\s?sm\b|\bsm[\s-]?57\b|\bbeta\b|"
                  r"\bglock\b|\bcaliber\b|\bammo\b|\brifle\b|\bak-?47\b|\bpreamp\b|\binterface\b|\bsocket\b",
          queries=["47 microphone", "67 microphone", "87 microphone", "251 microphone", "c12 microphone"],
          model=None, brand=None),
@@ -360,8 +363,14 @@ def build(cfg: dict) -> dict:
     rows = find(cfg)
     keep = ("title", "price", "url", "image_url", "source_name", "location", "shipping", "first_seen", "last_seen",
             "posted_at", "global_id", "description", "previous_price")
+    try:
+        auc = auctions(cfg)
+    except Exception:
+        logger.exception("Mic auction list failed")
+        auc = []
     data = {"built": datetime.now(timezone.utc).isoformat(),
-            "rows": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in rows]}
+            "rows": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in rows],
+            "auctions": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in auc]}
     try:
         SNAPSHOT.write_text(json.dumps(data))
     except OSError:
@@ -435,4 +444,182 @@ def alert(cfg: dict) -> int:
                          [(r["url"], str(r.get("price")), now) for r in todo])
         conn.commit()
     logger.info("Mic Focus: %d hits, %d new, %d pushes", len(hits), len(todo), sent)
+    return sent
+
+
+# --------------------------------------------------------------------------
+# eBay auctions for your mics (owner, Oct 23): a lot of under-$1,000 tube
+# mics sell at auction. Each mic's broad search runs against eBay auctions
+# once an hour (17 API calls), stored like other listings (price = current
+# bid, description "Auction · current bid (N bids) · ends …" Pacific).
+# Shown on the Mics page by end time; a push about an hour before one ends
+# while bid + shipping is still under that mic's limit — the bid is
+# re-checked with eBay right before the push.
+
+AUCTION_MARK = Path("/data/mic_auctions_fetched.txt")
+AUCTION_EVERY_MIN = 60
+AUCTION_DAYS = 3          # shown when ending within this many days
+AUCTION_ALERT_MIN = 75    # push when ending within this many minutes
+
+
+def _auction_due() -> bool:
+    try:
+        last = datetime.fromisoformat(AUCTION_MARK.read_text().strip())
+        return datetime.now(timezone.utc) - last >= timedelta(minutes=AUCTION_EVERY_MIN - 5)
+    except Exception:
+        return True
+
+
+def fetch_auctions(cfg: dict) -> int:
+    """Searches eBay auctions for each mic (hourly) and stores the matches."""
+    if not _auction_due():
+        return 0
+    import requests
+    from scrapers.auctions import ebay_auction_listing
+    from scrapers.ebay_api import (CONDITION_FILTER, SEARCH_URL, _check_response, _get_token, _headers,
+                                   country_of, ebay_paused_until, shipping_of)
+    from scrapers.store import _conn, mark_seen
+    api = cfg.get("ebay_api") or {}
+    if not (api.get("client_id") and api.get("client_secret")) or ebay_paused_until():
+        return 0
+    targets = [t for t in settings(cfg)["targets"] if t["on"]]
+    token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
+    stored = 0
+    for q in fb_terms(cfg):
+        params = {"q": q, "sort": "endingSoonest", "limit": "100",
+                  "filter": f"{CONDITION_FILTER},buyingOptions:{{AUCTION}},priceCurrency:USD,itemLocationCountry:US"}
+        try:
+            resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
+            _check_response(resp)
+        except Exception as e:
+            logger.warning("Mic auction search failed for %r: %s", q, e)
+            break
+        if resp.status_code != 200:
+            continue
+        for item in resp.json().get("itemSummaries", []) or []:
+            listing = ebay_auction_listing(item, "eBay — Auctions")
+            if not listing or not classify(listing.title, targets):
+                continue
+            listing.url = listing.url.split("?")[0]  # eBay adds per-search tracking to the link
+            listing.shipping = shipping_of(item)
+            listing.country = country_of(item)
+            mark_seen(listing)
+            with _conn() as conn:  # bids move: keep the stored bid current
+                conn.execute("UPDATE seen SET price = ?, description = ?, last_seen = ? WHERE url = ?",
+                             (listing.price, listing.description, datetime.now(timezone.utc).isoformat(), listing.url))
+                conn.commit()
+            stored += 1
+        time.sleep(0.3)
+    AUCTION_MARK.write_text(datetime.now(timezone.utc).isoformat())
+    logger.info("Mic auctions: %d stored from eBay", stored)
+    return stored
+
+
+def _auction_end(desc: str) -> Optional[datetime]:
+    m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", desc or "")
+    if not m:
+        return None
+    from zoneinfo import ZoneInfo
+    return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+
+
+def auctions(cfg: dict) -> list[dict]:
+    """Live eBay auctions for your mics ending within AUCTION_DAYS, soonest
+    first, with r['mic'] like find() (price = current bid + shipping)."""
+    from scrapers.enrich import is_partial, needs_repair, parse_price
+    from scrapers.store import _conn
+    targets = [t for t in settings(cfg)["targets"] if t["on"]]
+    now = datetime.now(timezone.utc)
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM seen WHERE description LIKE 'Auction%' AND url LIKE '%ebay.com%' AND hidden = 0"
+            " AND duplicate = 0 AND COALESCE(sold, 0) = 0 AND (country IS NULL OR country = 'US')")]
+    out, seen = [], set()
+    for r in rows:
+        end = _auction_end(r.get("description"))
+        if not end or not (now < end <= now + timedelta(days=AUCTION_DAYS)):
+            continue
+        t = classify(r.get("title") or "", targets)
+        if not t or is_partial(r["title"]) or needs_repair(r["title"], r.get("description")) or r["url"] in seen:
+            continue
+        bid = parse_price(r.get("price")) or 0
+        ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
+        total = round(bid + (ship or 0), 2)
+        if total > t["max_price"]:
+            continue
+        seen.add(r["url"])
+        mins = int((end - now).total_seconds() // 60)
+        r["mic"] = {"target": t["key"], "name": t["name"], "max_price": t["max_price"], "delivered": total,
+                    "bid": bid, "ends": end.isoformat(), "mins_left": mins}
+        out.append(r)
+    out.sort(key=lambda r: r["mic"]["ends"])
+    return out
+
+
+def _ensure_auction(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS mic_auction_alerted (url TEXT PRIMARY KEY, at TEXT)")
+
+
+def _current_bid(url: str, cfg: dict) -> Optional[tuple]:
+    """(bid, shipping, ended) straight from eBay, or None if it can't tell."""
+    import requests
+    from scrapers.ebay_api import SEARCH_URL, _check_response, _get_token, _headers, shipping_of
+    m = re.search(r"/itm/(?:[^/]+/)?(\d{9,})", url or "")
+    api = cfg.get("ebay_api") or {}
+    if not m or not api.get("client_id"):
+        return None
+    try:
+        token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
+        base = SEARCH_URL.rsplit("/item_summary", 1)[0]
+        resp = requests.get(f"{base}/item/get_item_by_legacy_id", params={"legacy_item_id": m.group(1)},
+                            headers=_headers(token), timeout=20)
+        _check_response(resp)
+        if resp.status_code == 404:
+            return (None, None, True)
+        j = resp.json()
+        bid = float(((j.get("currentBidPrice") or j.get("price") or {}).get("value")))
+        return (bid, shipping_of(j), False)
+    except Exception as e:
+        logger.debug("Couldn't re-check auction %s: %s", url, e)
+        return None
+
+
+def alert_auctions(cfg: dict) -> int:
+    """A push about an hour before a mic auction ends, while the bid (checked
+    again with eBay just now) plus shipping is still under that mic's limit."""
+    from scrapers.notify import push_enabled, send_push
+    from scrapers.store import _conn
+    if not push_enabled(cfg):
+        return 0
+    soon = [r for r in auctions(cfg) if r["mic"]["mins_left"] <= AUCTION_ALERT_MIN]
+    if not soon:
+        return 0
+    with _conn() as conn:
+        _ensure_auction(conn)
+        done = {u for (u,) in conn.execute("SELECT url FROM mic_auction_alerted")}
+    sent = 0
+    for r in soon:
+        if r["url"] in done:
+            continue
+        m = r["mic"]
+        live = _current_bid(r["url"], cfg)
+        if live and live[2]:
+            continue  # ended / removed
+        bid, ship = (live[0], live[1]) if live and live[0] is not None else (m["bid"], r.get("shipping"))
+        total = bid + (ship or 0)
+        with _conn() as conn:
+            _ensure_auction(conn)
+            conn.execute("INSERT OR IGNORE INTO mic_auction_alerted VALUES (?, ?)",
+                         (r["url"], datetime.now(timezone.utc).isoformat()))
+            conn.commit()
+        if total > m["max_price"]:
+            continue
+        ship_txt = " + free shipping" if ship == 0 else (f" + ${ship:,.0f} shipping" if ship else "")
+        send_push(cfg, f"🔨 {m['name']}: auction ends in {max(1, m['mins_left'])} min",
+                  f"{r['title'][:100]}\nCurrent bid ${bid:,.0f}{ship_txt} · your limit ${m['max_price']:,}",
+                  url=r["url"], tags=["hammer"], image=r.get("image_url"))
+        sent += 1
+    if sent:
+        logger.info("Mic auction alerts sent: %d", sent)
     return sent

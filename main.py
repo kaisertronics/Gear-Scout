@@ -467,6 +467,11 @@ def run_watch_cycle():
             except Exception:
                 logger.exception("Mic Focus sweep / alerts failed")
             try:
+                mic_focus.fetch_auctions(cfg)  # hourly
+                mic_focus.alert_auctions(cfg)
+            except Exception:
+                logger.exception("Mic auctions failed")
+            try:
                 from scrapers.assistant import check_alerts
                 check_alerts(cfg)
             except Exception:

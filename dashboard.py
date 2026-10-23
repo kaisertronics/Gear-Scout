@@ -2288,7 +2288,21 @@ def mics_page():
         sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
     except Exception:
         pass
+    auctions = _decorate(data.get("auctions") or [])
+    for l in auctions:
+        m = l["mic"]
+        mins = m.get("mins_left") or 0
+        try:  # minutes left as of now, not as of the last sweep
+            mins = int((datetime.fromisoformat(m["ends"]) - datetime.now(timezone.utc)).total_seconds() // 60)
+        except Exception:
+            pass
+        l["auction_ends"] = (f"{mins} min" if mins < 90 else f"{mins // 60} h" if mins < 48 * 60 else f"{mins // 1440} days")
+        l["price_ctx"] = dict(l.get("price_ctx") or {}, note=f"Bid + shipping ${m['delivered']:,.0f} · your limit ${m['max_price']:,}")
+    auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
+    from urllib.parse import quote
+    mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
     return render_template("mics.html", st=st, hits=hits, by=by, built=_ago(data.get("built")), built_iso=data.get("built"),
+                           auctions=auctions, mercari=mercari,
                            sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
 
 

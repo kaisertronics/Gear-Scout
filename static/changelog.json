@@ -8,7 +8,10 @@
       "Older mic ads found before Oct 7 (when Gear Scout started noting when it last saw an ad) are back on the Mics page, about 200 of them, like a $399 WA-47 on Facebook. They don't push. The hourly sold check now looks at the Mics page first, your price range first, so the ones that have sold drop off within a few hours.",
       "Cheap WA-47s now show as deals. Gear Scout had been reading 'WA-47 Jr' (the cheaper FET mic) as the WA-47 tube, so hiding Jr ads counted as disputing the tube WA-47's price, and no WA-47 could be a deal. The same thing happened to the AKG D12 with 'D12-type' knockoffs. Fixed, and both disputes cleared: a $300 WA-47 is 45% under the ~$548 they sell for.",
       "In Mic Focus, the Deals and Steals pages cover your mic list (not the paused Telex List): about 150 mic deals right now. Attenuator pads and aviation headsets are left out.",
-      "Warm Audio mics over $500 aren't shown anywhere now (Mics page, Warm section, Deals), and Warm pushes stay at $300–$500. Every price limit now includes the limit itself ($500 counts as under $500)."
+      "Warm Audio mics over $500 aren't shown anywhere now (Mics page, Warm section, Deals), and Warm pushes stay at $300–$500. Every price limit now includes the limit itself ($500 counts as under $500).",
+      "🔨 eBay auctions for your mics: each mic is searched on eBay auctions every hour, and the Mics page lists ones ending in the next 3 days with bid + shipping under your limit. About an hour before one ends you get a push if it's still under (the bid is re-checked with eBay first).",
+      "📱 Mercari alerts: Mercari blocks Gear Scout, so the Mics page has a checklist of your 17 mic searches. Open each in the Mercari app, tap Save this search, and Mercari pushes new ones to you.",
+      "The catch-all (47 / 67 / 87 / 251 / C12) no longer picks up brands that have their own section (a Warm WA-87 FET isn't a Warm tube mic), handheld or dynamic mics, wireless, Bluetooth or earbuds."
     ]
   },
   {
