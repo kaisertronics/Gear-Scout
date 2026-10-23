@@ -73,8 +73,17 @@
     </section>
   {% endfor %}
   <script>
-    // Every category starts open: re-open each so its listings load right away.
-    document.querySelectorAll('details.more-listings[open][data-lazy]').forEach(d => { d.open = false; d.open = true; });
+    // Every category starts open, so fetch its listings now. (Closing and
+    // re-opening to trigger the usual on-open loader doesn't work: browsers
+    // merge the two toggles into none and the lists stayed empty.)
+    document.querySelectorAll('details.more-listings[open][data-lazy]').forEach(async d => {
+      if (d.dataset.loaded) return;
+      d.dataset.loaded = '1';
+      const grid = d.querySelector('.listing-grid');
+      grid.innerHTML = '<p class="muted">Loading…</p>';
+      try { grid.innerHTML = await (await fetch(d.dataset.lazy)).text(); }
+      catch (err) { grid.innerHTML = '<p class="muted">Couldn’t load — reload the page.</p>'; delete d.dataset.loaded; }
+    });
   </script>
 
 {% endblock %}
