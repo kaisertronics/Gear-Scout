@@ -78,8 +78,11 @@ TARGETS = [
          queries=["warm audio wa-47", "warm audio wa-251", "warm audio wa-8000", "warm audio wa-cx12", "warm audio wa-67"],
          model=r"\b(wa[\s-]?47|wa[\s-]?251|wa[\s-]?8000|wa[\s-]?cx-?12|wa[\s-]?67)\b",
          brand="Warm Audio"),
-    dict(key="lauten", name="Lauten Audio", min_pct=60, max_price=1000,
-         match=r"\blauten\b", require=None, exclude=None,
+    # Owner (Oct 24): fewer Lautens — their studio mics only (no LA-120/220
+    # budget or drum mics), and nothing over your limit is shown.
+    dict(key="lauten", name="Lauten Audio", min_pct=60, max_price=1000, hide_over_limit=True,
+         match=r"\blauten\b", require=None,
+         exclude=r"\bla[\s-]?(?:120|220)\b|tom[\s-]?mic|snare[\s-]?mic|kick[\s-]?mic|\bls[\s-]?\d{3}\b|\bft[\s-]?\d{3}\b",
          queries=["lauten audio", "lauten atlantis", "lauten eden", "lauten oceanus"],
          model=r"\b(atlantis|eden|oceanus|clarion|horizon|torch|synergy|la-?\d{3}|ft-?\d{3}|ls-?\d{3})\b",
          brand="Lauten Audio"),
