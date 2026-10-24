@@ -33,6 +33,11 @@ MIN_PRICE = 40.0        # under this it's a placeholder or a part
 MIN_PUSH_PRICE = 300    # owner's floor (Oct 22): nothing under $300 delivered pushes or makes the list
 
 _TUBE = r"\btube\b|\bvalve\b|\bvacuum\b"
+# Brands with their own section: a model their section leaves out (a Warm
+# WA-251 now that Warm is CX12 / Fentone / WA-14 only, a Lauten drum mic)
+# must not turn up in the C12 / U47-251 / catch-all groups instead (Oct 24).
+_OWN_BRANDS = (r"warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|"
+               r"united\s*studio|dachman|signal\s*arts?")
 _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\b|\b47 ?fet\b|\bu-?47 ?fet\b", re.I)
 _NOT_MIC = re.compile(
     r"\b(?:pre-?amps?|preamplifiers?|compressors?|limiters?|equali[sz]ers?|eq|channel ?strips?|500[\s-]?series|"
@@ -71,8 +76,8 @@ TARGETS = [
          model=r"\b(sa[\s-]?\d{2,3}t?\s?(?:mk\s?(?:iii|ii|3|2)|mkiii|mkii)?)\b",
          brand="Stam Audio"),
     # Owner (Oct 24): Warm Audio is only the WA-CX12 (and its stereo pair), the
-    # Fentone and the WA-14 — $250 to $500, nothing over $500 shown.
-    dict(key="warm", name="Warm Audio WA-CX12 / Fentone / WA-14", min_pct=60, max_price=500, min_price=250,
+    # Fentone and the WA-14 — $250 to $900 (raised Oct 24), nothing over the limit shown.
+    dict(key="warm", name="Warm Audio WA-CX12 / Fentone / WA-14", min_pct=60, max_price=900, min_price=250,
          hide_over_limit=True,
          match=r"\bwa[\s-]?cx[\s-]?12\b|\bcx[\s-]?12\b(?=.*warm)|(?<=warm audio )cx[\s-]?12|\bfentone\b|\bwa[\s-]?14\b",
          require=r"warm\s*audio|\bwa[\s-]?(?:cx[\s-]?12|14)\b|\bfentone\b",
@@ -132,13 +137,13 @@ TARGETS = [
     dict(key="c12", name="C12-style tube mics", min_pct=60, max_price=375,
          match=r"\bc-?12\b|\bcv-?12\b",
          require=_TUBE + r"|\bc-?12\b",
-         exclude=r"\bc-?12 ?a\b|\bfet\b|\bd-?12\b|\bbehringer\b|\bmxl\b|socket",
+         exclude=_OWN_BRANDS + r"|\bc-?12 ?a\b|\bfet\b|\bd-?12\b|\bbehringer\b|\bmxl\b|socket",
          queries=["c12 tube mic", "c12 tube microphone", "c12 clone"],
          model=None, brand=None),
     dict(key="classic_tube", name="U47 / ELA M 251-style tube mics", min_pct=60, max_price=1000,
          match=r"\bu-?\s?47\b|\bela ?-?m ?-?251\b|\b251\b",
          require=_TUBE + r"|\bu-?\s?47\b|\bela ?-?m ?-?251\b",
-         exclude=r"\bc-?12 ?a\b|\bc-?12 ?vr\b(?=.*\bfet\b)|\bfet\b|\bd-?12\b|\bnt-?\d|\bb-?\d{2,3}\b(?=.*behringer)|"
+         exclude=_OWN_BRANDS + r"|\bc-?12 ?a\b|\bc-?12 ?vr\b(?=.*\bfet\b)|\bfet\b|\bd-?12\b|\bnt-?\d|\bb-?\d{2,3}\b(?=.*behringer)|"
                  r"\bbehringer\b|\bmxl\b|socket|\b251(?:st|nd)\b",
          queries=["u47 tube microphone", "ela m 251", "251 tube microphone", "u47 tube"],
          model=None, brand=None),
@@ -148,7 +153,7 @@ TARGETS = [
          match=r"(?<![\d.$,])(?:\b|(?<=[a-z]))(?:u|m|k|ela ?m ?|tlm ?)?[\s-]?(?:47|67|87|251)(?:\s?(?:ai|i|fet|tube|se|le|mk\s?i{1,3}))?\b(?![\d.,]|\s?(?:mm|cm|in\b|inch|ft|lbs?|watt|w\b|hp|mph|cc|v\b|year|yr))|\bc[\s-]?12\b",
          require=r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bvalve\b|\bfet\b|\bclone\b|\bstyle\b|large[\s-]?diaphragm|\bldc\b",
          # brands with their own section stay there (a WA-87 FET isn't a "Warm tube mic", and isn't a catch-all one either)
-         exclude=r"warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|united\s*studio|dachman|signal\s*art|"
+         exclude=_OWN_BRANDS + r"|"
                  r"handheld|hand-held|\bdynamic\b|bluetooth|earbuds?|wireless|karaoke|lavalier|gooseneck|"
                  r"\b(?:19|20)\d\d\b(?=.*\b(?:car|truck|chevy|ford|corvette|mustang|jeep|honda|toyota)\b)|\bshure\s?sm\b|\bsm[\s-]?57\b|\bbeta\b|"
                  r"\bglock\b|\bcaliber\b|\bammo\b|\brifle\b|\bak-?47\b|\bpreamp\b|\binterface\b|\bsocket\b",
