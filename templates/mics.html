@@ -96,7 +96,7 @@
   {% for t in st.targets %}
     {% set ls = by.get(t.key) or [] %}
     <section class="panel" id="t-{{ t.key }}">
-      <h2>{{ t.name }} <span class="muted">— all {{ ls|length }} for sale, lowest price first · push ${{ '{:,}'.format(st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2>
+      <h2>{{ t.name }} <span class="muted">— all {{ ls|length }} for sale, lowest price first · push ${{ '{:,}'.format(t.min_price or st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2>
       {% if ls %}
         <details class="more-listings" open data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
           <summary>Hide / show</summary><div class="listing-grid"></div>

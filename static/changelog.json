@@ -1,9 +1,10 @@
 [
   {
     "date": "2026-10-24",
-    "title": "Fewer Lauten mics",
+    "title": "Fewer Lauten mics; Warm Audio narrowed",
     "items": [
-      "Lauten now shows only their studio mics (Eden, Atlantis, Clarion, Oceanus, Horizon, Torch, the LA-320 tube) at or under your Lauten limit. Their LA-120 / LA-220 budget mics and Tom, Snare and Kick drum mics are left out, and so is anything over the limit."
+      "Lauten now shows only their studio mics (Eden, Atlantis, Clarion, Oceanus, Horizon, Torch, the LA-320 tube) at or under your Lauten limit. Their LA-120 / LA-220 budget mics and Tom, Snare and Kick drum mics are left out, and so is anything over the limit.",
+      "Warm Audio is now just the WA-CX12 (and the stereo pair), the Fentone and the WA-14 (and WA-14 SP pair), from $250 to $500. Other Warm mics aren't shown or searched."
     ]
   },
   {

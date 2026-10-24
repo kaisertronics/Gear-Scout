@@ -70,13 +70,15 @@ TARGETS = [
          queries=["stam sa-47", "stam audio mic", "stam tube microphone"],
          model=r"\b(sa[\s-]?\d{2,3}t?\s?(?:mk\s?(?:iii|ii|3|2)|mkiii|mkii)?)\b",
          brand="Stam Audio"),
-    # Owner (Oct 23): Warm Audio over $500 isn't shown anywhere, not just not pushed.
-    dict(key="warm", name="Warm Audio tube mics", min_pct=60, max_price=500, hide_over_limit=True,
-         match=r"warm\s*audio|\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b",
-         require=r"\bwa[\s-]?(?:47|251|8000|cx-?12|67)\b|warm\s*audio.{0,30}(?:" + _TUBE + r")",
-         exclude=r"\bwa-?47 ?jr\b|\bwa-?47 ?f\b|\bwa-?(?:12|73|76|2a|412|273|2mpx|1b|84|87|14|ma)\b",
-         queries=["warm audio wa-47", "warm audio wa-251", "warm audio wa-8000", "warm audio wa-cx12", "warm audio wa-67"],
-         model=r"\b(wa[\s-]?47|wa[\s-]?251|wa[\s-]?8000|wa[\s-]?cx-?12|wa[\s-]?67)\b",
+    # Owner (Oct 24): Warm Audio is only the WA-CX12 (and its stereo pair), the
+    # Fentone and the WA-14 — $250 to $500, nothing over $500 shown.
+    dict(key="warm", name="Warm Audio WA-CX12 / Fentone / WA-14", min_pct=60, max_price=500, min_price=250,
+         hide_over_limit=True,
+         match=r"\bwa[\s-]?cx[\s-]?12\b|\bcx[\s-]?12\b(?=.*warm)|(?<=warm audio )cx[\s-]?12|\bfentone\b|\bwa[\s-]?14\b",
+         require=r"warm\s*audio|\bwa[\s-]?(?:cx[\s-]?12|14)\b|\bfentone\b",
+         exclude=r"\bpreamps?\b",
+         queries=["warm audio wa-cx12", "warm audio cx12 stereo", "warm audio fentone", "warm audio wa-14"],
+         model=r"\b(wa[\s-]?cx[\s-]?12(?:\s?stereo)?|wa[\s-]?14|fentone)\b",
          brand="Warm Audio"),
     # Owner (Oct 24): fewer Lautens — their studio mics only (no LA-120/220
     # budget or drum mics), and nothing over your limit is shown.
@@ -203,7 +205,7 @@ def sweep_terms(cfg: dict) -> list[str]:
 # every ~2 hours instead of every 5–14 with all ~45 site searches (Oct 23).
 FB_TERMS = {
     "peluso": ["peluso microphone"], "golden_age": ["golden age microphone"], "stam": ["stam microphone"],
-    "warm": ["warm audio microphone"], "lauten": ["lauten microphone"], "bees_neez": ["bees neez microphone"],
+    "warm": ["warm audio cx12", "warm audio fentone", "warm audio wa-14"], "lauten": ["lauten microphone"], "bees_neez": ["bees neez microphone"],
     "advanced_audio": ["advanced audio microphone"], "united": ["united microphone"],
     "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "d12": ["akg d12"],
     "c12": ["c12 microphone"], "classic_tube": ["u47 microphone", "251 microphone"],
@@ -237,7 +239,7 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
             continue
         if t.get("exclude") and re.search(t["exclude"], title, re.I):
             continue
-        if t["key"] in ("warm", "c12", "classic_tube", "golden_age", "stam", "bees_neez") and _FET.search(title):
+        if t["key"] in ("c12", "classic_tube", "golden_age", "stam", "bees_neez") and _FET.search(title):
             continue
         return t
     return None
@@ -350,7 +352,7 @@ def find(cfg: dict) -> list[dict]:
         ref = new or used
         ref_kind = "new" if new else ("used" if used else None)
         pct = round((1 - delivered / ref) * 100) if ref else None
-        hit = floor <= delivered <= t["max_price"]  # by price (Oct 22), not % off
+        hit = t.get("min_price", floor) <= delivered <= t["max_price"]  # by price (Oct 22), not % off
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,
