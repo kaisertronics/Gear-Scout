@@ -90,7 +90,9 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
             if not mt:
                 continue  # Mic Focus: Deals / Steals are your mics
             if mt.get("hide_over_limit") and value > mt["max_price"]:
-                continue  # e.g. Warm Audio over $500 isn't shown
+                continue  # e.g. Warm Audio over its limit isn't shown
+            if any(re.search(rx, title, re.I) and value > cap for rx, cap in mt.get("model_limits") or []):
+                continue  # WA-14 over $300
         elif not wanted_match(title, r.get("price"), terms, r.get("source_name")):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)

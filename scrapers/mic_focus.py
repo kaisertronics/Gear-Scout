@@ -77,8 +77,9 @@ TARGETS = [
          brand="Stam Audio"),
     # Owner (Oct 24): Warm Audio is only the WA-CX12 (and its stereo pair), the
     # Fentone and the WA-14 — $250 to $900 (raised Oct 24), nothing over the limit shown.
-    dict(key="warm", name="Warm Audio WA-CX12 / Fentone / WA-14", min_pct=60, max_price=900, min_price=250,
-         hide_over_limit=True,
+    # WA-14s only up to $300 (owner, Oct 24); Warm's minimum is $150.
+    dict(key="warm", name="Warm Audio WA-CX12 / Fentone / WA-14", min_pct=60, max_price=900, min_price=150,
+         hide_over_limit=True, model_limits=[(r"\bwa[\s-]?14\b", 300)],
          match=r"\bwa[\s-]?cx[\s-]?12\b|\bcx[\s-]?12\b(?=.*warm)|(?<=warm audio )cx[\s-]?12|\bfentone\b|\bwa[\s-]?14\b",
          require=r"warm\s*audio|\bwa[\s-]?(?:cx[\s-]?12|14)\b|\bfentone\b",
          exclude=r"\bpreamps?\b",
@@ -330,6 +331,8 @@ def find(cfg: dict) -> list[dict]:
         delivered = round(unit + (ship or 0), 2)
         if t.get("hide_over_limit") and delivered > t["max_price"]:
             continue
+        if any(re.search(rx, title, re.I) and delivered > cap for rx, cap in t.get("model_limits") or []):
+            continue  # a model with its own lower cap (WA-14: $300)
         ad = (title.lower().strip(), round(value))
         if ad in seen_ads:
             continue
