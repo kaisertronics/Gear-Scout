@@ -371,9 +371,33 @@ def find(cfg: dict) -> list[dict]:
     return out
 
 
+def _ad_sig(title, price) -> tuple:
+    return (re.sub(r"\s+", " ", (title or "").lower()).strip(), str(price or "").strip())
+
+
+def still_showing(rows: list[dict]) -> list[dict]:
+    """Drops what you've hidden (the ✕) or what sold / went pending since the
+    list was built — checked when the page opens, so a hidden ad doesn't come
+    back on the next reload. A hidden ad also hides its re-posts (same title
+    and price, another site or region)."""
+    if not rows:
+        return rows
+    from scrapers.store import _conn
+    urls = [r.get("url") for r in rows if r.get("url")]
+    gone = set()
+    with _conn() as conn:
+        for i in range(0, len(urls), 500):
+            chunk = urls[i:i + 500]
+            gone |= {u for (u,) in conn.execute(
+                f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(chunk))})"
+                " AND (hidden = 1 OR COALESCE(sold, 0) = 1 OR COALESCE(pending, 0) = 1)", chunk)}
+        hidden = {_ad_sig(t, p) for t, p in conn.execute("SELECT title, price FROM seen WHERE hidden = 1")}
+    return [r for r in rows if r.get("url") not in gone and _ad_sig(r.get("title"), r.get("price")) not in hidden]
+
+
 def build(cfg: dict) -> dict:
     """Recomputes the list and saves it for the page."""
-    rows = find(cfg)
+    rows = still_showing(find(cfg))
     keep = ("title", "price", "url", "image_url", "source_name", "location", "shipping", "first_seen", "last_seen",
             "posted_at", "global_id", "description", "previous_price")
     try:
@@ -427,6 +451,8 @@ def alert(cfg: dict) -> int:
     from scrapers.store import _conn
     data = build(cfg)
     hits = [r for r in data["rows"] if r["mic"]["hit"] and r["mic"].get("fresh", True)]
+    if hits:
+        hits = still_showing(hits)
     with _conn() as conn:
         _ensure(conn)
         done = {(u, p) for u, p in conn.execute("SELECT url, price FROM mic_alerted")}

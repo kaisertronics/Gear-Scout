@@ -2265,7 +2265,8 @@ def mics_page():
     cfg = load_config_raw()
     st = mic_focus.settings(cfg)
     data = mic_focus.load()
-    rows = _decorate(data.get("rows") or [])
+    # Hidden (✕), sold or pending since the list was built: gone right away.
+    rows = _decorate(mic_focus.still_showing(data.get("rows") or []))
     for l in rows:
         l["age_days"] = _age_days(l)
         m = l["mic"]
@@ -2288,7 +2289,7 @@ def mics_page():
         sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
     except Exception:
         pass
-    auctions = _decorate(data.get("auctions") or [])
+    auctions = _decorate(mic_focus.still_showing(data.get("auctions") or []))
     for l in auctions:
         m = l["mic"]
         mins = m.get("mins_left") or 0

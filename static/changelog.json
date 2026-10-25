@@ -6,7 +6,8 @@
       "Lauten now shows only their studio mics (Eden, Atlantis, Clarion, Oceanus, Horizon, Torch, the LA-320 tube) at or under your Lauten limit. Their LA-120 / LA-220 budget mics and Tom, Snare and Kick drum mics are left out, and so is anything over the limit.",
       "Warm Audio is now just the WA-CX12 (and the stereo pair), the Fentone and the WA-14 (and WA-14 SP pair), from $150 to $900. Other Warm mics aren't shown or searched.",
       "Other Warm Audio mics (WA-251, WA-47 and so on) no longer turn up in the U47 / 251-style or C12 groups either. Brands with their own section stay in it.",
-      "WA-14s only show up to $300, and Warm's minimum is $150."
+      "WA-14s only show up to $300, and Warm's minimum is $150.",
+      "Mics page: an ad you hide with the ✕ stays gone. Before, it came back on the next reload until the list was rebuilt. Hiding one also hides its re-posts (same title and price), and ads that sell or go pending drop off as soon as Gear Scout knows."
     ]
   },
   {
