@@ -89,6 +89,9 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
             mt = mic_classify(title, focus)
             if not mt:
                 continue  # Mic Focus: Deals / Steals are your mics
+            src = (r.get("source_name") or "").lower()
+            if r.get("country") == "CA" or "kijiji" in src or "mcquade" in src or "C$" in str(r.get("price") or ""):
+                continue  # US only, like the Mics page (tariffs on Canadian ones)
             if mt.get("hide_over_limit") and value > mt["max_price"]:
                 continue  # e.g. Warm Audio over its limit isn't shown
             if any(re.search(rx, title, re.I) and value > cap for rx, cap in mt.get("model_limits") or []):

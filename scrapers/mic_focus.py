@@ -43,7 +43,7 @@ _NOT_MIC = re.compile(
     r"\b(?:pre-?amps?|preamplifiers?|compressors?|limiters?|equali[sz]ers?|eq|channel ?strips?|500[\s-]?series|"
     r"lunchbox|di box|interface|headphones?|monitors?|speakers?|guitar|pedal|plugin|plug-in|software|t-?shirt|"
     r"hat|sticker|poster|book|magazine|diecast|die-cast|figures?|toys?|chogokin|popy|robot|lego|model kit|tuner|"
-    r"headsets?|aviation|intercom|pilot)\b", re.I)
+    r"headsets?|aviation|intercom|pilot|mixers?)\b", re.I)
 _PART = re.compile(
     r"\b(?:capsules?(?! (?:included|incl))|power suppl(?:y|ies)|psu|cables? only|cable for|shock ?mounts?|"
     r"spider|mount only|clip|case only|flight case|box only|grille|head ?basket|basket|body only|"
@@ -372,7 +372,7 @@ def find(cfg: dict) -> list[dict]:
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit,
                     "model": q, "basis": basis, "check": bool(pct is not None and pct >= 85),
-                    "fresh": (r.get("last_seen") or "") >= fresh_cut}
+                    "fresh": (r.get("last_seen") or r.get("first_seen") or "") >= fresh_cut}
         out.append(r)
     out.sort(key=lambda r: r["mic"]["delivered"])  # cheapest first
     return out
@@ -592,11 +592,13 @@ def auctions(cfg: dict) -> list[dict]:
         bid = parse_price(r.get("price")) or 0
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         total = round(bid + (ship or 0), 2)
-        if total > t["max_price"]:
+        # a model with its own lower cap (WA-14: $300) is held to it here too
+        cap = min([t["max_price"]] + [c for rx, c in t.get("model_limits") or [] if re.search(rx, r["title"], re.I)])
+        if total > cap:
             continue
         seen.add(r["url"])
         mins = int((end - now).total_seconds() // 60)
-        r["mic"] = {"target": t["key"], "name": t["name"], "max_price": t["max_price"], "delivered": total,
+        r["mic"] = {"target": t["key"], "name": t["name"], "max_price": cap, "delivered": total,
                     "bid": bid, "ends": end.isoformat(), "mins_left": mins}
         out.append(r)
     out.sort(key=lambda r: r["mic"]["ends"])

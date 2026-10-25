@@ -746,7 +746,8 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
             rows = [dict(r) for r in conn.execute(
                 """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
                    AND sold = 0 AND COALESCE(pending, 0) = 0 AND favorite = 0
-                   AND first_seen >= datetime('now', '-7 days') ORDER BY first_seen DESC LIMIT 4000""")]
+                   AND first_seen >= ? ORDER BY first_seen DESC LIMIT 4000""",
+                ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),))]
         # Taste first (cheap), then full price context only for those.
         rows = [r for r in rows if t.score(r.get("title") or "") >= 1.0
                 and is_relevant(r.get("title"), r.get("price"), terms)]
@@ -2340,6 +2341,7 @@ def mics_settings():
             pass
     data["mic_focus"] = mf
     save_config_raw(data)
+    _data_changed()  # Deals / Steals follow Mic Focus (on/off, limits): rebuild them
     return redirect(url_for("mics_page", saved=1))
 
 

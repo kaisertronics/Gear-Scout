@@ -162,9 +162,11 @@ def run_refresh_cycle(cfg: dict):
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
     try:
-        # New Wanted matches to your phone now, not after the sold check below.
-        from scrapers.wanted import alert_new
-        alert_new(cfg)
+        # New Wanted matches to your phone now, not after the sold check below
+        # (not in Mic Focus: mic alerts only — see run_watch_cycle).
+        if not _mic_focus_on(cfg):
+            from scrapers.wanted import alert_new
+            alert_new(cfg)
     except Exception:
         logger.exception("Wanted alert failed")
     try:
@@ -182,11 +184,15 @@ def run_refresh_cycle(cfg: dict):
     def market_job():
         # New finds first, then this run's other listings, then anything from
         # the last few days (live searches, Telex matches) still without a value.
+        from datetime import timedelta
         from scrapers.store import _conn
+        # ISO cutoff: first_seen is "2026-10-06T10:00…", which compares wrong
+        # against SQLite's datetime('now', …) ("2026-10-06 10:00").
+        cut = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         with _conn() as conn:
             recent = [t for (t,) in conn.execute(
-                "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= datetime('now', '-3 days')"
-                " ORDER BY first_seen DESC LIMIT 1500")]
+                "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= ?"
+                " ORDER BY first_seen DESC LIMIT 1500", (cut,))]
         try:
             nocomp = [t for t in Path("/data/nocomp_titles.txt").read_text().split("\n") if t.strip()]
         except OSError:
@@ -227,7 +233,8 @@ def run_scrape_cycle():
         _run_scrape_cycle()
         try:
             from scrapers.telex import check_telex_lowest
-            check_telex_lowest(load_config())
+            if not _mic_focus_on():  # Mic Focus: mic alerts only
+                check_telex_lowest(load_config())
         except Exception:
             logger.exception("Telex lowest-price check failed")
     # Recorded only once a run finishes, so a run cut short by a restart is

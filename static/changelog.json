@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-10-25",
+    "title": "Code review",
+    "items": [
+      "Mic Focus really pauses Telex List pushes now. The hourly refresh was still sending new Telex matches to your phone (about 20 in the last day), and the end-of-run lowest-price check was still running for Telex terms.",
+      "Mic auctions follow the WA-14's own $300 limit. A WA-14 auction at $350 would have been listed and pushed, showing 'your limit $900'.",
+      "Deals and Steals in Mic Focus are US-only, like the Mics page. Two Canadian mics (a Kijiji D12 VR and a Canadian Reverb United 87) are gone from Deals.",
+      "Rolls and Vanguard mixers ('Mic/Source Mixer', 'Sound Mixer') are no longer counted as mics.",
+      "Saving the Mics page settings (on/off, limits) updates Deals and Steals right away. Before, they could take up to 10 minutes."
+    ]
+  },
+  {
     "date": "2026-10-24",
     "title": "Fewer Lauten mics; Warm Audio narrowed",
     "items": [
