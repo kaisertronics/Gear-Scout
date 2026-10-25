@@ -36,7 +36,7 @@ _TUBE = r"\btube\b|\bvalve\b|\bvacuum\b"
 # Brands with their own section: a model their section leaves out (a Warm
 # WA-251 now that Warm is CX12 / Fentone / WA-14 only, a Lauten drum mic)
 # must not turn up in the C12 / U47-251 / catch-all groups instead (Oct 24).
-_OWN_BRANDS = (r"warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|"
+_OWN_BRANDS = (r"vanguard|warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|"
                r"united\s*studio|dachman|signal\s*arts?")
 _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\b|\b47 ?fet\b|\bu-?47 ?fet\b", re.I)
 _NOT_MIC = re.compile(
@@ -128,6 +128,13 @@ TARGETS = [
                  r"boss|korg|digidesign|avid|apogee|focusrite|presonus|motu)\b)",
          queries=["dachman microphone", "da 87se"],
          model=r"\b(da[\s-]?\d{2,3}[a-z]{0,3}|\d{2,3}se)\b", brand="Dachman Audio"),
+    dict(key="vanguard", name="Vanguard Audio Labs", min_pct=60, max_price=1000,
+         match=r"\bvanguard\b",
+         require=r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bv[\s-]?(?:13|44s?|1s?|4)\b|audio labs",
+         exclude=r"tripod|monopod|\bbags?\b|backpack|camera|binocular|spotting|scope|golf|\bcase\b(?!.*mic)|"
+                 r"fishing|rod|stroller|guitar|bass|amp(?:lifier)?\b",
+         queries=["vanguard microphone", "vanguard v13", "vanguard audio labs"],
+         model=r"\b(v[\s-]?13|v[\s-]?44s?|v[\s-]?1s?|v[\s-]?4|lucent)\b", brand="Vanguard Audio Labs"),
     dict(key="d12", name="AKG D12", min_pct=60, max_price=500,
          match=r"(?<![\w-])d-?12\b(?![-\s]?\d)",
          require=r"\bakg\b",
@@ -213,7 +220,7 @@ FB_TERMS = {
     "peluso": ["peluso microphone"], "golden_age": ["golden age microphone"], "stam": ["stam microphone"],
     "warm": ["warm audio cx12", "warm audio fentone", "warm audio wa-14"], "lauten": ["lauten microphone"], "bees_neez": ["bees neez microphone"],
     "advanced_audio": ["advanced audio microphone"], "united": ["united microphone"],
-    "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "d12": ["akg d12"],
+    "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "vanguard": ["vanguard microphone"], "d12": ["akg d12"],
     "c12": ["c12 microphone"], "classic_tube": ["u47 microphone", "251 microphone"],
     "generic": ["47 microphone", "67 microphone", "87 microphone"],
 }
@@ -284,7 +291,7 @@ def _model_prices(q: str) -> dict:
 
 def _candidates() -> list[dict]:
     from scrapers.store import _conn
-    likes = ["da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
+    likes = ["vanguard", "da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
              "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251", "67", "87"]
     cut = (datetime.now(timezone.utc) - timedelta(days=LIVE_DAYS)).isoformat()
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
