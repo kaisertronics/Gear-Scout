@@ -86,6 +86,7 @@ Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new comm
 ### Left for the owner (2026-10-27)
 - The 4 daily full scrapes don't follow the 1–7 AM Facebook quiet hours (the hourly refresh does). With the schedule at 7 AM, noon, 5 PM, 9 PM none falls inside them, so nothing changed; only matters if the schedule moves.
 - Kijiji listings don't record a country (they're all Canadian). Noted only.
+- Deploy: the nightly task rebuilt scout at 14:10 PT after this review's commit, so scout already had these fixes. The dashboard was deployed by this review with safe_deploy.sh (it also carries the nightly's sold_check change in 073a4c8, read and fine). Rollback images: gear-scout-{scout,dashboard}:pre-review-1027.
 
 ### Left for the owner (2026-10-25)
 - In Mic Focus, the scheduled full scrape still sends the digest email, favorite price-drop pushes still go out, and the background Facebook post search (fb_posts_background) still walks the Telex List (its roundup email is off). The Mics page lists what's paused (Telex matches, steals, price drops, auctions, AI briefing) and these aren't on it, so left as they are — say if they should pause too, or if the post search should use the mic terms.
