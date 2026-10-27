@@ -188,13 +188,26 @@ def _shown_first(limit: int, include_fb: bool) -> list[str]:
                 " AND (sold_checked_at IS NULL OR sold_checked_at < ?) GROUP BY url", (*chunk, cutoff)).fetchall()
     # Never-checked first, then the longest since a check — so nothing far
     # down the page waits forever behind the top listings.
-    # Your Feed comes before the other pages.
+    # Your Feed comes before the other pages — in Mic Focus, the Mics page's
+    # "in your price range" list comes first (Oct 27: half of it waited
+    # 5–19 h behind ~400 Feed ads the owner isn't looking at).
     order = {u: i for i, u in enumerate(shown)}
     try:
         feed = set(open(SHOWN_FILES[0]).read().split("\n"))
     except OSError:
         feed = set()
-    return [u for u, _ in sorted(set(due), key=lambda r: (r[0] not in feed, r[1], order.get(r[0], 0)))][:limit]
+    top = set()
+    try:
+        import yaml
+        from scrapers import mic_focus
+        data = mic_focus.load()
+        if data.get("rows") and mic_focus.enabled(yaml.safe_load(open("/config/config.yaml")) or {}):
+            top = {r["url"] for r in data["rows"] if r["mic"]["hit"]}
+            feed = {r["url"] for r in data["rows"]}  # the Mics page stands in for the Feed
+    except Exception:
+        logger.debug("Mic Focus order skipped", exc_info=True)
+    return [u for u, _ in sorted(set(due), key=lambda r: (r[0] not in top, r[0] not in feed, r[1],
+                                                           order.get(r[0], 0)))][:limit]
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:

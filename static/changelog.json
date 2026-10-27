@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-27",
+    "title": "Nightly check: sold mics drop off sooner",
+    "items": [
+      "The hourly sold check now looks at your Mics page's 'In your price range' list first, then the rest of the Mics page. Before, it went through about 400 Feed ads first, so about half of your price-range mics went 5 to 19 hours between checks.",
+      "Spot check of 40 price-range mics: all were real mics in the right section, and 38 were still for sale. A Peluso TR-14 (Reverb) and a Serrano Vintage 87 (Craigslist) had just sold. The next hourly check removes them.",
+      "Mic searches are on time: every 15 minutes on Reverb, Craigslist and the other fast sites, eBay within half an hour, and each Facebook brand search within 10 hours. Most new ads were found within an hour of being posted.",
+      "AudioKarma now blocks Gear Scout. Health shows it as a 'feed parse error', but it's a block. Nothing to do; it was rarely finding anything."
+    ]
+  },
+  {
+    "date": "2026-10-27",
     "title": "Code review",
     "items": [
       "Lowest Price trackers leave out overseas eBay sellers, like the rest of Gear Scout. Their eBay 'cheapest first' search was letting UK, Korean and Chinese sellers in (12 of 38 results for 'neve 1073'), so one could have been pushed as a new lowest.",
