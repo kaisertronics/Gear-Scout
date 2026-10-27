@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-27",
+    "title": "Eight more mic brands",
+    "items": [
+      "New sections on the Mics page: Telefunken, Mojave, Soyuz, Josephson, Flea and JZ ($300 to $1,000, like the rest), plus Neumann and AKG, which only show and push when one is 30%+ under what that model sells for used (otherwise they'd flood the page with TLM 103s and C414s at normal prices).",
+      "Each brand's non-mic products and clones are left out: Neumann monitors and headphones, Telefunken radios and TVs, AKG headphones and wireless, Soyuz's Launcher DI, 'Soviet clone AKG' and '-style' copies, flea markets and the Chili Peppers bassist's gear. AKG D12s stay in their own section."
+    ]
+  },
+  {
+    "date": "2026-10-27",
     "title": "Nightly check: sold mics drop off sooner",
     "items": [
       "The hourly sold check now looks at your Mics page's 'In your price range' list first, then the rest of the Mics page. Before, it went through about 400 Feed ads first, so about half of your price-range mics went 5 to 19 hours between checks.",

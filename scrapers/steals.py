@@ -85,6 +85,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
+        mt = None
         if focus is not None:
             mt = mic_classify(title, focus)
             if not mt:
@@ -113,6 +114,8 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         unit = c["value"]  # per piece when an ad sells several
         ref = min(c["ref"], peer) if peer else c["ref"]
         pct = round((1 - unit / ref) * 100)
+        if focus is not None and (mt or {}).get("deal_pct") and pct < mt["deal_pct"]:
+            continue  # Neumann / AKG: only 30%+ under used
         if ref < MIN_REF or not (min_pct <= pct <= MAX_PCT):
             continue
         ad = (title.lower().strip(), round(value))
