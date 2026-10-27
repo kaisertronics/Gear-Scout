@@ -260,8 +260,9 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
     out = []
     for item in resp.json().get("itemSummaries", []) or []:
         title = item.get("title") or ""
-        if not title or not keyword_match(title, [query]):
-            continue
+        from scrapers.store import is_overseas
+        if not title or not keyword_match(title, [query]) or is_overseas(country_of(item)):
+            continue  # overseas sellers are left out, like every other eBay search
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         loc = item.get("itemLocation") or {}
         location = ", ".join(p for p in (loc.get("city"), loc.get("stateOrProvince")) if p) or None
@@ -270,6 +271,6 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
             url=item.get("itemWebUrl") or f"https://www.ebay.com/itm/{item_id}",
             price=_format_price(item.get("price")), description=item.get("condition"),
             image_url=(item.get("image") or {}).get("imageUrl"), listing_id=item_id,
-            location=location,
+            location=location, shipping=shipping_of(item), country=country_of(item),
         ))
     return out

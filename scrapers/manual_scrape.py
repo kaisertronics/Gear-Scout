@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def run_manual_scrape(
     cfg: dict,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
-) -> tuple[list[ScrapeResult], list]:
+) -> tuple[list[ScrapeResult], list, dict]:
     """Scrapes every enabled source using cfg's standing keyword list,
     stores any new listings, and updates the same last_run.json snapshot a
     scheduled run would — so the Dashboard tab reflects it immediately —
@@ -40,6 +40,9 @@ def run_manual_scrape(
     # — a full scheduled-style pass takes 15–20 minutes.
     sources = [{**s, "_light": True} for s in cfg.get("sources", [])
                if s.get("enabled", True) and s.get("type") != "facebook_posts"]
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
     total = len(sources) + len(terms)
 
     def feed_progress(done, _total, current):

@@ -4,7 +4,7 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: 66511fe + the "Code review (Oct 25)" commit right after it (reviewed 2026-10-25: ba581a9..66511fe, 31 commits, incl. all of Mic Focus) — next run's diff starts at the Code review (Oct 25) commit
+Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new commits since 1eedc7f, rotation only) — next run's diff starts there
 
 ## Files — last fully read
 
@@ -12,9 +12,13 @@ Last reviewed commit: 66511fe + the "Code review (Oct 25)" commit right after it
 |------|-----------------|-------|
 | scrapers/store.py | 2026-10-20 | |
 | scrapers/runner.py | 2026-10-20 | one-term = 1 FB worker |
-| scrapers/dispatch.py | 2026-10-06 | |
-| scrapers/reverb_api.py | 2026-10-06 | term search newest first |
-| scrapers/ebay_api.py | 2026-10-06 | specific terms on all of eBay |
+| scrapers/dispatch.py | 2026-10-27 | |
+| scrapers/reverb_api.py | 2026-10-27 | term search newest first |
+| scrapers/ebay_api.py | 2026-10-27 | ebay_lowest now drops overseas |
+| scrapers/kijiji.py | 2026-10-27 | |
+| scrapers/price_check.py | 2026-10-27 | FB favorites respect pause |
+| scrapers/manual_scrape.py | 2026-10-27 | |
+| scripts/safe_deploy.sh | 2026-10-27 | |
 | scrapers/comps.py | 2026-10-25 | |
 | scrapers/wanted.py | 2026-10-18 | gear check, cable terms |
 | scrapers/notify.py | 2026-10-25 | push photo |
@@ -35,7 +39,7 @@ Last reviewed commit: 66511fe + the "Code review (Oct 25)" commit right after it
 | scrapers/fb_posts.py | partly | 1–230 |
 | scrapers/emailer.py | partly | 28–200 |
 | dashboard.py | partly | Feed, Health, Telex, deals cache |
-| main.py | 2026-10-05 (session) | |
+| main.py | 2026-10-27 | full scrape respects FB pause |
 | scrapers/steals.py | 2026-10-18 | |
 | scrapers/models.py | 2026-10-18 | new |
 | scrapers/brand.py | 2026-10-18 | new |
@@ -75,6 +79,13 @@ Last reviewed commit: 66511fe + the "Code review (Oct 25)" commit right after it
 | 2026-10-25 | "Rolls RM67 Mic/Source Mixer", "Vanguard VM304a … Sound Mixer" classified as focus mics | mixers in _NOT_MIC |
 | 2026-10-25 | Saving Mics settings didn't invalidate the Deals/Steals cache (up to 10 min stale) | _data_changed() |
 | 2026-10-25 | Mic "fresh" (push window) used last_seen only, not COALESCE(last_seen, first_seen) | COALESCE (0 rows affected today) |
+| 2026-10-27 | Scheduled full scrape, "Scrape now" and the favorites price check ignored facebook_paused() (8 Marketplace regions + 3 groups + every FB favorite opened while paused); only the hourly refresh checked it | Facebook sources / FB favorites skipped while paused (tested with the pause forced on and off) |
+| 2026-10-27 | Lowest Price trackers: ebay_lowest didn't drop overseas sellers (live: 12 of 38 "neve 1073" results from GB/KR/CN) | is_overseas check; country + shipping now recorded (26 results, 0 overseas) |
+| 2026-10-27 | main.py comment said steals are 60%+; manual_scrape return type said 2 values (returns 3) | comments fixed |
+
+### Left for the owner (2026-10-27)
+- The 4 daily full scrapes don't follow the 1–7 AM Facebook quiet hours (the hourly refresh does). With the schedule at 7 AM, noon, 5 PM, 9 PM none falls inside them, so nothing changed; only matters if the schedule moves.
+- Kijiji listings don't record a country (they're all Canadian). Noted only.
 
 ### Left for the owner (2026-10-25)
 - In Mic Focus, the scheduled full scrape still sends the digest email, favorite price-drop pushes still go out, and the background Facebook post search (fb_posts_background) still walks the Telex List (its roundup email is off). The Mics page lists what's paused (Telex matches, steals, price drops, auctions, AI briefing) and these aren't on it, so left as they are — say if they should pause too, or if the post search should use the mic terms.

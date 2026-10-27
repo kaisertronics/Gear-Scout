@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-10-27",
+    "title": "Code review",
+    "items": [
+      "Lowest Price trackers leave out overseas eBay sellers, like the rest of Gear Scout. Their eBay 'cheapest first' search was letting UK, Korean and Chinese sellers in (12 of 38 results for 'neve 1073'), so one could have been pushed as a new lowest.",
+      "When Facebook asks Gear Scout to slow down, the four daily full scrapes, 'Scrape now' and the favorites price check now leave Facebook alone too, like everything else already did."
+    ]
+  },
+  {
     "date": "2026-10-25",
     "title": "Code review",
     "items": [

@@ -283,6 +283,9 @@ def _run_scrape_cycle():
         # Facebook post search runs all day in the background instead, with
         # its own afternoon roundup email.
         sources = [s for s in sources if s.get("type") != "facebook_posts"]
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
     email_cfg = cfg["email"]
 
     logger.info("=" * 60)
@@ -525,7 +528,7 @@ def run_watch_cycle():
             price_drops.alert(cfg)
         except Exception:
             logger.exception("Price-drop check failed")
-        # New steals (60%+ under used prices): push + email right away.
+        # New steals (steals.MIN_PCT, 50%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new
             alert_new(cfg)
