@@ -88,7 +88,7 @@ TARGETS = [
          brand="Warm Audio"),
     # Owner (Oct 24): fewer Lautens — their studio mics only (no LA-120/220
     # budget or drum mics), and nothing over your limit is shown.
-    dict(key="lauten", name="Lauten Audio", min_pct=60, max_price=1000, hide_over_limit=True,
+    dict(key="lauten", name="Lauten Audio", min_pct=60, max_price=1000, min_price=150, hide_over_limit=True,
          match=r"\blauten\b", require=None,
          exclude=r"\bla[\s-]?(?:120|220)\b|tom[\s-]?mic|snare[\s-]?mic|kick[\s-]?mic|\bls[\s-]?\d{3}\b|\bft[\s-]?\d{3}\b",
          queries=["lauten audio", "lauten atlantis", "lauten eden", "lauten oceanus"],
@@ -294,8 +294,8 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
     if not title or _NOT_MIC.search(title) or _PART.search(title):
         return None
     from scrapers.wanted import is_spare_tube
-    if is_spare_tube(title) or (re.search(r"6au6|ef ?94|6072|12ay7|ef ?86|6sj7|vf ?14", title, re.I)
-                                and re.search(r"nos|new old stock|^\s*\d+\s?x\b|\bpairs?\b|matched", title, re.I)):
+    if is_spare_tube(title) or (re.search(r"6au6|ef ?94|6072|12ay7|ef ?86|6sj7|vf ?14|nuvistors?|13cw4|7586|7895|ac ?701", title, re.I)
+                                and re.search(r"nos|new old stock|^\s*\d+\s?x\b|\bx\s?\d\b|\btubes\b|\bpairs?\b|matched", title, re.I)):
         return None  # a spare tube for one of these mics
     # A "studio microphones: AEA, AKG, Avantone, Lauten, Royer…" lot isn't one mic.
     if len(set(m.lower() for m in _BRANDS.findall(title))) >= 3:
@@ -426,6 +426,10 @@ def find(cfg: dict) -> list[dict]:
                 continue
         ref = new or used
         ref_kind = "new" if new else ("used" if used else None)
+        # Under 20% of what the model goes for is a scam, a fake or a part
+        # ("Neumann U87" at $100) — not a real lowest price (Oct 28).
+        if ref and delivered < ref * 0.2:
+            continue
         pct = round((1 - delivered / ref) * 100) if ref else None
         hit = t.get("min_price", floor) <= delivered <= t["max_price"]  # by price (Oct 22), not % off
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,

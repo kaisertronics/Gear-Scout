@@ -2281,6 +2281,31 @@ def mics_page():
     by = {t["key"]: [] for t in st["targets"]}
     for l in rows:
         by.setdefault(l["mic"]["target"], []).append(l)
+    # Each section in the order of the price the card shows (listing +
+    # listed shipping) — sorting by per-piece price put a $1,299 pair first.
+    from scrapers.enrich import model_key, parse_price
+
+    def shown(l):
+        v = parse_price(l.get("price")) or 0
+        return v + (l["shipping"] if isinstance(l.get("shipping"), (int, float)) else 0)
+    models = {}
+    for k, ls in by.items():
+        ls.sort(key=shown)
+        # Lowest price per model: the cheapest listing of each model, cheapest first.
+        groups = {}
+        for l in ls:
+            q = l["mic"].get("model")
+            if q:
+                label = q
+            else:
+                mk = (model_key(l.get("title")) or "").split("|")[0]
+                label = mk.split(":")[-1].upper() if mk else "Other"
+            # "TLM 103", "TLM-103" and "TLM103" are one model
+            g = groups.setdefault(re.sub(r"[\s-]", "", label.lower()), {"label": label, "n": 0, "best": l})
+            g["n"] += 1
+        models[k] = sorted(groups.values(), key=lambda g: shown(g["best"]))
+        for g in models[k]:
+            g["price"] = shown(g["best"])
     # In your price range, newest find first (cheapest-first buried new ones
     # mid-list, so the top never seemed to change); categories stay cheapest first.
     hits = sorted((l for l in rows if l["mic"]["hit"]), key=lambda l: l.get("first_seen") or "", reverse=True)
@@ -2303,7 +2328,7 @@ def mics_page():
     auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
     from urllib.parse import quote
     mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
-    return render_template("mics.html", st=st, hits=hits, by=by, built=_ago(data.get("built")), built_iso=data.get("built"),
+    return render_template("mics.html", st=st, hits=hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
                            auctions=auctions, mercari=mercari,
                            sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
 

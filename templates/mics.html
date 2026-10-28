@@ -98,6 +98,20 @@
     <section class="panel" id="t-{{ t.key }}">
       <h2>{{ t.name }} <span class="muted">— all {{ ls|length }} for sale, lowest price first · push ${{ '{:,}'.format(t.min_price or st.min_price) }}–${{ '{:,}'.format(t.max_price) }}{{ '' if t.on else ' (off)' }}</span></h2>
       {% if ls %}
+        {% set ms = models.get(t.key) or [] %}
+        {% if ms|length > 1 %}
+          <table class="mic-models">
+            <thead><tr><th>Model</th><th>Lowest</th><th>For sale</th></tr></thead>
+            <tbody>
+            {% for g in ms %}
+              <tr><td>{{ g.label }}</td>
+                  <td><a href="{{ g.best.url }}" target="_blank" rel="noopener">${{ '{:,.0f}'.format(g.price) }}</a>
+                    <span class="muted">{{ (g.best.source_name or '').split(' — ')[0] }}</span></td>
+                  <td>{{ g.n }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
         <details class="more-listings" open data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
           <summary>Hide / show</summary><div class="listing-grid"></div>
         </details>

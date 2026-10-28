@@ -1091,3 +1091,7 @@ details.panel > summary { cursor: pointer; }
 
 .mercari-list { list-style: none; padding: 0; margin: 8px 0; columns: 2 220px; }
 .mercari-list li { padding: 4px 0; break-inside: avoid; }
+
+.mic-models { border-collapse: collapse; margin: 4px 0 12px; width: 100%; max-width: 640px; font-size: 14px; }
+.mic-models th, .mic-models td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border, #e5e7eb); }
+.mic-models td:nth-child(2) { white-space: nowrap; }
