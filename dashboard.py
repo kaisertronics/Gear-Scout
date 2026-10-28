@@ -2306,6 +2306,11 @@ def mics_page():
         models[k] = sorted(groups.values(), key=lambda g: shown(g["best"]))
         for g in models[k]:
             g["price"] = shown(g["best"])
+            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
+            # tag and border the Price Board uses) — here and in "In your price range".
+            if g["n"] > 1:
+                g["best"]["model_lowest"] = True
+                g["best"]["model_lowest_label"] = g["label"]
     # In your price range, newest find first (cheapest-first buried new ones
     # mid-list, so the top never seemed to change); categories stay cheapest first.
     hits = sorted((l for l in rows if l["mic"]["hit"]), key=lambda l: l.get("first_seen") or "", reverse=True)

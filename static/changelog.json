@@ -4,6 +4,7 @@
     "title": "Mics page: lowest price per model, in order",
     "items": [
       "Each mic section now opens with a 'Lowest price per model' table: every model, its cheapest listing (tap to open) and how many are for sale, cheapest first.",
+      "The cheapest ad of each model is highlighted on its card (💲 Lowest, with a colored border) in its section and in 'In your price range'.",
       "The cards in each section are in the order of the price they show. They used to be sorted by price per piece, so a $1,299 pair showed up before a $650 single.",
       "Listings priced under 20% of what that model sells for are left out. They're scams, fakes or parts, like a 'Neumann U87' for $100. Spare nuvistor tubes (13CW4 and similar) are left out too.",
       "Lauten's minimum is now $150."
