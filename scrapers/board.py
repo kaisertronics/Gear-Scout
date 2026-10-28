@@ -106,7 +106,7 @@ def build(cfg: dict, only: list[str] | None = None) -> list[dict]:
         all_terms = [(t, k) for t, k in all_terms if t in only]
     exclude = cfg.get("exclude_words") or []
     # The same listings the Feed shows: still for sale, shown by a site in
-    # the last 45 days, the same ad stored twice counted once.
+    # the last 90 days (wanted.FEED_DAYS), the same ad stored twice counted once.
     from scrapers.wanted import recent_rows
     rows, seen_ads = [], set()
     for r in recent_rows():

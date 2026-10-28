@@ -4,7 +4,7 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new commits since 1eedc7f, rotation only) — next run's diff starts there
+Last reviewed commit: the "Code review (Oct 28)" commit (2026-10-28: reviewed 4e039de..b3be6b9) — next run's diff starts there
 
 ## Files — last fully read
 
@@ -20,17 +20,17 @@ Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new comm
 | scrapers/manual_scrape.py | 2026-10-27 | |
 | scripts/safe_deploy.sh | 2026-10-27 | |
 | scrapers/comps.py | 2026-10-25 | |
-| scrapers/wanted.py | 2026-10-18 | gear check, cable terms |
+| scrapers/wanted.py | 2026-10-28 | gear check, cable terms |
 | scrapers/notify.py | 2026-10-25 | push photo |
-| scrapers/mic_focus.py | 2026-10-25 | new (Oct 22–24) |
+| scrapers/mic_focus.py | 2026-10-28 | 8 new brands, deal_pct, 20% floor |
 | scrapers/fb_posts_background.py | 2026-10-25 | facebook_paused, quiet hours |
 | scrapers/watches.py | 2026-10-25 | |
 | scrapers/live_search.py | 2026-10-25 | |
 | scrapers/timefmt.py, run_status.py | 2026-10-25 | |
 | templates/mics.html, sweetwater.html | 2026-10-25 | new |
 | templates/base.html, steals.html, settings.html, health.html | 2026-10-25 (diff) | |
-| dashboard.py | 2026-10-25 (diff) | mics, sweetwater, login hash, inbox done, deals defaults |
-| scrapers/board.py | 2026-10-18 (diff: build, verify_cheapest) | aligned with Feed |
+| dashboard.py | 2026-10-28 (diff) | mics_page: per-model table, model_lowest |
+| scrapers/board.py | 2026-10-28 | aligned with Feed; check_fb respects the pause |
 | scrapers/sold_check.py | partly | checker + _record + candidates |
 | scrapers/telex.py | partly | sweep + matchers |
 | scrapers/market.py | partly | lookups, load_market |
@@ -40,12 +40,13 @@ Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new comm
 | scrapers/emailer.py | partly | 28–200 |
 | dashboard.py | partly | Feed, Health, Telex, deals cache |
 | main.py | 2026-10-27 | full scrape respects FB pause |
-| scrapers/steals.py | 2026-10-18 | |
-| scrapers/models.py | 2026-10-18 | new |
-| scrapers/brand.py | 2026-10-18 | new |
-| scrapers/savings.py | 2026-10-18 | new |
-| scrapers/savings_slides.py | 2026-10-18 | new |
-| scrapers/shipping_backfill.py | 2026-10-18 | new |
+| scrapers/steals.py | 2026-10-28 | |
+| scrapers/models.py | 2026-10-28 | |
+| scrapers/brand.py | 2026-10-28 | |
+| scrapers/savings.py | 2026-10-28 | also Mic Focus's model prices |
+| scrapers/savings_slides.py | 2026-10-18 | next in rotation |
+| scrapers/shipping_backfill.py | 2026-10-28 | |
+| templates/mics.html, static/style.css (mic-models) | 2026-10-28 (diff) | |
 | scrapers/lowest.py | 2026-10-20 | FB every 6 h, carry-over |
 | scrapers/base.py | 2026-10-20 | keyword_match Wanted fallback only for ScrapeKeywords ✓ |
 | scrapers/price_drops.py | 2026-10-20 | |
@@ -82,6 +83,15 @@ Last reviewed commit: the "Code review (Oct 27)" commit (2026-10-27: no new comm
 | 2026-10-27 | Scheduled full scrape, "Scrape now" and the favorites price check ignored facebook_paused() (8 Marketplace regions + 3 groups + every FB favorite opened while paused); only the hourly refresh checked it | Facebook sources / FB favorites skipped while paused (tested with the pause forced on and off) |
 | 2026-10-27 | Lowest Price trackers: ebay_lowest didn't drop overseas sellers (live: 12 of 38 "neve 1073" results from GB/KR/CN) | is_overseas check; country + shipping now recorded (26 results, 0 overseas) |
 | 2026-10-27 | main.py comment said steals are 60%+; manual_scrape return type said 2 values (returns 3) | comments fixed |
+| 2026-10-28 | Mic Focus's 8 new brands (8d56455): the "is a mic" check was written with doubled backslashes (`\\bmic…\\b` inside r"…"), so "mic", "microphone", "tube", "fet", "large diaphragm" never matched; only titles with a model code got in (JZ's match had the same problem). 408 stored listings misjudged | One shared _MIC_WORDS pattern. On a DB copy: ~120 more listed, 18 more in the price range (Soyuz 013/011 FET, Josephson C551FA/C42MP, Telefunken tube mic, plain "Neumann mic" ads…), nothing dropped. Added _STUDIO_ONLY so the fix doesn't bring in "V76 Mic Pre", Telefunken direct boxes or loose "vacuum tube" ads; a first try that also left out dynamics/stands was reverted (owner searches "telefunken m80"; "MA-50 bundle with stand" is a real mic) |
+| 2026-10-28 | steals.py docstring said 60%+ (MIN_PCT is 50); board.py comment said the Feed window is 45 days (it's 90) | comments fixed |
+
+### Left for the owner (2026-10-28)
+- With the new-brand fix, these now show in the brand sections too: AKG/Mojave/Soyuz/Telefunken **dynamic** mics (AKG D5/D7, Mojave MA-D packs, Soyuz V1, Telefunken D19, DD5 drum kit) and AKG boundary/paging mics (PCC160, PZM). Dynamics were kept on purpose because "telefunken m80" is one of your searches. Say if the big-brand sections should be studio condensers/ribbons only.
+- Mic Focus Deals/Steals (steals.py) check a mic's own limit against the listing price; the Mics page checks price + shipping. Small difference, not changed.
+- Uncommitted edits from another session were in the working tree (dashboard.py "newest ad first" sort on the Mics page, enrich.py Sound Storm car-amp filter, mics.html header text, docs/studio-wiring/). Not part of this review and not committed or deployed by it; read and they look fine.
+- Reminder: the dashboard sign-in gate is switched off (dashboard.require_login returns early, per your earlier request), so anyone with the ngrok link can open Settings.
+- Price Board trend: "a week / month ago" takes the last value in database order, not date order. It works because days are added in order; noted only.
 
 ### Left for the owner (2026-10-27)
 - The 4 daily full scrapes don't follow the 1–7 AM Facebook quiet hours (the hourly refresh does). With the schedule at 7 AM, noon, 5 PM, 9 PM none falls inside them, so nothing changed; only matters if the schedule moves.

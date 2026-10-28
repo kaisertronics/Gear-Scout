@@ -33,6 +33,10 @@ MIN_PRICE = 40.0        # under this it's a placeholder or a part
 MIN_PUSH_PRICE = 300    # owner's floor (Oct 22): nothing under $300 delivered pushes or makes the list
 
 _TUBE = r"\btube\b|\bvalve\b|\bvacuum\b"
+# "It's a studio mic" words for the big-brand sections (Oct 27), and what those
+# brands also sell that isn't one: mic preamps ("V76 Mic Pre"), direct boxes, spare tubes.
+_MIC_WORDS = r"\bmic(?:rophone)?s?\b|condenser|\btube\b|\bvalve\b|\bfet\b|ribbon|large[\s-]?diaphragm|\bldc\b|\bsdc\b"
+_STUDIO_ONLY = r"\bmic(?:rophone)?\s?pre\b|direct box|vacuum tube(?!.*(?:condenser|\bmic))"
 # Brands with their own section: a model their section leaves out (a Warm
 # WA-251 now that Warm is CX12 / Fentone / WA-14 only, a Lauten drum mic)
 # must not turn up in the C12 / U47-251 / catch-all groups instead (Oct 24).
@@ -138,55 +142,55 @@ TARGETS = [
     # Neumann and AKG: only real deals (owner, Oct 27): 30%+ under what that model sells for used.
     dict(key="neumann", name="Neumann (30%+ under used)", min_pct=60, max_price=1000, deal_pct=30,
          match=r"\bneumann\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|\b(?:u|m|km|tlm|tlm|kms|bcm|tlm)[\s-]?\d{2,3}",
-         exclude=r"\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bkh[\s-]?\d{2,3}\b|monitors?\b|speakers?|subwoofer|headphones?|\bndh\b|\bnda\b|ea[\s-]?87|ea[\s-]?1\b|"
+         require=_MIC_WORDS + r"|\b(?:u|m|km|tlm|kms|bcm)[\s-]?\d{2,3}",
+         exclude=_STUDIO_ONLY + r"|\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bkh[\s-]?\d{2,3}\b|monitors?\b|speakers?|subwoofer|headphones?|\bndh\b|\bnda\b|ea[\s-]?87|ea[\s-]?1\b|"
                  r"\bmt[\s-]?\d{2}\b|power supply|\bn[\s-]?248\b|\bbs[\s-]?48\b|stand\b|\bcables?\b|lathe|cutting",
          queries=["neumann microphone", "neumann tlm 103", "neumann km 184"],
          model=r"\b(u[\s-]?\d{2}\s?(?:ai|fet)?|m[\s-]?\d{2,3}|km[\s-]?\d{2,3}\w?|tlm[\s-]?\d{2,3}\w?|kms[\s-]?\d{3}|bcm[\s-]?\d{3})\b",
          brand="Neumann"),
     dict(key="telefunken", name="Telefunken", min_pct=60, max_price=1000,
          match=r"\btelefunken\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|ela[\s-]?m|\b(?:tf|ar|cu|m|u)[\s-]?\d{1,3}\b",
-         exclude=r"radio|\btv\b|television|record player|turntable|phonograph|tape (?:deck|recorder)|reel|\bopus\b|"
+         require=_MIC_WORDS + r"|ela[\s-]?m|\b(?:tf|ar|cu|m|u)[\s-]?\d{1,3}\b",
+         exclude=_STUDIO_ONLY + r"|radio|\btv\b|television|record player|turntable|phonograph|tape (?:deck|recorder)|reel|\bopus\b|"
                  r"speakers?|amplifier|receiver|tubes? only|\b(?:ef|ecc|el)\s?\d{2,3}\b(?!.*mic)",
          queries=["telefunken microphone", "telefunken tf11", "telefunken m80"],
          model=r"\b(ela[\s-]?m[\s-]?\d{3}\w?|tf[\s-]?\d{2}|ar[\s-]?\d{2}|cu[\s-]?\d{2}|m[\s-]?\d{2}|u[\s-]?\d{2})\b",
          brand="Telefunken"),
     dict(key="mojave", name="Mojave Audio", min_pct=60, max_price=1000,
          match=r"\bmojave\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|\bma[\s-]?\d{2,4}",
-         exclude=r"desert|\bjeep\b|\btruck\b|candle|rug|blanket|shirt|print",
+         require=_MIC_WORDS + r"|\bma[\s-]?\d{2,4}",
+         exclude=_STUDIO_ONLY + r"|desert|\bjeep\b|\btruck\b|candle|rug|blanket|shirt|print",
          queries=["mojave microphone", "mojave ma-200", "mojave ma-300"],
          model=r"\b(ma[\s-]?\d{2,4}\s?(?:fet|vcr)?)\b", brand="Mojave Audio"),
     dict(key="soyuz", name="Soyuz", min_pct=60, max_price=1000,
          match=r"\bsoyuz\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|\bsu[\s-]?\d{3}\b|\b1973\b|bomblet",
-         exclude=r"launcher|\bdi\b|preamp|space|rocket|model kit|poster",
+         require=_MIC_WORDS + r"|\bsu[\s-]?\d{3}\b|\b1973\b|bomblet",
+         exclude=_STUDIO_ONLY + r"|launcher|\bdi\b|preamp|space|rocket|model kit|poster",
          queries=["soyuz microphone", "soyuz su-017", "soyuz 1973"],
          model=r"\b(su[\s-]?\d{3}|1973|bomblet)\b", brand="Soyuz"),
     dict(key="akg", name="AKG (30%+ under used)", min_pct=60, max_price=1000, deal_pct=30,
          match=r"\bakg\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|\b(?:c|d)[\s-]?\d{2,4}",
-         exclude=r"\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bd[\s-]?12(?:e|vr|\s?vr)?\b|headphones?|\bk[\s-]?\d{2,3}\b|earbuds?|wireless|bodypack|\bwms\b|perception|lyra|ara\b|"
+         require=_MIC_WORDS + r"|\b(?:c|d)[\s-]?\d{2,4}",
+         exclude=_STUDIO_ONLY + r"|\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bd[\s-]?12(?:e|vr|\s?vr)?\b|headphones?|\bk[\s-]?\d{2,3}\b|earbuds?|wireless|bodypack|\bwms\b|perception|lyra|ara\b|"
                  r"gooseneck|\bcgn\b|shock ?mount|\bh[\s-]?\d{2,3}\b|stand\b|clip|windscreen|handheld",
          queries=["akg microphone", "akg c414", "akg c12 vr", "akg c451"],
          model=r"\b(c[\s-]?\d{2,4}\s?(?:xls|xlii|vr|b|eb|e)?|d[\s-]?\d{2,4})\b", brand="AKG"),
     dict(key="josephson", name="Josephson", min_pct=60, max_price=1000,
          match=r"\bjosephson\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|\b(?:c|e)[\s-]?\d{2,3}\w?\b|series (?:six|seven)",
-         exclude=r"\bbook\b|novel|print",
+         require=_MIC_WORDS + r"|\b(?:c|e)[\s-]?\d{2,3}\w?\b|series (?:six|seven)",
+         exclude=_STUDIO_ONLY + r"|\bbook\b|novel|print",
          queries=["josephson microphone", "josephson c700"],
          model=r"\b(c[\s-]?\d{2,3}\w?|e[\s-]?\d{2}\w?)\b", brand="Josephson"),
     dict(key="flea", name="Flea Microphones", min_pct=60, max_price=1000,
          match=r"\bflea\b",
-         require=r"\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|flea\s?(?:47|49|12|251|m\s?50|50)\b",
-         exclude=r"flea market|flea (?:&|and) tick|\bfleas\b|chili peppers|\brhcp\b|\bbass\b|fender|jazz bass|guitar|"
+         require=_MIC_WORDS + r"|flea\s?(?:47|49|12|251|m\s?50|50)\b",
+         exclude=_STUDIO_ONLY + r"|flea market|flea (?:&|and) tick|\bfleas\b|chili peppers|\brhcp\b|\bbass\b|fender|jazz bass|guitar|"
                  r"collar|\bdog\b|\bcat\b|treatment|shirt|vinyl record",
          queries=["flea microphone", "flea 47 microphone", "flea 12 microphone"],
          model=r"\b(flea\s?(?:47|49|12|251|m\s?50|50)\w*)\b", brand="Flea"),
     dict(key="jz", name="JZ Microphones", min_pct=60, max_price=1000,
-         match=r"\bjz\b(?=.*(?:\\bmic(?:rophone)?s?\\b|condenser|\\btube\\b|\\bvalve\\b|\\bfet\\b|ribbon|large[\\s-]?diaphragm|\\bldc\\b|\\bsdc\\b|black hole|\bbh[\s-]?\d|\bv[\s-]?\d{2}\b|vintage|amethyst))|jz microphones",
-         require=None, exclude=r"\bjz[\s-]?\d{3,}\b(?!.*mic)",
+         match=r"\bjz\b(?=.*(?:" + _MIC_WORDS + r"|black hole|\bbh[\s-]?\d|\bv[\s-]?\d{2}\b|vintage|amethyst))|jz microphones",
+         require=None, exclude=_STUDIO_ONLY + r"|\bjz[\s-]?\d{3,}\b(?!.*mic)",
          queries=["jz microphones", "jz black hole microphone", "jz v12"],
          model=r"\b(bh[\s-]?\d\w*|black hole\s?\w*|v[\s-]?\d{2}\w*|vintage\s?\d{2}|amethyst\s?\w*)\b", brand="JZ Microphones"),
     dict(key="d12", name="AKG D12", min_pct=60, max_price=500,

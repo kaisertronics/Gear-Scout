@@ -1,6 +1,6 @@
 """
 Steals: listings priced far under what the gear really sells for used
-(60%+ off by default) — across everything Gear Scout has collected for your
+(50%+ off by default) — across everything Gear Scout has collected for your
 search terms and Telex List, still for sale.
 
 A discount that big is usually a mistake (wrong comp, a part, a pedal

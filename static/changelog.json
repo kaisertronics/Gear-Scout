@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-10-28",
+    "title": "Code review",
+    "items": [
+      "The eight new mic brands (Telefunken, Mojave, Soyuz, Josephson, Flea, JZ, Neumann, AKG) only counted an ad when its title had a model number. 'Telefunken Tube Recording Microphone', 'Josephson C551FA Microphone' or a Soyuz 013 FET were left out. Fixed: about 18 more mics now show in 'In your price range' and about 120 more in the brand sections. Mic preamps ('V76 Mic Pre'), direct boxes and loose spare tubes from those brands stay out."
+    ]
+  },
+  {
+    "date": "2026-10-28",
     "title": "Mics page: lowest price per model, in order",
     "items": [
       "Each mic section now opens with a 'Lowest price per model' table: every model, its cheapest listing (tap to open) and how many are for sale, cheapest first.",
