@@ -556,7 +556,8 @@ def alert(cfg: dict) -> int:
         conn.executemany("INSERT OR IGNORE INTO mic_alerted VALUES (?, ?, ?)",
                          [(r["url"], str(r.get("price")), now) for r in todo])
         conn.commit()
-    logger.info("Mic Focus: %d hits, %d new, %d pushes", len(hits), len(todo), sent)
+    emailed = _email_hits(cfg, f"Mic Focus: {len(todo)} new mic{'s' if len(todo) != 1 else ''} in your range", todo)
+    logger.info("Mic Focus: %d hits, %d new, %d pushes%s", len(hits), len(todo), sent, ", emailed" if emailed else "")
     return sent
 
 
@@ -738,3 +739,110 @@ def alert_auctions(cfg: dict) -> int:
     if sent:
         logger.info("Mic auction alerts sent: %d", sent)
     return sent
+
+
+# --------------------------------------------------------------------------
+# Deep Reverb read (owner, Oct 29): a search reads only the newest 150 results,
+# so for a brand with hundreds of used listings (Neumann, AKG) the older ads
+# that are still for sale were never seen. Every 2 hours each brand search is
+# paged through up to 500 results, the mics among them stored, and the ones
+# already known marked as still listed. Older ads it finds are not pushed.
+
+DEEP_MARK = Path("/data/mic_deep_crawl.txt")
+DEEP_EVERY_MIN = 120
+DEEP_PAGES = 10
+
+
+def deep_crawl(cfg: dict) -> int:
+    try:
+        last = datetime.fromisoformat(DEEP_MARK.read_text().strip())
+        if datetime.now(timezone.utc) - last < timedelta(minutes=DEEP_EVERY_MIN - 5):
+            return 0
+    except Exception:
+        pass
+    import requests
+    from scrapers.reverb_api import API_URL, HEADERS, _to_listing, country_of
+    from scrapers.store import _conn, is_overseas, mark_seen
+    targets = [t for t in settings(cfg)["targets"] if t["on"]]
+    with _conn() as conn:
+        known = {m.group(1) for (u,) in conn.execute("SELECT url FROM seen WHERE url LIKE '%reverb.com/item/%'")
+                 for m in [re.search(r"/item/(\d+)", u or "")] if m}
+    now = datetime.now(timezone.utc)
+    fresh_cut = now - timedelta(days=FRESH_DAYS)
+    seen_ids, added, touched, quiet = set(), 0, [], []
+    for q in fb_terms(cfg):
+        try:
+            for page in range(1, DEEP_PAGES + 1):
+                resp = requests.get(API_URL, params={"query": q, "per_page": 50, "page": page, "state": "live",
+                                                     "sort": "published_at|desc"}, headers=HEADERS, timeout=25)
+                resp.raise_for_status()
+                batch = resp.json().get("listings") or []
+                for item in batch:
+                    lid = str(item.get("id"))
+                    if lid in seen_ids or is_overseas(country_of(item)):
+                        continue
+                    if not classify(item.get("title") or "", targets):
+                        continue
+                    seen_ids.add(lid)
+                    if lid in known:
+                        touched.append(lid)
+                        continue
+                    listing = _to_listing(item, "Reverb — All Used")
+                    mark_seen(listing)
+                    added += 1
+                    if not listing.posted_at or listing.posted_at.astimezone(timezone.utc) < fresh_cut:
+                        quiet.append((listing.url, str(listing.price)))  # an old ad: stored, not pushed
+                if len(batch) < 50:
+                    break
+                time.sleep(0.25)
+        except Exception as e:
+            logger.warning("Mic deep read failed for %r: %s", q, e)
+        time.sleep(0.25)
+    stamp = now.isoformat()
+    with _conn() as conn:
+        _ensure(conn)
+        conn.executemany("INSERT OR IGNORE INTO mic_alerted VALUES (?, ?, ?)", [(u, p, stamp) for u, p in quiet])
+        for i in range(0, len(touched), 400):  # ads still listed: keep them current
+            chunk = touched[i:i + 400]
+            conn.executemany("UPDATE seen SET last_seen = ? WHERE url LIKE ?", [(stamp, f"%reverb.com/item/{l}%") for l in chunk])
+        conn.commit()
+    DEEP_MARK.write_text(stamp)
+    logger.info("Mic deep read: %d Reverb mics seen, %d new to Gear Scout (%d older ads not pushed)", len(seen_ids), added, len(quiet))
+    return added
+
+
+# --------------------------------------------------------------------------
+# Email for mic alerts (the push-only version left out the emails every other
+# Gear Scout alert sends).
+
+def _email_hits(cfg: dict, subject: str, rows: list[dict]) -> bool:
+    email_cfg = cfg.get("email") or {}
+    if not (email_cfg.get("from") and email_cfg.get("password") and rows):
+        return False
+    from html import escape
+    from scrapers.emailer import send_html_email
+    dash = (email_cfg.get("dashboard_url") or "").rstrip("/")
+    cards = ""
+    for r in rows[:25]:
+        m = r.get("mic") or {}
+        img = (f'<img src="{escape(r["image_url"])}" width="88" height="88" style="width:88px;height:88px;object-fit:cover;border-radius:8px;">'
+               if str(r.get("image_url") or "").startswith("http") else "")
+        off = f" · {m['pct']}% off {m['ref_kind']}" if m.get("pct") and m["pct"] > 0 else ""
+        cards += (f'<tr><td style="padding:10px 0;vertical-align:top;width:100px">{img}</td><td style="padding:10px 0;vertical-align:top">'
+                  f'<div style="font-size:12px;color:#7a5c00;font-weight:700">{escape(m.get("name") or "")}</div>'
+                  f'<a href="{escape(r["url"])}" style="color:#1e3a5f;font-weight:700;font-size:15px;text-decoration:none">{escape(r["title"][:110])}</a>'
+                  f'<div style="font-size:18px;font-weight:700;color:#166534">${m.get("delivered", 0):,.0f}'
+                  f'<span style="font-size:12px;color:#64748b;font-weight:400"> delivered{escape(off)}</span></div>'
+                  f'<div style="font-size:12px;color:#64748b">{escape(str(r.get("source_name") or ""))}'
+                  f'{" · " + escape(str(r["location"]).split(" @")[0]) if r.get("location") else ""}</div></td></tr>')
+    more = f'<p style="color:#64748b">+ {len(rows) - 25} more on the Mics page.</p>' if len(rows) > 25 else ""
+    link = f'<p><a href="{escape(dash)}/mics">Open the Mics page →</a></p>' if dash else ""
+    html = (f'<!DOCTYPE html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,sans-serif">'
+            f'<div style="max-width:620px;margin:0 auto;padding:20px"><div style="background:#161512;color:#efe6d2;padding:16px 20px;'
+            f'border-radius:12px 12px 0 0;font-size:18px;font-weight:700">🎤 {escape(subject)}</div>'
+            f'<div style="background:#fff;padding:8px 20px 16px;border-radius:0 0 12px 12px"><table width="100%" cellspacing="0">{cards}</table>{more}{link}</div></div></body></html>')
+    try:
+        return send_html_email(html, subject, email_cfg)
+    except Exception:
+        logger.exception("Mic Focus email failed")
+        return False

@@ -165,7 +165,12 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
         sites = sites - {"fb"}  # Facebook asked to slow down: wait out the pause
     sources = [s for s in sweep_sources(cfg) if _site(s) in sites]
     site_of = {s["name"]: _site(s) for s in sources}
-    results = run_sources(sources, [search_query(term)], cfg)
+    kw = [search_query(term)]
+    from scrapers import mic_focus
+    if mic_focus.enabled(cfg):
+        from scrapers.base import LooseTerm
+        kw = LooseTerm(kw)  # "dachman microphone" also keeps "Dachman DA87"
+    results = run_sources(sources, kw, cfg)
     if "fb" in sites and any(not r.success and re.search(r"checkpoint|temporarily blocked|slow down|confirm",
                                                           f"{r.error} {r.fix_hint}", re.I)
                              for r in results if site_of.get(r.source_name) == "fb"):

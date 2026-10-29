@@ -136,6 +136,16 @@ def fix_brand_spelling(text_lower: str) -> str:
 WANTED_MATCHERS: list = []
 
 
+class LooseTerm(list):
+    """A one-term live search whose trailing generic word ("dachman
+    microphone") is only for the site's search box: the title has to name the
+    brand and model, but needn't say "microphone" ("Dachman DA87", "Neumann
+    U87 Ai"). Used by Mic Focus."""
+
+
+_GENERIC_TAIL = {"microphone", "microphones"}
+
+
 class ScrapeKeywords(list):
     """The scrape keyword list (keywords_with_learned): keyword_match also
     accepts anything your Wanted list matches."""
@@ -170,6 +180,9 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
         # like the sites' own search boxes — not the exact phrase, so
         # "Sony C-38B" and "C38B mic by Sony" both match.
         words = [w for w in re.split(r'\s+', keywords[0].strip()) if re.search(r'[a-z0-9]', w, re.I)]
+        if (isinstance(keywords, LooseTerm) and len(words) > 1 and words[-1].lower() in _GENERIC_TAIL
+                and any(re.fullmatch(r"[a-z]{4,}", w, re.I) for w in words[:-1])):
+            words = words[:-1]  # only for a brand search; "47 microphone" / "c12 microphone" stay strict
         if words and all(_word_matches(w, text_lower) for w in words):
             return True
     return False

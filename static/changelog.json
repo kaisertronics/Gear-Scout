@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-29",
+    "title": "Mics: older Reverb ads, titles without 'microphone', and email",
+    "items": [
+      "Gear Scout was reading only the newest 150 results of each Reverb search, so for brands with hundreds of used listings (Neumann, AKG) the older ads that were still for sale were never seen. Every 2 hours each brand search is now read 500 results deep. The first read found 312 mics Gear Scout didn't have (298 older ads, 14 new ones, including a $399 Dachman DA87). Older ads are stored but not pushed.",
+      "Searches for brands like 'dachman microphone' used to need the word 'microphone' in the listing title, so 'Dachman DA87' or 'Neumann U87 Ai' were dropped. The title now only has to name the brand.",
+      "Mic alerts now also come by email (one email per batch of new mics, with pictures, prices and links), not just a push. The email goes to the same address as your digest."
+    ]
+  },
+  {
     "date": "2026-10-28",
     "title": "Code review",
     "items": [
