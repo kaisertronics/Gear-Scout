@@ -572,6 +572,15 @@ def run_fb_posts_batch():
         logger.exception("Background Facebook post search failed")
 
 
+def run_routine_watch():
+    """Alerts when the nightly update or the code review stops finishing."""
+    try:
+        from scrapers import routine_watch
+        routine_watch.check(load_config())
+    except Exception:
+        logger.exception("Routine watchdog failed")
+
+
 def run_ai_briefing():
     if _mic_focus_on():
         return  # Mic Focus: mic alerts only
@@ -655,6 +664,9 @@ def run_schedule():
                       name="gear_scout_fb_posts", max_instances=1, coalesce=True, misfire_grace_time=300)
     scheduler.add_job(run_fb_posts_roundup, CronTrigger(minute=0, timezone=tz_name),
                       name="gear_scout_fb_roundup", misfire_grace_time=1800)
+    # Every 3 hours: has the nightly update / code review stopped finishing?
+    scheduler.add_job(run_routine_watch, IntervalTrigger(hours=3, timezone=tz_name),
+                      name="gear_scout_routine_watch", max_instances=1, coalesce=True, misfire_grace_time=1800)
     # AI emails (only when a Gemini key is set): daily briefing and weekly notes.
     scheduler.add_job(run_ai_briefing, CronTrigger(hour=8, minute=0, timezone=tz_name),
                       name="gear_scout_ai_briefing", misfire_grace_time=3600)

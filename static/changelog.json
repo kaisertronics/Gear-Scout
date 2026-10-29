@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-29",
+    "title": "Frozen routines can't hide anymore",
+    "items": [
+      "If the nightly update or the code review hasn't finished in 30 hours (it's usually frozen on an approval prompt nobody can see), Gear Scout now pushes and emails you, at most once a day, with the exact steps to unfreeze it. It checks every 3 hours.",
+      "Fixed the cause of the Oct 28 freeze: the instructions for both routines told them to copy the code into a scratch folder with `cp`, and that command asks for approval. They now `docker cp` straight into the container instead."
+    ]
+  },
+  {
+    "date": "2026-10-29",
     "title": "Nightly check: newest mics really on top",
     "items": [
       "'In your price range' now goes by when the seller posted the ad, not when Gear Scout first found it. Newly added brands (and the new deeper Reverb read) turn up old dealer ads, some listed since 2017, which had pushed this week's ads down the list.",
