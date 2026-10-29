@@ -2311,9 +2311,19 @@ def mics_page():
             if g["n"] > 1:
                 g["best"]["model_lowest"] = True
                 g["best"]["model_lowest_label"] = g["label"]
-    # In your price range, newest find first (cheapest-first buried new ones
+    # In your price range, newest first (cheapest-first buried new ones
     # mid-list, so the top never seemed to change); categories stay cheapest first.
-    hits = sorted((l for l in rows if l["mic"]["hit"]), key=lambda l: l.get("first_seen") or "", reverse=True)
+    # "Newest" = when the seller posted it, when known: a dealer's 2017 ad that
+    # a newly added brand only just turned up goes below this week's ads (Oct 28).
+    def listed(l):
+        found = l.get("first_seen") or ""
+        try:
+            p = datetime.fromisoformat(l.get("posted_at") or "")
+            p = p if p.tzinfo else p.replace(tzinfo=timezone.utc)
+            return min(found, p.astimezone(timezone.utc).isoformat()) if found else p.isoformat()
+        except (TypeError, ValueError):
+            return found
+    hits = sorted((l for l in rows if l["mic"]["hit"]), key=listed, reverse=True)
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())

@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-29",
+    "title": "Nightly check: newest mics really on top",
+    "items": [
+      "'In your price range' now goes by when the seller posted the ad, not when Gear Scout first found it. Newly added brands (and the new deeper Reverb read) turn up old dealer ads, some listed since 2017, which had pushed this week's ads down the list.",
+      "Spot check of 40 price-range mics: all real mics in the right section and all 40 still for sale (5 Facebook ads opened). Most new ads were found within an hour of being posted.",
+      "Car amplifiers sold as 'SSL EVO' or 'SSL Evolution' (Sound Storm, not Solid State Logic) no longer match your 'ssl' term. There were 20 of them.",
+      "While Mic Focus is on, your other Telex terms aren't searched (Health shows them 13+ hours old). That's how Mic Focus works; turn it off on the Mics page when you want the full Telex search back."
+    ]
+  },
+  {
+    "date": "2026-10-29",
     "title": "Mics: older Reverb ads, titles without 'microphone', and email",
     "items": [
       "Gear Scout was reading only the newest 150 results of each Reverb search, so for brands with hundreds of used listings (Neumann, AKG) the older ads that were still for sale were never seen. Every 2 hours each brand search is now read 500 results deep. The first read found 312 mics Gear Scout didn't have (298 older ads, 14 new ones, including a $399 Dachman DA87). Older ads are stored but not pushed.",

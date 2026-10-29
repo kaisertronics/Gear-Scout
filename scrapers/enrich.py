@@ -275,6 +275,8 @@ _JUNK = re.compile(
     r"gift wrap|scrapbook|sewing|craft ribbon|decor|decoration|ornament|prop microphone|"
     # wireless systems that don't say "wireless", car audio, test gear
     r"wms[\s-]?\d+\w*|ism\d?|uhf|vhf|bodypack|phoenix gold|\d+(?:\.\d)?\s?(?:watts? )?rms|tube tester|"
+    # Sound Storm Laboratories car amps sold as "SSL EVO 5000", "SSL Evolution EV2.1000"
+    r"sound ?storm|ssl (?:evo\w*|ev\d+\w*)|"
     r"multimeter|oscilloscope|signal generator|bass trainer|metronome|"
     # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
     r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"
