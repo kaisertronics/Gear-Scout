@@ -40,7 +40,7 @@ _STUDIO_ONLY = r"\bmic(?:rophone)?\s?pre\b|direct box|vacuum tube(?!.*(?:condens
 # Brands with their own section: a model their section leaves out (a Warm
 # WA-251 now that Warm is CX12 / Fentone / WA-14 only, a Lauten drum mic)
 # must not turn up in the C12 / U47-251 / catch-all groups instead (Oct 24).
-_OWN_BRANDS = (r"neumann|telefunken|mojave|soyuz|\bakg\b|josephson|\bflea\b|\bjz\b|vanguard|warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|"
+_OWN_BRANDS = (r"distressor|neumann|telefunken|mojave|soyuz|\bakg\b|josephson|\bflea\b|\bjz\b|vanguard|warm\s*audio|\bwa[\s-]?\d|peluso|golden\s*age|\bstam\b|lauten|neez|advanced\s*audio|"
                r"united\s*studio|dachman|signal\s*arts?")
 _FET = re.compile(r"\bfet\b|\bjr\.?\b|\bjunior\b|\bsolid[- ]state\b|\bwa-?47 ?f\b|\b47 ?fet\b|\bu-?47 ?fet\b", re.I)
 _NOT_MIC = re.compile(
@@ -193,6 +193,15 @@ TARGETS = [
          require=None, exclude=_STUDIO_ONLY + r"|\bjz[\s-]?\d{3,}\b(?!.*mic)",
          queries=["jz microphones", "jz black hole microphone", "jz v12"],
          model=r"\b(bh[\s-]?\d\w*|black hole\s?\w*|v[\s-]?\d{2}\w*|vintage\s?\d{2}|amethyst\s?\w*)\b", brand="JZ Microphones"),
+    # Owner (Oct 29): a Distressor deal is a single at $1,300 or less, a pair at $2,400 or less (delivered).
+    dict(key="distressor", name="Empirical Labs Distressor", note="single ≤ $1,300 · pair ≤ $2,400",
+         min_pct=60, max_price=2400, min_price=700, outboard=True, caps={1: 1300, 2: 2400},
+         match=r"\bdistressor\b|\bel8[\s-]?(?:x|xs|s|mx|sx|d)?\b(?=.*(?:compressor|limiter|empirical))",
+         require=None,
+         exclude=r"plug-?in|software|slate|\bui\b|universal audio|\buad\b|clone|style|inspired|brochure|\bguide\b|poster|flyer|sticker|knobs?|buttons?|"
+                 r"rack ?ears?|\bcables?\b|power supply|\bcase\b|\bstands?\b|\bsvg\b|\bkit\b",
+         queries=["empirical labs distressor", "distressor el8", "distressor pair"],
+         model=r"\b(el8[\s-]?(?:x|xs|s|mx|sx|d)?)\b", brand="Empirical Labs"),
     dict(key="d12", name="AKG D12", min_pct=60, max_price=500,
          match=r"(?<![\w-])d-?12\b(?![-\s]?\d)",
          require=r"\bakg\b",
@@ -278,7 +287,7 @@ FB_TERMS = {
     "peluso": ["peluso microphone"], "golden_age": ["golden age microphone"], "stam": ["stam microphone"],
     "warm": ["warm audio cx12", "warm audio fentone", "warm audio wa-14"], "lauten": ["lauten microphone"], "bees_neez": ["bees neez microphone"],
     "advanced_audio": ["advanced audio microphone"], "united": ["united microphone"],
-    "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "vanguard": ["vanguard microphone"], "neumann": ["neumann microphone"], "telefunken": ["telefunken microphone"], "mojave": ["mojave microphone"], "soyuz": ["soyuz microphone"], "akg": ["akg microphone"], "josephson": ["josephson microphone"], "flea": ["flea microphone"], "jz": ["jz microphone"], "d12": ["akg d12"],
+    "signal_art": ["signal art microphone"], "dachman": ["dachman microphone"], "vanguard": ["vanguard microphone"], "distressor": ["empirical labs distressor"], "neumann": ["neumann microphone"], "telefunken": ["telefunken microphone"], "mojave": ["mojave microphone"], "soyuz": ["soyuz microphone"], "akg": ["akg microphone"], "josephson": ["josephson microphone"], "flea": ["flea microphone"], "jz": ["jz microphone"], "d12": ["akg d12"],
     "c12": ["c12 microphone"], "classic_tube": ["u47 microphone", "251 microphone"],
     "generic": ["47 microphone", "67 microphone", "87 microphone"],
 }
@@ -294,7 +303,7 @@ def fb_terms(cfg: dict) -> list[str]:
 
 def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
     """The first target a listing title belongs to, or None."""
-    if not title or _NOT_MIC.search(title) or _PART.search(title):
+    if not title or _PART.search(title):
         return None
     from scrapers.wanted import is_spare_tube
     if is_spare_tube(title) or (re.search(r"6au6|ef ?94|6072|12ay7|ef ?86|6sj7|vf ?14|nuvistors?|13cw4|7586|7895|ac ?701", title, re.I)
@@ -306,6 +315,8 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
     for t in cfg_targets or TARGETS:
         if not re.search(t["match"], title, re.I):
             continue
+        if not t.get("outboard") and _NOT_MIC.search(title):
+            continue  # a preamp / compressor / pedal isn't a mic (a Distressor is, here, the thing wanted)
         if t.get("require") and not re.search(t["require"], title, re.I):
             continue
         if t.get("exclude") and re.search(t["exclude"], title, re.I):
@@ -314,6 +325,13 @@ def classify(title: str, cfg_targets: Optional[list] = None) -> Optional[dict]:
             continue
         return t
     return None
+
+
+def _cap(t: dict, qty: int) -> float:
+    """Most a listing of `qty` pieces may cost in total: a single or a pair has
+    its own cap, three or more get ~90% of the single cap each."""
+    caps = t["caps"]
+    return caps.get(qty, caps[1] * 0.9 * qty if qty > 2 else caps[1])
 
 
 def _model_query(t: dict, title: str) -> Optional[str]:
@@ -349,7 +367,7 @@ def _model_prices(q: str) -> dict:
 
 def _candidates() -> list[dict]:
     from scrapers.store import _conn
-    likes = ["neumann", "telefunken", "mojave", "soyuz", "akg", "josephson", "flea", "jz ", "vanguard", "da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
+    likes = ["distressor", "el8", "neumann", "telefunken", "mojave", "soyuz", "akg", "josephson", "flea", "jz ", "vanguard", "da 87", "da-87", "da87", "da 67", "da-67", "da67", "da 47", "da-47", "da47", "da fet", "advanced audio", "cm47", "cm-47", "cm12", "united studio", "ut twin", "ut fet", "ut tube", "signal art", "dachman", "peluso", "golden age", "ga-47", "ga47", "ga-251", "ga251", "stam", "warm audio", "wa-", "wa47", "wa251",
              "wa8000", "wacx", "lauten", "neez", "d12", "d-12", "c12", "c-12", "47", "251", "67", "87"]
     cut = (datetime.now(timezone.utc) - timedelta(days=LIVE_DAYS)).isoformat()
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
@@ -366,7 +384,8 @@ def find(cfg: dict) -> list[dict]:
     r['mic'] = {target, name, min_pct, pct, ref, ref_kind, new, used,
     delivered, hit, model}. Best discount first."""
     from scrapers.comps import evaluate, price_index, similar_index, similar_price
-    from scrapers.enrich import exclude_match, is_accessory_only, is_partial, needs_repair, parse_price, price_basis
+    from scrapers.enrich import (exclude_match, is_accessory_only, is_partial, needs_repair, parse_price, price_basis,
+                                 title_says_sold)
     from scrapers.market import load_market
     st = settings(cfg)
     targets = [t for t in st["targets"] if t["on"]]
@@ -385,15 +404,23 @@ def find(cfg: dict) -> list[dict]:
         src = (r.get("source_name") or "").lower()
         if "kijiji" in src or "mcquade" in src or "C$" in str(r.get("price") or ""):
             continue  # Canadian: tariffs
-        if exclude_match(title, exclude_words) or is_accessory_only(title) or is_partial(title) \
+        if title_says_sold(title) or exclude_match(title, exclude_words) or is_accessory_only(title) or is_partial(title) \
                 or needs_repair(title, r.get("description")):
             continue
         value = parse_price(r.get("price"))
         if not value or value < MIN_PRICE:
             continue
-        unit = price_basis(title, None, value)[2] or value
+        _, qty, unit = price_basis(title, None, value)
+        qty = max(int(qty or 1), 1)
+        if t.get("caps") and qty == 1:
+            k = re.search(r"\b(\d)[\s-]?(?:pack|pk)\b|\bset of (\d)\b|\b(?:stereo )?pair\b|\btwo\b", title, re.I)
+            if k:
+                qty = int(k.group(1) or k.group(2) or 2)
+                unit = value / qty
+        unit = unit or value
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
-        delivered = round(unit + (ship or 0), 2)
+        delivered = round(unit + ((ship or 0) / qty if t.get("caps") else (ship or 0)), 2)
+        total = round(value + (ship or 0), 2)
         if t.get("hide_over_limit") and delivered > t["max_price"]:
             continue
         if any(re.search(rx, title, re.I) and delivered > cap for rx, cap in t.get("model_limits") or []):
@@ -434,10 +461,15 @@ def find(cfg: dict) -> list[dict]:
         if ref and delivered < ref * 0.2:
             continue
         pct = round((1 - delivered / ref) * 100) if ref else None
-        hit = t.get("min_price", floor) <= delivered <= t["max_price"]  # by price (Oct 22), not % off
+        if t.get("caps"):
+            cap = _cap(t, qty)
+            hit = t.get("min_price", floor) <= delivered and total <= cap
+        else:
+            cap = t["max_price"]
+            hit = t.get("min_price", floor) <= delivered <= t["max_price"]  # by price (Oct 22), not % off
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
-                    "used": round(used) if used else None, "delivered": delivered, "hit": hit,
+                    "used": round(used) if used else None, "delivered": delivered, "hit": hit, "qty": qty, "total": total, "cap": round(cap),
                     "model": q, "basis": basis, "check": bool(pct is not None and pct >= 85),
                     "fresh": (r.get("last_seen") or r.get("first_seen") or "") >= fresh_cut}
         out.append(r)
@@ -508,13 +540,19 @@ def _ensure(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS mic_alerted (url TEXT, price TEXT, at TEXT, PRIMARY KEY (url, price))")
 
 
+def _price_text(m: dict) -> str:
+    if (m.get("qty") or 1) > 1:
+        return f"${m['total']:,.0f} for {m['qty']} (${m['delivered']:,.0f} each)"
+    return f"${m['delivered']:,.0f} delivered"
+
+
 def _line(r: dict) -> str:
     m = r["mic"]
     ref = (f"new ~${m['new']:,}" if m["new"] else "") + (" / " if m["new"] and m["used"] else "") + \
           (f"used ~${m['used']:,}" if m["used"] else "")
     off = f"{m['pct']}% off {m['ref_kind']}" if m["pct"] is not None else "no price to compare yet"
     where = (r.get("location") or "").split(" @")[0]
-    return f"${m['delivered']:,.0f} delivered · {off}" + (f" ({ref})" if ref else "") + \
+    return f"{_price_text(m)} · {off}" + (f" ({ref})" if ref else "") + \
            f" · {r.get('source_name') or ''}" + (f" · {where}" if where else "")
 
 
@@ -545,7 +583,8 @@ def alert(cfg: dict) -> int:
         else:
             for r in todo:
                 m = r["mic"]
-                head = f"${m['delivered']:,.0f}" + (f" ({m['pct']}% off {m['ref_kind']})" if m["pct"] and m["pct"] > 0 else "")
+                head = (f"pair ${m['total']:,.0f}" if (m.get("qty") or 1) > 1 else f"${m['delivered']:,.0f}") + \
+                    (f" ({m['pct']}% off {m['ref_kind']})" if m["pct"] and m["pct"] > 0 else "")
                 chk = " (double-check)" if m["check"] else ""
                 send_push(cfg, f"🎤 {m['name']}: {head}{chk}", f"{r['title'][:100]}\n{_line(r)}",
                           url=r["url"], tags=["microphone"], image=r.get("image_url"))
@@ -662,6 +701,9 @@ def auctions(cfg: dict) -> list[dict]:
         total = round(bid + (ship or 0), 2)
         # a model with its own lower cap (WA-14: $300) is held to it here too
         cap = min([t["max_price"]] + [c for rx, c in t.get("model_limits") or [] if re.search(rx, r["title"], re.I)])
+        if t.get("caps"):
+            from scrapers.enrich import price_basis as _pb
+            cap = _cap(t, max(int(_pb(r["title"], None, bid)[1] or 1), 1))
         if total > cap:
             continue
         seen.add(r["url"])
@@ -828,11 +870,12 @@ def _email_hits(cfg: dict, subject: str, rows: list[dict]) -> bool:
         img = (f'<img src="{escape(r["image_url"])}" width="88" height="88" style="width:88px;height:88px;object-fit:cover;border-radius:8px;">'
                if str(r.get("image_url") or "").startswith("http") else "")
         off = f" · {m['pct']}% off {m['ref_kind']}" if m.get("pct") and m["pct"] > 0 else ""
+        dl = "delivered" if (m.get("qty") or 1) == 1 else ""
         cards += (f'<tr><td style="padding:10px 0;vertical-align:top;width:100px">{img}</td><td style="padding:10px 0;vertical-align:top">'
                   f'<div style="font-size:12px;color:#7a5c00;font-weight:700">{escape(m.get("name") or "")}</div>'
                   f'<a href="{escape(r["url"])}" style="color:#1e3a5f;font-weight:700;font-size:15px;text-decoration:none">{escape(r["title"][:110])}</a>'
-                  f'<div style="font-size:18px;font-weight:700;color:#166534">${m.get("delivered", 0):,.0f}'
-                  f'<span style="font-size:12px;color:#64748b;font-weight:400"> delivered{escape(off)}</span></div>'
+                  f'<div style="font-size:18px;font-weight:700;color:#166534">{escape(_price_text(m).replace(" delivered", ""))}'
+                  f'<span style="font-size:12px;color:#64748b;font-weight:400"> {dl}{escape(off)}</span></div>'
                   f'<div style="font-size:12px;color:#64748b">{escape(str(r.get("source_name") or ""))}'
                   f'{" · " + escape(str(r["location"]).split(" @")[0]) if r.get("location") else ""}</div></td></tr>')
     more = f'<p style="color:#64748b">+ {len(rows) - 25} more on the Mics page.</p>' if len(rows) > 25 else ""

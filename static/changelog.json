@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-29",
+    "title": "Empirical Labs Distressor deals",
+    "items": [
+      "New Mics section: Empirical Labs Distressor (EL8, EL8-X and so on). A deal is a single at $1,300 or less, delivered, or a pair at $2,400 or less. A listing sold as a pair or '2x' counts against the pair price, and the card shows it as '$2,400 for 2 ($1,200 each)'. You get a push and an email for each, and auctions count too.",
+      "Brochures, manuals, knobs and software are left out, and so are Distressor clones and 'style' copies."
+    ]
+  },
+  {
+    "date": "2026-10-29",
     "title": "Frozen routines can't hide anymore",
     "items": [
       "If the nightly update or the code review hasn't finished in 30 hours (it's usually frozen on an approval prompt nobody can see), Gear Scout now pushes and emails you, at most once a day, with the exact steps to unfreeze it. It checks every 3 hours.",
