@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-29",
+    "title": "Code review",
+    "items": [
+      "A Distressor pair listed as '$1,300 each' was counted as $1,300 total and could show as a deal under the $2,400 pair limit; it now counts as $2,600.",
+      "The every-2-hours deep Reverb mic read now also clears a wrong 'sold' mark on a mic that is still listed."
+    ]
+  },
+  {
+    "date": "2026-10-29",
     "title": "Nightly check: all quiet",
     "items": [
       "Checked the top 40 Feed ads: 35 still for sale, 1 sold on Reverb (the hourly sold check will remove it), 4 Facebook ads not opened.",

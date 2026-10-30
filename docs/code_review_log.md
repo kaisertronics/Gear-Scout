@@ -4,14 +4,18 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: the "Code review (Oct 28)" commit (2026-10-28: reviewed 4e039de..b3be6b9) — next run's diff starts there
+Last reviewed commit: the "Code review (Oct 29)" commit (2026-10-29: reviewed b3be6b9..59593b2) — next run's diff starts there
 
 ## Files — last fully read
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
-| scrapers/store.py | 2026-10-20 | |
-| scrapers/runner.py | 2026-10-20 | one-term = 1 FB worker |
+| scrapers/store.py | 2026-10-29 | |
+| scrapers/runner.py | 2026-10-29 | one-term = 1 FB worker |
+| scrapers/savings_slides.py | 2026-10-29 | |
+| scrapers/mic_focus.py | 2026-10-29 (diff) | Distressor caps, deep_crawl, email |
+| scrapers/routine_watch.py | 2026-10-29 | new |
+| scrapers/base.py (LooseTerm), telex.py, board.py, enrich.py, steals.py, main.py, dashboard.mics_page | 2026-10-29 (diff) | |
 | scrapers/dispatch.py | 2026-10-27 | |
 | scrapers/reverb_api.py | 2026-10-27 | term search newest first |
 | scrapers/ebay_api.py | 2026-10-27 | ebay_lowest now drops overseas |
@@ -85,6 +89,14 @@ Last reviewed commit: the "Code review (Oct 28)" commit (2026-10-28: reviewed 4e
 | 2026-10-27 | main.py comment said steals are 60%+; manual_scrape return type said 2 values (returns 3) | comments fixed |
 | 2026-10-28 | Mic Focus's 8 new brands (8d56455): the "is a mic" check was written with doubled backslashes (`\\bmic…\\b` inside r"…"), so "mic", "microphone", "tube", "fet", "large diaphragm" never matched; only titles with a model code got in (JZ's match had the same problem). 408 stored listings misjudged | One shared _MIC_WORDS pattern. On a DB copy: ~120 more listed, 18 more in the price range (Soyuz 013/011 FET, Josephson C551FA/C42MP, Telefunken tube mic, plain "Neumann mic" ads…), nothing dropped. Added _STUDIO_ONLY so the fix doesn't bring in "V76 Mic Pre", Telefunken direct boxes or loose "vacuum tube" ads; a first try that also left out dynamics/stands was reverted (owner searches "telefunken m80"; "MA-50 bundle with stand" is a real mic) |
 | 2026-10-28 | steals.py docstring said 60%+ (MIN_PCT is 50); board.py comment said the Feed window is 45 days (it's 90) | comments fixed |
+| 2026-10-29 | Mic Focus Distressor: a pair priced "$1,300 each" got total = $1,300 (qty 2), so it passed the $2,400 pair cap as a "hit" (reproduced with price_basis: basis 'each', qty 2) | total = unit × qty + shipping |
+| 2026-10-29 | mic_focus.deep_crawl refreshed last_seen only; a Reverb mic wrongly marked sold stayed sold while the crawl saw it live. Its LIKE '%item/123%' also could match a longer id | also confirmed_live_at, un-marks sold; pattern '%item/ID-%' (all 19,649 stored Reverb links have the -slug) |
+
+### Left for the owner (2026-10-29)
+- Routine watchdog pushes/emails when the nightly or code-review log is over 30 h old; it uses the log files' modified times, so any edit to those logs resets it. Fine as is.
+- Deep Reverb read does one `UPDATE … LIKE '%…%'` per live mic it already knows (a table scan each, a few hundred every 2 h). Works; if it ever feels slow, index by Reverb id.
+- Non-"pair" wording like "Stereo" alone ("EL8X Distressor … Stereo") counts as a single in the Distressor quantity check. Noted only.
+- Read and fine: LooseTerm (only for one-term searches ending in "microphone"; survives run_sources untouched), mics_page `listed` sort key, Distressor classify (plugins, brochures, 'sold' titles out), scrapers/store.py, runner.py, savings_slides.py in full.
 
 ### Left for the owner (2026-10-28)
 - With the new-brand fix, these now show in the brand sections too: AKG/Mojave/Soyuz/Telefunken **dynamic** mics (AKG D5/D7, Mojave MA-D packs, Soyuz V1, Telefunken D19, DD5 drum kit) and AKG boundary/paging mics (PCC160, PZM). Dynamics were kept on purpose because "telefunken m80" is one of your searches. Say if the big-brand sections should be studio condensers/ribbons only.

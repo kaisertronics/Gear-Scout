@@ -420,7 +420,7 @@ def find(cfg: dict) -> list[dict]:
         unit = unit or value
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         delivered = round(unit + ((ship or 0) / qty if t.get("caps") else (ship or 0)), 2)
-        total = round(value + (ship or 0), 2)
+        total = round(unit * qty + (ship or 0), 2)  # "$1,300 each" for a pair is $2,600, not $1,300
         if t.get("hide_over_limit") and delivered > t["max_price"]:
             continue
         if any(re.search(rx, title, re.I) and delivered > cap for rx, cap in t.get("model_limits") or []):
@@ -846,7 +846,9 @@ def deep_crawl(cfg: dict) -> int:
         conn.executemany("INSERT OR IGNORE INTO mic_alerted VALUES (?, ?, ?)", [(u, p, stamp) for u, p in quiet])
         for i in range(0, len(touched), 400):  # ads still listed: keep them current
             chunk = touched[i:i + 400]
-            conn.executemany("UPDATE seen SET last_seen = ? WHERE url LIKE ?", [(stamp, f"%reverb.com/item/{l}%") for l in chunk])
+            # live on Reverb right now: also undoes a wrong "sold" mark, like mark_seen does
+            conn.executemany("UPDATE seen SET last_seen = ?, confirmed_live_at = ?, sold = 0, sold_at = NULL WHERE url LIKE ?",
+                             [(stamp, stamp, f"%reverb.com/item/{l}-%") for l in chunk])
         conn.commit()
     DEEP_MARK.write_text(stamp)
     logger.info("Mic deep read: %d Reverb mics seen, %d new to Gear Scout (%d older ads not pushed)", len(seen_ids), added, len(quiet))
