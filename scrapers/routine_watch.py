@@ -69,9 +69,9 @@ def check(cfg: dict, now=None) -> int:
             when = written.strftime("%a %H:%M UTC")
         title = f"⚠️ Gear Scout's {name} hasn't finished in {hours:.0f} h"
         text = (f"Its log was last updated {when}. It's most likely frozen on a permission prompt nobody can see, "
-                f"which also blocks the next day's run. Open the Claude app → Routines → "
-                f"“{'Gear Scout nightly improvements' if name == 'nightly update' else 'Gear Scout daily code review'}” → "
-                f"open its running session and approve the waiting step (or switch it to Auto mode).")
+                f"which also blocks the next day's run. Open the Claude app and find the session named "
+                f"“{'Gear Scout nightly improvements' if name == 'nightly update' else 'Gear Scout daily code review'}” "
+                f"in your session list (it shows as running), then approve the waiting step or switch it to Auto mode.")
         if push_enabled(cfg):
             send_push(cfg, title, text, tags=["warning"])
             sent += 1
