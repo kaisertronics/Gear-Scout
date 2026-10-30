@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-10-29",
+    "title": "Nightly check: all quiet",
+    "items": [
+      "Checked the top 40 Feed ads: 35 still for sale, 1 sold on Reverb (the hourly sold check will remove it), 4 Facebook ads not opened.",
+      "New ads reach you fast: half within 30 minutes, 21 of 23 within an hour. No errors in the logs, so nothing was changed tonight.",
+      "Your non-mic Wanted terms haven't been searched for about 37 hours because Mic Focus is on. Turn it off if you want everything searched again."
+    ]
+  },
+  {
+    "date": "2026-10-29",
     "title": "Empirical Labs Distressor deals",
     "items": [
       "New Mics section: Empirical Labs Distressor (EL8, EL8-X and so on). A deal is a single at $1,300 or less, delivered, or a pair at $2,400 or less. A listing sold as a pair or '2x' counts against the pair price, and the card shows it as '$2,400 for 2 ($1,200 each)'. You get a push and an email for each, and auctions count too.",
