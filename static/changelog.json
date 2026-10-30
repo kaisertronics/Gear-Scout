@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-30",
+    "title": "Sold Reverb ads come down faster",
+    "items": [
+      "Found that a sold SSL Big Six stayed in your Feed for about a day: most of the Feed's Reverb ads were going 4+ hours (some 24+) without a sold check because the hourly check ran out of room.",
+      "Reverb ads now get their own allowance of up to 250 checks an hour (Reverb has no daily limit), so sold ones should drop off within a few hours.",
+      "New ads still reach you fast: half within 40 minutes, 25 of 32 within an hour. AudioKarma is still blocking Gear Scout, nothing else is failing."
+    ]
+  },
+  {
     "date": "2026-10-29",
     "title": "Code review",
     "items": [

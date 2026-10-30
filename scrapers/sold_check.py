@@ -35,6 +35,7 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 RECHECK_HOURS = 12
+REVERB_MAX = 250  # Reverb API checks per hourly run, on top of the other sites' 120
 _GONE_TEXT = re.compile(
     r"this ad is no longer available|this posting has been deleted|this posting has expired|"
     r"this posting has been flagged for removal|listing (?:is no longer|isn'?t) available|"
@@ -324,12 +325,16 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     start = time.time()
     checked = sold = 0
     lock = threading.Lock()
-    shown = _shown_first(max_http, include_fb=False)
+    shown = _shown_first(max_http * 3, include_fb=False)
     http = list(dict.fromkeys(shown + [u for u, _ in _candidates(max_http * 2, include_fb=False)]))
     # eBay is checked through its API, which counts against the daily
     # allowance: at most 40 per hour, the ones you can see first.
     ebay = [u for u in http if "ebay.com/itm" in u][:40]
-    http = [u for u in http if "ebay.com/itm" not in u][:max_http] + ebay
+    # Reverb's public API is quick and has no daily cap, so those checks
+    # don't share the 120 slots (Oct 30: 124 of the Feed's 179 Reverb ads
+    # were over 4 h unchecked, and a sold SSL Big Six stayed up a day).
+    reverb = [u for u in http if "reverb.com/item/" in u][:REVERB_MAX]
+    http = [u for u in http if "ebay.com/itm" not in u and "reverb.com/item/" not in u][:max_http] + reverb + ebay
 
     def check_one(url):
         nonlocal checked, sold
