@@ -96,6 +96,7 @@ Last reviewed commit: the "Code review (Oct 29)" commit (2026-10-29: reviewed b3
 - Routine watchdog pushes/emails when the nightly or code-review log is over 30 h old; it uses the log files' modified times, so any edit to those logs resets it. Fine as is.
 - Deep Reverb read does one `UPDATE … LIKE '%…%'` per live mic it already knows (a table scan each, a few hundred every 2 h). Works; if it ever feels slow, index by Reverb id.
 - Non-"pair" wording like "Stereo" alone ("EL8X Distressor … Stereo") counts as a single in the Distressor quantity check. Noted only.
+- Deploy: safe_deploy.sh both at ~20:05 PT from ac1a8f7 (normal build worked); /login and / return 200, no tracebacks in either container.
 - Read and fine: LooseTerm (only for one-term searches ending in "microphone"; survives run_sources untouched), mics_page `listed` sort key, Distressor classify (plugins, brochures, 'sold' titles out), scrapers/store.py, runner.py, savings_slides.py in full.
 
 ### Left for the owner (2026-10-28)
