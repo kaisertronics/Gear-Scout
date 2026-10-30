@@ -4,12 +4,16 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: the "Code review (Oct 29)" commit (2026-10-29: reviewed b3be6b9..59593b2) — next run's diff starts there
+Last reviewed commit: the "Code review (Oct 30)" commit (2026-10-30: reviewed 59593b2..8a400d7) — next run's diff starts there
 
 ## Files — last fully read
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
+| scrapers/sold_check.py | 2026-10-30 | whole file; Reverb's own 250/hour slots verified live (368–388 checked per run, ~5 min) |
+| scrapers/lowest.py, price_drops.py, auctions.py, analytics.py | 2026-10-30 | no bugs; lowest.py's alert email doesn't escape the title (cosmetic) |
+| scrapers/html_scraper.py | 2026-10-30 (1–600) | Guitar Center, Sweetwater, Craigslist, start of Reverb; next chunk 600–1140 |
+| scrapers/mic_focus.py | 2026-10-30 (diff + find, deep_crawl) | pair total fix and deep-read "still listed" update both correct; every stored Reverb URL has the -slug so the new LIKE is safe |
 | scrapers/store.py | 2026-10-29 | |
 | scrapers/runner.py | 2026-10-29 | one-term = 1 FB worker |
 | scrapers/savings_slides.py | 2026-10-29 | |
