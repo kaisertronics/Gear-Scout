@@ -92,6 +92,7 @@ Last reviewed commit: the "Code review (Oct 28)" commit (2026-10-28: reviewed 4e
 - Uncommitted edits from another session were in the working tree (dashboard.py "newest ad first" sort on the Mics page, enrich.py Sound Storm car-amp filter, mics.html header text, docs/studio-wiring/). Not part of this review and not committed or deployed by it; read and they look fine.
 - Reminder: the dashboard sign-in gate is switched off (dashboard.require_login returns early, per your earlier request), so anyone with the ngrok link can open Settings.
 - Price Board trend: "a week / month ago" takes the last value in database order, not date order. It works because days are added in order; noted only.
+- Deploy: this review built overlay images from 1c3c567, but other sessions committed (7d35c51…993cae1) and redeployed before they were used. Both running containers already have this fix (mic_focus.py identical to HEAD), so the older overlay was not deployed and `:latest` points at the running images. /login and / return 200, no tracebacks.
 
 ### Left for the owner (2026-10-27)
 - The 4 daily full scrapes don't follow the 1–7 AM Facebook quiet hours (the hourly refresh does). With the schedule at 7 AM, noon, 5 PM, 9 PM none falls inside them, so nothing changed; only matters if the schedule moves.
