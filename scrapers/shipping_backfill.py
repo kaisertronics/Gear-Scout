@@ -41,13 +41,13 @@ def main() -> None:
     logger.info("Shipping backfill: %d Reverb, %d eBay listings", len(reverb), len(ebay))
     if "--count" in sys.argv:
         return
-    from scrapers.reverb_api import HEADERS, country_of as reverb_country, shipping_of as reverb_ship
+    from scrapers.reverb_api import HEADERS, country_of as reverb_country, reverb_get, shipping_of as reverb_ship
     from scrapers.store import set_country, set_shipping
     done = 0
     for url in reverb:
         m = re.search(r"/item/(\d+)", url)
         try:
-            r = requests.get(f"https://api.reverb.com/api/listings/{m.group(1)}", headers=HEADERS, timeout=20)
+            r = reverb_get(f"https://api.reverb.com/api/listings/{m.group(1)}", headers=HEADERS, timeout=20)
             if r.ok:
                 ship = reverb_ship(r.json())
                 set_shipping(url, ship if ship is not None else None)

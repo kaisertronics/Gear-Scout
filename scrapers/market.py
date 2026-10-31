@@ -131,8 +131,9 @@ def _reverb_by_condition(query: str) -> dict[str, list[float]]:
     cached = _by_condition_cache.get(query)
     if cached and time.time() - cached[0] < 600:
         return cached[1]
-    resp = requests.get(API_URL, params={"query": query, "per_page": 50},
-                        headers=HEADERS, timeout=20)
+    from scrapers.reverb_api import reverb_get
+    resp = reverb_get(API_URL, params={"query": query, "per_page": 50},
+                      headers=HEADERS, timeout=20)
     resp.raise_for_status()
     out: dict[str, list[float]] = {}
     for item in resp.json().get("listings", []) or []:

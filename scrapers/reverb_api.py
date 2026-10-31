@@ -28,6 +28,46 @@ LOOKBACK_HOURS = 3
 MAX_PAGES = 10
 
 
+class _CurlResponse:
+    """Just enough of requests.Response for the Reverb callers."""
+
+    def __init__(self, status: int, body: str):
+        self.status_code = status
+        self.text = body
+        self.ok = status < 400
+        self.headers = {}
+
+    def json(self):
+        import json
+        return json.loads(self.text)
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise requests.HTTPError(f"{self.status_code} Client Error for Reverb (via curl)")
+
+
+def reverb_get(url: str, params: dict = None, headers: dict = None, timeout: int = 20):
+    """GET from Reverb's API. Cloudflare sometimes answers Python's requests
+    with a 403 challenge page (it did from Oct 30 on, for every search and
+    sold check) while curl from the same machine gets through; when that
+    happens, ask curl instead."""
+    resp = requests.get(url, params=params, headers=headers or HEADERS, timeout=timeout)
+    if resp.status_code != 403 or "cloudflare" not in (resp.headers.get("Server") or "").lower():
+        return resp
+    import subprocess
+    from urllib.parse import urlencode
+    full = url + ("?" + urlencode(params) if params else "")
+    cmd = ["curl", "-s", "-m", str(timeout), "-w", "\n%{http_code}"]
+    for k, v in (headers or HEADERS).items():
+        cmd += ["-H", f"{k}: {v}"]
+    try:
+        out = subprocess.run(cmd + [full], capture_output=True, text=True, timeout=timeout + 5).stdout
+        body, _, code = out.rpartition("\n")
+        return _CurlResponse(int(code), body)
+    except Exception:
+        return resp
+
+
 def country_of(item: dict):
     """Where a Reverb seller is, from the currency they list in (Reverb shows
     every price in US dollars, but a Japanese shop lists in JPY, a UK one in
@@ -99,7 +139,7 @@ def scrape_reverb_api(source: dict, keywords: list[str]) -> ScrapeResult:
     items: list[dict] = []
     try:
         for page in range(1, pages + 1):
-            resp = requests.get(API_URL, params={**params, "page": page}, headers=HEADERS, timeout=20)
+            resp = reverb_get(API_URL, params={**params, "page": page}, headers=HEADERS, timeout=20)
             resp.raise_for_status()
             batch = resp.json().get("listings") or []
             items.extend(batch)

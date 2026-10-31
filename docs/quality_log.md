@@ -25,5 +25,9 @@ the comparison price (comp) right, and is it still for sale?
 | 2026-10-29 Feed (check only) | top 40 of the Feed | — | — | 97% of 36 checked (Reverb API, eBay, Craigslist; 4 Facebook ads not opened) · 1 gone: SSL Big Six (Reverb sold) | New ads: half within 0.5 h, 21/23 within 1 h. No errors in either container's 24 h logs. Non-mic Wanted terms 37 h since last search (Mic Focus is on, so expected). AudioKarma still 403. No code change tonight. |
 | 2026-10-30 Feed (before fixes) | top 40 of the Feed | — | — | 97% of ~30 checked (Reverb API; eBay/Craigslist pages block direct fetches; 6 Facebook ads not opened) · 1 gone: SSL Big Six (sold on Reverb since Oct 29, still showing) | New ads: half within 0.6 h, 25/32 within 1 h. Of the Feed's 179 Reverb ads, 124 hadn't been sold-checked in 4 h+ (many 24 h+): the hourly check's 120 website slots were used up. AudioKarma still 403. |
 | 2026-10-30 (after fixes) | same | — | — | — | sold_check.py: Reverb ads (public API, no daily cap) get up to 250 checks an hour of their own, on top of the 120 slots for other sites. |
+| 2026-10-31 (before fixes) | health + logs only (no Feed sample tonight) | — | — | — | New ads: half within 0.3 h, 6 of 7 within 1 h. Reverb API answered Python requests with a Cloudflare 403 (curl from the same container got 200): the 2-hourly Mic deep read failed on all 29 terms every run since Oct 30, and Reverb sold checks/price lookups were exposed to it. AudioKarma still 403. |
+| 2026-10-31 (after fixes) | same | — | — | — | reverb_api.reverb_get: on a Cloudflare 403, retry with curl; used by the Reverb scrape, mic deep read, sold check, price lookups, shipping backfill. Tested in the container: search, single listing and sold check all 200. |
 
-Next to watch: vintage dynamic mics with thin Reverb data (Shure 570, EV 674, Astatic 30) — comps may run high.
+Next to watch: whether Reverb ads keep getting through (log shows "Mic deep read failed" if not); Feed sample not done Oct 31.
+
+Older note: vintage dynamic mics with thin Reverb data (Shure 570, EV 674, Astatic 30) — comps may run high.

@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-10-31",
+    "title": "Reverb was blocking Gear Scout — fixed",
+    "items": [
+      "Found that Reverb's security layer (Cloudflare) had started turning away Gear Scout's Python requests: the every-2-hours mic read failed every time since yesterday, and Reverb sold checks and price lookups were being blocked too.",
+      "Gear Scout now falls back to curl (which Reverb lets through) whenever that happens, for Reverb searches, sold checks, price lookups and shipping reads. Tested live: searches and sold checks work again.",
+      "New ads still reach you fast (half within 20 minutes). Your non-mic Wanted terms still show as days old because Mic Focus is on. AudioKarma is still blocked."
+    ]
+  },
+  {
     "date": "2026-10-30",
     "title": "Sold Reverb ads come down faster",
     "items": [

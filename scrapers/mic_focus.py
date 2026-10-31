@@ -803,7 +803,7 @@ def deep_crawl(cfg: dict) -> int:
     except Exception:
         pass
     import requests
-    from scrapers.reverb_api import API_URL, HEADERS, _to_listing, country_of
+    from scrapers.reverb_api import API_URL, HEADERS, _to_listing, country_of, reverb_get
     from scrapers.store import _conn, is_overseas, mark_seen
     targets = [t for t in settings(cfg)["targets"] if t["on"]]
     with _conn() as conn:
@@ -815,8 +815,8 @@ def deep_crawl(cfg: dict) -> int:
     for q in fb_terms(cfg):
         try:
             for page in range(1, DEEP_PAGES + 1):
-                resp = requests.get(API_URL, params={"query": q, "per_page": 50, "page": page, "state": "live",
-                                                     "sort": "published_at|desc"}, headers=HEADERS, timeout=25)
+                resp = reverb_get(API_URL, params={"query": q, "per_page": 50, "page": page, "state": "live",
+                                                   "sort": "published_at|desc"}, headers=HEADERS, timeout=25)
                 resp.raise_for_status()
                 batch = resp.json().get("listings") or []
                 for item in batch:

@@ -104,10 +104,13 @@ def check_url(url: str) -> Optional[bool]:
         m = re.search(r"/item/(\d+)", url)
         if not m:
             return None
-        r = requests.get(f"https://api.reverb.com/api/listings/{m.group(1)}",
-                         headers={"Accept-Version": "3.0", "Accept": "application/hal+json"}, timeout=20)
+        from scrapers.reverb_api import reverb_get
+        r = reverb_get(f"https://api.reverb.com/api/listings/{m.group(1)}",
+                       headers={"Accept-Version": "3.0", "Accept": "application/hal+json"}, timeout=20)
         if r.status_code == 404:
             return True
+        if not r.ok:
+            return None
         try:
             from scrapers.reverb_api import country_of, shipping_of
             from scrapers.store import set_country, set_shipping
