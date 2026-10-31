@@ -383,8 +383,9 @@ def _full_ad_text(url: str, stored: str) -> str:
     try:
         if "reverb.com/item/" in url:
             m = re.search(r"/item/(\d+)", url)
-            r = requests.get(f"https://api.reverb.com/api/listings/{m.group(1)}",
-                             headers={"Accept-Version": "3.0"}, timeout=15)
+            from scrapers.reverb_api import reverb_get
+            r = reverb_get(f"https://api.reverb.com/api/listings/{m.group(1)}",
+                           headers={"Accept-Version": "3.0"}, timeout=15)
             if r.ok:
                 d = r.json()
                 return f"Condition: {(d.get('condition') or {}).get('display_name', '')}\n" + \

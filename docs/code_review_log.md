@@ -4,12 +4,16 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: the "Code review (Oct 30)" commit (2026-10-30: reviewed 59593b2..8a400d7) — next run's diff starts there
+Last reviewed commit: the "Code review (Oct 31)" commit (2026-10-31: reviewed 8a400d7..eb3c2f0) — next run's diff starts there
 
 ## Files — last fully read
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
+| scrapers/reverb_api.py (curl fallback diff), market.py, mic_focus.py deep_crawl, sold_check.check_url, shipping_backfill.py | 2026-10-31 (diff) | reverb_get fallback correct; sold_check now returns "unknown" on any non-OK answer |
+| scrapers/reverb_api.py, shopify_store.py, geo.py, image_cache.py | 2026-10-31 | whole files; no bugs (geo._load never retries after one failed download until restart — noted) |
+| scrapers/html_scraper.py | 2026-10-31 (600–1140) | file now fully read this week; Reverb page, eBay, Audiogon, Vintage King, USAM, forums |
+| scrapers/assistant.py | 2026-10-31 (355–456) | verdict ad-text fetch |
 | scrapers/sold_check.py | 2026-10-30 | whole file; Reverb's own 250/hour slots verified live (368–388 checked per run, ~5 min) |
 | scrapers/lowest.py, price_drops.py, auctions.py, analytics.py | 2026-10-30 | no bugs; lowest.py's alert email doesn't escape the title (cosmetic) |
 | scrapers/html_scraper.py | 2026-10-30 (1–600) | Guitar Center, Sweetwater, Craigslist, start of Reverb; next chunk 600–1140 |
@@ -95,6 +99,11 @@ Last reviewed commit: the "Code review (Oct 30)" commit (2026-10-30: reviewed 59
 | 2026-10-28 | steals.py docstring said 60%+ (MIN_PCT is 50); board.py comment said the Feed window is 45 days (it's 90) | comments fixed |
 | 2026-10-29 | Mic Focus Distressor: a pair priced "$1,300 each" got total = $1,300 (qty 2), so it passed the $2,400 pair cap as a "hit" (reproduced with price_basis: basis 'each', qty 2) | total = unit × qty + shipping |
 | 2026-10-29 | mic_focus.deep_crawl refreshed last_seen only; a Reverb mic wrongly marked sold stayed sold while the crawl saw it live. Its LIKE '%item/123%' also could match a longer id | also confirmed_live_at, un-marks sold; pattern '%item/ID-%' (all 19,649 stored Reverb links have the -slug) |
+
+| 2026-10-31 | The AI "verdict" button read a Reverb ad's full text with plain requests, which Cloudflare has been turning away (the Oct 31 curl fallback skipped it); it silently fell back to the short stored text | assistant._full_ad_text uses reverb_get. Tested live on a DB-free copy; all 30 dashboard GET pages return 200 |
+
+### Left for the owner (2026-10-31)
+- Nothing needing a decision. AudioKarma is still blocked (per the nightly's note).
 
 ### Left for the owner (2026-10-29)
 - Routine watchdog pushes/emails when the nightly or code-review log is over 30 h old; it uses the log files' modified times, so any edit to those logs resets it. Fine as is.
