@@ -1,19 +1,50 @@
 {% extends "base.html" %}
 {% from "_listing_card.html" import listing_card %}
-{% block title %}Gear Scout — Mics{% endblock %}
+{% block title %}Gear Scout{% endblock %}
 {% block content %}
 
   <section class="panel">
-    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic{{ '' if hits|length == 1 else 's' }} for sale in your price range</span></h2>
+    <h2>🆕 New since you last looked <span class="muted">— {{ new|length }}{% if since %} since {{ since }}{% endif %}, newest first</span></h2>
+    {% if new %}
+      <div class="listing-grid">{% for l in new[:24] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if new|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new[24:])) }}">
+          <summary>Show all {{ new|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">Nothing new in the deals below since your last visit.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" id="deals">
+    <h2>🔥 Best deals <span class="muted">— everything on your Telex List posted in the last 150 days, 50%+ under its used value, biggest discount first</span></h2>
+    <p class="muted">Used value = the middle of what single, used, US listings of that exact model asked over the last year
+      (3+ listings needed; pairs, bundles, new-in-box ads and parts left out). More than 75% under usually means a scam or a
+      mix-up, so those aren't shown.</p>
+    {% if deals %}
+      <div class="listing-grid">{% for l in deals[:24] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if deals|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(deals[24:])) }}">
+          <summary>Show all {{ deals|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">No 50%+ deals on your list right now.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
     <p class="muted">
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
       OfferUp, ShopGoodwill and the other fast sites every time, eBay every 30 minutes, Facebook in rotation) and pushes
-      each one between your ${{ '{:,}'.format(st.min_price) }} minimum and its price limit to your phone, once per price (a price drop sends it again). Everything else is paused: Telex matches, steals,
+      each deal to your phone, once per price (a price drop sends it again): every brand at 50%+ under its used value
+      (and ${{ '{:,}'.format(st.min_price) }} or more), United and Dachman between your minimum and their price limit, the Distressor at its single / pair price. Everything else is paused: Telex matches, steals,
       price drops, auctions, the daily AI briefing. Your Telex List is kept, just not searched.
       {% else %}<strong>Off.</strong> Gear Scout is searching your whole Telex List as usual; this page still lists the mics.{% endif %}
-      Prices are delivered (with listed shipping). The "% under" on each card compares that with today's <b>new</b> price when
-      the mic is still made, else with what it goes for <b>used</b>. US listings only, anything still for sale that a site showed in the last 90 days (pushes are only for ones seen in the last 10). Parts, power supplies, repair jobs and auctions are left out.
+      Prices are delivered (with listed shipping). The "% under" on each card compares that with what the model goes for <b>used</b>. US listings only, anything still for sale that a site showed in the last 90 days (pushes are only for ones seen in the last 10). Parts, power supplies, repair jobs and auctions are left out.
     </p>
     <p class="muted">Last sweep {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} ·
       list updated {{ built or 'not yet' }}</p>
@@ -24,7 +55,7 @@
   </section>
 
   <section class="panel">
-    <h2>Push when… <span class="muted">— delivered price between your minimum and each mic's limit</span></h2>
+    <h2>Push when… <span class="muted">— 50%+ under used, or between your minimum and the limit for United, Dachman and the Distressor</span></h2>
     <form method="post" action="{{ url_for('mics_settings') }}">
       <p>Minimum for every mic: $<input type="number" name="min_price" value="{{ st.min_price }}" min="0" step="25" inputmode="numeric" style="width:6em;color:#111"> <span class="muted">(cheaper ones are usually parts, capsules or lookalikes)</span></p>
       <table class="mic-targets">
@@ -34,7 +65,7 @@
           <tr>
             <td><input type="checkbox" name="on_{{ t.key }}" value="1" {{ 'checked' if t.on }} aria-label="Search and push {{ t.name }}"></td>
             <td><a href="#t-{{ t.key }}">{{ t.name }}</a></td>
-            <td>$<input type="number" name="price_{{ t.key }}" value="{{ t.max_price }}" min="0" step="50" inputmode="numeric"></td>
+            <td>{% if t.key in pct_keys %}<span class="muted">50%+ off used</span>{% else %}$<input type="number" name="price_{{ t.key }}" value="{{ t.max_price }}" min="0" step="50" inputmode="numeric">{% endif %}</td>
             <td>{{ (by.get(t.key) or [])|length }}</td>
           </tr>
         {% endfor %}
@@ -46,7 +77,7 @@
   </section>
 
   <section class="panel">
-    <h2>In your price range <span class="muted">— ${{ '{:,}'.format(st.min_price) }} and up, under each mic's limit, newest ad first</span></h2>
+    <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in their price range), newest ad first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}
@@ -55,7 +86,7 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">Nothing under your prices right now. Every new one goes to your phone the moment a sweep finds it.</p>
+      <p class="muted">No mic deals right now. Every new one goes to your phone the moment a sweep finds it.</p>
     {% endif %}
   </section>
 
@@ -96,7 +127,7 @@
   {% for t in st.targets %}
     {% set ls = by.get(t.key) or [] %}
     <section class="panel" id="t-{{ t.key }}">
-      <h2>{{ t.name }} <span class="muted">— all {{ ls|length }} for sale, lowest price first · push {{ t.note or ('$' ~ '{:,}'.format(t.min_price or st.min_price) ~ '–$' ~ '{:,}'.format(t.max_price)) }}{{ '' if t.on else ' (off)' }}</span></h2>
+      <h2>{{ t.name }} <span class="muted">— {% if t.key in pct_keys %}{{ ls|length }} at 50%+ under used{% else %}all {{ ls|length }} for sale{% endif %}, lowest price first · push {{ t.note or ('50%+ off used' if t.key in pct_keys else '$' ~ '{:,}'.format(t.min_price or st.min_price) ~ '–$' ~ '{:,}'.format(t.max_price)) }}{{ '' if t.on else ' (off)' }}</span></h2>
       {% if ls %}
         {% set ms = models.get(t.key) or [] %}
         {% if ms|length > 1 %}
@@ -116,10 +147,21 @@
           <summary>Hide / show</summary><div class="listing-grid"></div>
         </details>
       {% else %}
-        <p class="muted">None for sale in the US right now.</p>
+        <p class="muted">{{ 'None 50%+ under right now.' if t.key in pct_keys else 'None for sale in the US right now.' }}</p>
       {% endif %}
     </section>
   {% endfor %}
+
+  {% if check %}
+  <details class="panel" id="check">
+    <summary><h2 style="display:inline">🔎 Check these <span class="muted">— {{ check|length }} mics with no solid used value yet, or a price too good to be true</span></h2></summary>
+    <p class="muted">Fewer than 3 other single, used listings of these models have turned up in the last year, so Gear Scout
+      can't tell whether they're a deal. Grouped by brand, cheapest first. They don't push.</p>
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(check)) }}">
+      <summary>Show them</summary><div class="listing-grid"></div>
+    </details>
+  </details>
+  {% endif %}
   <script>
     // Stay current: check every minute for a new sweep and reload when there is
     // one (not while you're typing in the settings form).

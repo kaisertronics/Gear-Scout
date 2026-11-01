@@ -24,7 +24,7 @@
       </form>
       <nav>
         {% if mic_focus_on %}
-        <a href="{{ url_for('mics_page') }}" class="{{ 'active' if request.endpoint in ('mics_page', 'feed') and not request.args.get('inbox') else '' }}">🎤 Mics</a>
+        <a href="{{ url_for('mics_page') }}" class="{{ 'active' if request.endpoint in ('mics_page', 'feed') and not request.args.get('inbox') else '' }}">🏠 Home</a>
         <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>
         <details class="nav-more"><summary>More</summary><div class="nav-more-list">

@@ -109,7 +109,7 @@ TARGETS = [
          exclude=r"\bcar\b|amplifier|speaker|subwoofer|stereo receiver",
          queries=["advanced audio microphone"],
          model=r"\b(cm[\s-]?\d{2,3}[a-z]{0,3})\b", brand="Advanced Audio"),
-    dict(key="united", name="United Studio Technologies", min_pct=60, max_price=1000,
+    dict(key="united", price_range=True, name="United Studio Technologies", min_pct=60, max_price=1000,
          match=r"united\s*studio\s*tech|\but[\s-]?(?:twin[\s-]?\d{2}|fet[\s-]?47|tube[\s-]?67|vintage[\s-]?87|47|251|12|67)\b",
          require=r"united\s*studio|\bmic(?:rophone)?s?\b|condenser",
          exclude=r"la-?2a|1176|turntable|record player|teletronix",
@@ -122,7 +122,7 @@ TARGETS = [
          exclude=r"painted|wooden|wear|shirt|crew neck|hoodie|sign\b|canvas|print",
          queries=["signal arts microphone", "signal art microphone"],
          model=None, brand=None),
-    dict(key="dachman", name="Dachman Audio", min_pct=60, max_price=1000,
+    dict(key="dachman", price_range=True, name="Dachman Audio", min_pct=60, max_price=1000,
          # "DA" model codes are Dachman's too ("DA 87SE", "DA-87i", "DA FET 47") — owner, Oct 22
          match=r"\bdachman\b|\bda[\s-]?(?:fet[\s-]?)?(?:87|67|47|251|12|57|414|17|20)[a-z]{0,3}\b",
          require=r"\bdachman\b|\bmic(?:rophone)?s?\b|condenser|\btube\b|\bfet\b|\b(?:87|47|67)\s?se\b|\b(?:87|67|47)i\b",
@@ -140,7 +140,7 @@ TARGETS = [
          model=r"\b(v[\s-]?13|v[\s-]?44s?|v[\s-]?1s?|v[\s-]?4|lucent)\b", brand="Vanguard Audio Labs"),
     # Owner (Oct 27): more brands, $300–$1,000 like the rest (change on the Mics page).
     # Neumann and AKG: only real deals (owner, Oct 27): 30%+ under what that model sells for used.
-    dict(key="neumann", name="Neumann (30%+ under used)", min_pct=60, max_price=1000, deal_pct=30,
+    dict(key="neumann", name="Neumann", min_pct=60, max_price=1000, deal_pct=30,
          match=r"\bneumann\b",
          require=_MIC_WORDS + r"|\b(?:u|m|km|tlm|kms|bcm)[\s-]?\d{2,3}",
          exclude=_STUDIO_ONLY + r"|\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bkh[\s-]?\d{2,3}\b|monitors?\b|speakers?|subwoofer|headphones?|\bndh\b|\bnda\b|ea[\s-]?87|ea[\s-]?1\b|"
@@ -168,7 +168,7 @@ TARGETS = [
          exclude=_STUDIO_ONLY + r"|launcher|\bdi\b|preamp|space|rocket|model kit|poster",
          queries=["soyuz microphone", "soyuz su-017", "soyuz 1973"],
          model=r"\b(su[\s-]?\d{3}|1973|bomblet)\b", brand="Soyuz"),
-    dict(key="akg", name="AKG (30%+ under used)", min_pct=60, max_price=1000, deal_pct=30,
+    dict(key="akg", name="AKG", min_pct=60, max_price=1000, deal_pct=30,
          match=r"\bakg\b",
          require=_MIC_WORDS + r"|\b(?:c|d)[\s-]?\d{2,4}",
          exclude=_STUDIO_ONLY + r"|\bclones?\b|\bstyle\b|soviet|oktava|\bcopy\b|replica|\btype\b|inspired|tribute|\bd[\s-]?12(?:e|vr|\s?vr)?\b|headphones?|\bk[\s-]?\d{2,3}\b|earbuds?|wireless|bodypack|\bwms\b|perception|lyra|ara\b|"
@@ -242,6 +242,20 @@ _BRANDS = re.compile(r"\b(aea|akg|avantone|lauten|royer|sennheiser|shure|neumann
                      r"coles|cad|mxl|soyuz|wunder|chandler|manley|ua|universal audio|josephson|schoeps|sony)\b", re.I)
 
 
+# Owner (Oct 31): every mic brand except United and Dachman only shows when
+# it's at least this far under what it sells for used; one with no known used
+# value goes to "Check these" at the end of the page instead.
+from scrapers.market_value import DEAL_PCT  # noqa: E402  (shared with the landing page's deals)
+# In a brand's own section these are copies, parts or memorabilia, not the mic.
+_NOT_THE_MIC = re.compile(r"\bbased\b|\bstyle\b|\binspired\b|\bclone\b|\bphoto\b|exhibit|\bbody\b|\bpcb\b|"
+                          r"\bposter\b|\bpatch\b|\bpin\b|\bshirt\b|\bmug\b", re.I)
+_CLONE_KEYS = {"c12", "classic_tube", "generic"}
+
+
+def pct_mode(t: dict) -> bool:
+    return not t.get("price_range") and not t.get("caps")
+
+
 def settings(cfg: dict) -> dict:
     """{enabled, targets: [target with min_pct/on from config]}"""
     mf = cfg.get("mic_focus") or {}
@@ -259,6 +273,9 @@ def settings(cfg: dict) -> dict:
         except (TypeError, ValueError):
             pass
         t["on"] = bool(o.get("on", True))
+        if pct_mode(t):
+            # the old price windows and per-model caps no longer apply
+            t.update(deal_pct=DEAL_PCT, min_pct=DEAL_PCT, hide_over_limit=False, model_limits=None, min_price=0)
         out.append(t)
     try:
         floor = max(0, int(mf.get("min_price", MIN_PUSH_PRICE)))
@@ -412,14 +429,15 @@ def find(cfg: dict) -> list[dict]:
             continue
         _, qty, unit = price_basis(title, None, value)
         qty = max(int(qty or 1), 1)
-        if t.get("caps") and qty == 1:
+        pm = pct_mode(t)
+        if (t.get("caps") or pm) and qty == 1:
             k = re.search(r"\b(\d)[\s-]?(?:pack|pk)\b|\bset of (\d)\b|\b(?:stereo )?pair\b|\btwo\b", title, re.I)
             if k:
                 qty = int(k.group(1) or k.group(2) or 2)
                 unit = value / qty
         unit = unit or value
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
-        delivered = round(unit + ((ship or 0) / qty if t.get("caps") else (ship or 0)), 2)
+        delivered = round(unit + ((ship or 0) / qty if (t.get("caps") or pm) else (ship or 0)), 2)
         total = round(unit * qty + (ship or 0), 2)  # "$1,300 each" for a pair is $2,600, not $1,300
         if t.get("hide_over_limit") and delivered > t["max_price"]:
             continue
@@ -430,6 +448,26 @@ def find(cfg: dict) -> list[dict]:
             continue
         seen_ads.add(ad)
         q = _model_query(t, title)
+        if pm:
+            if t["key"] not in _CLONE_KEYS and _NOT_THE_MIC.search(title):
+                continue
+            from scrapers.market_value import judge, skip_listing
+            if skip_listing(title) or qty > 2:
+                continue
+            j = judge(title, delivered)
+            if j["kind"] is None or delivered < floor:
+                continue  # under 50% off, or under your minimum
+            if j["used"] and delivered < j["used"] * 0.2:
+                continue  # a scam, a fake or a part
+            unsure = j["kind"] != "deal"
+            r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": DEAL_PCT, "max_price": None, "pct": j["pct"],
+                        "ref": j["used"], "ref_kind": "used" if j["used"] else None, "new": None, "used": j["used"],
+                        "n": j["n"], "unsure": unsure, "why": j["kind"] if unsure else None,
+                        "delivered": delivered, "hit": not unsure, "qty": qty, "total": total, "cap": None,
+                        "model": q, "basis": f"{j['n']} listings" if j["used"] else "", "check": j["kind"] == "too_good",
+                        "fresh": (r.get("last_seen") or r.get("first_seen") or "") >= fresh_cut}
+            out.append(r)
+            continue
         new = used = None
         basis = ""
         if q:
@@ -511,9 +549,16 @@ def build(cfg: dict) -> dict:
     except Exception:
         logger.exception("Mic auction list failed")
         auc = []
+    try:
+        from scrapers.market_value import landing_deals
+        deals = landing_deals(cfg)
+    except Exception:
+        logger.exception("Landing deals failed")
+        deals = []
     data = {"built": datetime.now(timezone.utc).isoformat(),
             "rows": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in rows],
-            "auctions": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in auc]}
+            "auctions": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in auc],
+            "deals": [{k: r.get(k) for k in keep} | {"deal": r["deal"]} for r in deals]}
     try:
         SNAPSHOT.write_text(json.dumps(data))
     except OSError:
@@ -522,7 +567,8 @@ def build(cfg: dict) -> dict:
     # price range first, then everything else on the page, so an older ad
     # that sold drops off instead of lingering.
     try:
-        order = [r["url"] for r in rows if r["mic"]["hit"]] + [r["url"] for r in rows if not r["mic"]["hit"]]
+        order = [r["url"] for r in rows if r["mic"]["hit"]] + [r["url"] for r in deals] + \
+            [r["url"] for r in rows if not r["mic"]["hit"]]
         Path("/data/shown_mics.txt").write_text("\n".join(dict.fromkeys(order)))
     except OSError:
         pass
@@ -700,7 +746,14 @@ def auctions(cfg: dict) -> list[dict]:
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         total = round(bid + (ship or 0), 2)
         # a model with its own lower cap (WA-14: $300) is held to it here too
-        cap = min([t["max_price"]] + [c for rx, c in t.get("model_limits") or [] if re.search(rx, r["title"], re.I)])
+        if pct_mode(t):
+            from scrapers.market_value import value as used_value
+            used = used_value(r["title"])[0]
+            if not used:
+                continue
+            cap = round(used * (1 - DEAL_PCT / 100))
+        else:
+            cap = min([t["max_price"]] + [c for rx, c in t.get("model_limits") or [] if re.search(rx, r["title"], re.I)])
         if t.get("caps"):
             from scrapers.enrich import price_basis as _pb
             cap = _cap(t, max(int(_pb(r["title"], None, bid)[1] or 1), 1))

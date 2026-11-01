@@ -755,7 +755,7 @@ def model_key(title: Optional[str]) -> Optional[str]:
     return f"{key}|{form}" if form else key
 
 
-_VARIANT = re.compile(r"[\s-]+[\"“”']?(vr|xls|xlii|xl|eb|ai|jr|junior|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
+_VARIANT = re.compile(r"[\s-]+[\"“”']?(fet|vr|xls|xlii|xl|eb|ai|jr|junior|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
 
 
 def _model_variant(title: Optional[str], query: str) -> Optional[str]:

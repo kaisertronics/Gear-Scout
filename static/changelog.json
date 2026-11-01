@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-10-31",
+    "title": "New home page and honest used prices",
+    "items": [
+      "The Home page (was Mics) now opens with what's new since your last visit, then the best deals on everything on your Telex List posted in the last 150 days, then your mics.",
+      "Used values are rebuilt: the middle of what single, used US listings of that exact model asked over the last year, with 3 or more needed. An audit found about a quarter of the old values were off by 50% or more: Telex prices or new prices counted as 'used', pairs priced as one, and vintage, reissue and FET versions lumped together.",
+      "Every mic brand except United and Dachman now shows, and pushes, only at 50% or more under its used value, and $300 or more. United, Dachman and the Distressor keep their price ranges.",
+      "Mics with too few listings to judge, or more than 75% under (usually a scam), are in a closed 'Check these' section at the bottom. They don't push."
+    ]
+  },
+  {
+    "date": "2026-10-31",
     "title": "Faster clicks",
     "items": [
       "Search and the Mics page no longer freeze for several seconds (sometimes minutes). Gear Scout's price-history refresh, every 15 minutes, now runs on its own, out of the page's way."

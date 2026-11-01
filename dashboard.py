@@ -2271,6 +2271,10 @@ def mics_page():
     for l in rows:
         l["age_days"] = _age_days(l)
         m = l["mic"]
+        if m.get("unsure") and not m.get("used"):
+            l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+                f"No solid used value yet (only {m.get('n') or 0} other listing{'' if m.get('n') == 1 else 's'} of this model)"))
+            continue
         if m["pct"] is not None and m["pct"] > 0:
             label = "New" if m["ref_kind"] == "new" else "Used market"
             l["comp"] = {"pct": m["pct"], "ref": f"${m['ref']:,}", "est": False, "label": label}
@@ -2278,8 +2282,15 @@ def mics_page():
             l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
                 f"{'New' if m['ref_kind'] == 'new' else 'Used market'} ~${m['ref']:,}: "
                 + ("about the same" if m["pct"] is not None and m["pct"] > -5 else f"{-m['pct']}% over")))
+    # % brands only list their deals; one with no solid used value waits in
+    # "Check these" at the end. United, Dachman and the Distressor list everything.
+    check = sorted((l for l in rows if l["mic"].get("unsure")), key=lambda l: (l["mic"]["name"], l["mic"]["delivered"]))
+    rows = [l for l in rows if not l["mic"].get("unsure")]
+    pct_keys = {t["key"] for t in st["targets"] if mic_focus.pct_mode(t)}
     by = {t["key"]: [] for t in st["targets"]}
     for l in rows:
+        if l["mic"]["target"] in pct_keys and not l["mic"]["hit"]:
+            continue
         by.setdefault(l["mic"]["target"], []).append(l)
     # Each section in the order of the price the card shows (listing +
     # listed shipping) — sorting by per-piece price put a $1,299 pair first.
@@ -2341,10 +2352,27 @@ def mics_page():
         l["auction_ends"] = (f"{mins} min" if mins < 90 else f"{mins // 60} h" if mins < 48 * 60 else f"{mins // 1440} days")
         l["price_ctx"] = dict(l.get("price_ctx") or {}, note=f"Bid + shipping ${m['delivered']:,.0f} · your limit ${m['max_price']:,}")
     auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
+    # Landing: the best deals on everything you hunt (last 150 days), and
+    # what's new since your last visit across all of it.
+    deals = _decorate(mic_focus.still_showing(data.get("deals") or []))
+    for l in deals:
+        d = l["deal"]
+        l["age_days"] = _age_days(l)
+        l["comp"] = {"pct": d["pct"], "ref": f"${d['used']:,}", "est": False, "label": "Used market"}
+    since = _visit_marker()
+    new = []
+    if since:
+        seen_new = set()
+        for l in deals + hits + [l for t in ("united", "dachman", "distressor") for l in by.get(t, []) if l["mic"]["hit"]]:
+            if (l.get("first_seen") or "") > since and l["url"] not in seen_new:
+                seen_new.add(l["url"])
+                new.append(l)
+        new.sort(key=listed, reverse=True)
     from urllib.parse import quote
     mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
     return render_template("mics.html", st=st, hits=hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
-                           auctions=auctions, mercari=mercari,
+                           auctions=auctions, mercari=mercari, deals=deals, new=new, since=_ago(since) if since else None,
+                           check=check, pct_keys=pct_keys,
                            sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
 
 
@@ -2367,6 +2395,8 @@ def mics_settings():
     for t in TARGETS:
         k = t["key"]
         if f"price_{k}" not in request.form:
+            if f"on_{k}" in request.form or "min_price" in request.form:  # a 50%-rule brand: just its on/off tick
+                targets[k] = dict(targets.get(k) or {}, on=request.form.get(f"on_{k}") == "1")
             continue
         try:
             price = max(0, int(float(re.sub(r"[^\d.]", "", request.form.get(f"price_{k}") or "") or 0)))
