@@ -25,20 +25,40 @@ FLOOR_RATIO = 0.2   # under a fifth of the comp = a mismatch or placeholder
 _index_cache: dict = {"at": 0.0, "index": None}
 
 
+def _build_index() -> dict:
+    from scrapers.enrich import build_price_index
+    return build_price_index(all_priced_rows())
+
+
+def _build_index_apart() -> dict:
+    """Builds the index in a separate process: it's ~15 s of pure Python, and
+    run in the dashboard's own process it held the interpreter lock, so every
+    click (search, the Mics page) waited behind it — up to minutes while the
+    scraper's browser was also busy. The result is small to send back."""
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("fork")) as pool:
+            return pool.submit(_build_index).result(timeout=600)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Price index: separate process failed; building here")
+        return _build_index()
+
+
 def price_index(force: bool = False) -> dict:
     """Typical prices from Gear Scout's own history, refreshed every 15
     minutes — in the background: a page never waits for the rebuild (it
     reads every priced listing), it uses the last one."""
-    from scrapers.enrich import build_price_index
     if force or _index_cache["index"] is None:
-        _index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
+        _index_cache.update(index=_build_index_apart(), at=time.time())
     elif time.time() - _index_cache["at"] > 900 and not _index_cache.get("running"):
         import threading
 
         def rebuild():
             _index_cache["running"] = True
             try:
-                _index_cache.update(index=build_price_index(all_priced_rows()), at=time.time())
+                _index_cache.update(index=_build_index_apart(), at=time.time())
             finally:
                 _index_cache["running"] = False
         threading.Thread(target=rebuild, name="price-index", daemon=True).start()

@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-10-31",
+    "title": "Faster clicks",
+    "items": [
+      "Search and the Mics page no longer freeze for several seconds (sometimes minutes). Gear Scout's price-history refresh, every 15 minutes, now runs on its own, out of the page's way."
+    ]
+  },
+  {
+    "date": "2026-10-31",
     "title": "Reverb was blocking Gear Scout — fixed",
     "items": [
       "Found that Reverb's security layer (Cloudflare) had started turning away Gear Scout's Python requests: the every-2-hours mic read failed every time since yesterday, and Reverb sold checks and price lookups were being blocked too.",
