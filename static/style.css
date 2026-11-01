@@ -1095,3 +1095,8 @@ details.panel > summary { cursor: pointer; }
 .mic-models { border-collapse: collapse; margin: 4px 0 12px; width: 100%; max-width: 640px; font-size: 14px; }
 .mic-models th, .mic-models td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border, #e5e7eb); }
 .mic-models td:nth-child(2) { white-space: nowrap; }
+
+.proposal-list { padding-left: 1.1em; }
+.proposal-list li { margin: 0 0 .7em; line-height: 1.45; }
+.proposal-list form { margin-left: .4em; }
+.offer-help .btn { margin-left: .4em; padding: 1px 8px; font-size: 12px; }

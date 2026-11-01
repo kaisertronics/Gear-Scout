@@ -555,10 +555,17 @@ def build(cfg: dict) -> dict:
     except Exception:
         logger.exception("Landing deals failed")
         deals = []
+    deals, rows = _check_deals(cfg, deals, rows)
     data = {"built": datetime.now(timezone.utc).isoformat(),
             "rows": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in rows],
             "auctions": [{k: r.get(k) for k in keep} | {"mic": r["mic"]} for r in auc],
             "deals": [{k: r.get(k) for k in keep} | {"deal": r["deal"]} for r in deals]}
+    for part in ("rows", "deals"):
+        src = rows if part == "rows" else deals
+        for out_r, r in zip(data[part], src):
+            for k in ("warn", "photo", "offer", "score", "miles"):
+                if r.get(k) is not None:
+                    out_r[k] = r[k]
     try:
         SNAPSHOT.write_text(json.dumps(data))
     except OSError:
@@ -573,6 +580,78 @@ def build(cfg: dict) -> dict:
     except OSError:
         pass
     return data
+
+
+def daily_email(cfg: dict) -> bool:
+    """8 AM: the best deals on Home (whole Telex List, then mics), no
+    warning signs, best score first."""
+    data = load()
+    best = [dict(r, mic={"name": "Best deal", "pct": r["deal"]["pct"], "ref_kind": "used",
+                         "delivered": r["deal"]["delivered"], "qty": 1})
+            for r in still_showing(data.get("deals") or []) if not r.get("warn")][:10]
+    mics = [r for r in still_showing(data.get("rows") or []) if r["mic"]["hit"] and not r.get("warn")]
+    mics.sort(key=lambda r: -(r.get("score") or r["mic"].get("pct") or 0))
+    rows = best + mics[:15]
+    if not rows:
+        return False
+    return _email_hits(cfg, f"Gear Scout: today's {len(rows)} best deal{'s' if len(rows) != 1 else ''}", rows)
+
+
+def _check_deals(cfg: dict, deals: list, rows: list) -> tuple[list, list]:
+    """Scam signs, an AI photo check, a score and an offer suggestion for
+    every deal. A deal with a warning sign isn't pushed: a landing deal moves
+    under "check", a mic deal to "Check these"."""
+    from scrapers import deal_checks as D
+    from scrapers.geo import distance_miles
+    from scrapers.store import _conn
+    mic_deals = [r for r in rows if r["mic"]["hit"]]
+    every = deals + mic_deals
+    try:
+        D.run_photo_checks(every, cfg)
+    except Exception:
+        logger.exception("Photo checks failed")
+    photos = D.photo_results([r["url"] for r in every])
+    # the same photo on a different ad (another title or place)
+    imgs = {(r.get("image_url") or "").split("?")[0] for r in every if r.get("image_url")}
+    reused = set()
+    if imgs:
+        with _conn() as conn:
+            for img, n in conn.execute(
+                    "SELECT substr(image_url, 1, CASE WHEN instr(image_url, '?') > 0 THEN instr(image_url, '?') - 1"
+                    " ELSE length(image_url) END) AS img, COUNT(DISTINCT lower(substr(title, 1, 40)) || '|' || COALESCE(location, ''))"
+                    " FROM seen WHERE image_url IS NOT NULL AND duplicate = 0 GROUP BY img HAVING COUNT(*) > 1"):
+                if img in imgs and n > 1:
+                    reused.add(img)
+    home = str(cfg.get("home_zip") or "")
+    for r in every:
+        info = r.get("deal") or r["mic"]
+        used, unit = info.get("used"), info.get("delivered") or 0
+        warn = D.scam_flags(r, used, unit)
+        if (r.get("image_url") or "").split("?")[0] in reused:
+            warn.append("the same photo is on another ad")
+        p = photos.get(r["url"])
+        if p:
+            r["photo"] = p
+            if p["matches"] == "no":
+                warn.append("the photo doesn't show this item")
+            elif p["stock"] and D._LOCAL.search(r.get("source_name") or ""):
+                warn.append("a catalogue photo, not the real unit")
+        r["warn"] = warn or None
+        try:
+            r["miles"] = distance_miles(home, r.get("location")) if home else None
+        except Exception:
+            r["miles"] = None
+        r["flags"] = warn
+        r["score"] = D.score(r, info.get("pct") or 0)
+        r["offer"] = D.offer(r, unit, used)
+    for r in mic_deals:
+        if r["warn"]:
+            m = r["mic"]
+            m["hit"], m["unsure"], m["why"] = False, True, "warn"
+    for r in deals:
+        r["deal"]["warn"] = bool(r["warn"])
+    deals.sort(key=lambda r: (bool(r["warn"]), -r["score"]))
+    return deals, rows
 
 
 def load() -> dict:
@@ -933,8 +1012,8 @@ def _email_hits(cfg: dict, subject: str, rows: list[dict]) -> bool:
                   f'<span style="font-size:12px;color:#64748b;font-weight:400"> {dl}{escape(off)}</span></div>'
                   f'<div style="font-size:12px;color:#64748b">{escape(str(r.get("source_name") or ""))}'
                   f'{" · " + escape(str(r["location"]).split(" @")[0]) if r.get("location") else ""}</div></td></tr>')
-    more = f'<p style="color:#64748b">+ {len(rows) - 25} more on the Mics page.</p>' if len(rows) > 25 else ""
-    link = f'<p><a href="{escape(dash)}/mics">Open the Mics page →</a></p>' if dash else ""
+    more = f'<p style="color:#64748b">+ {len(rows) - 25} more on the Home page.</p>' if len(rows) > 25 else ""
+    link = f'<p><a href="{escape(dash)}/mics">Open Gear Scout →</a></p>' if dash else ""
     html = (f'<!DOCTYPE html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,sans-serif">'
             f'<div style="max-width:620px;margin:0 auto;padding:20px"><div style="background:#161512;color:#efe6d2;padding:16px 20px;'
             f'border-radius:12px 12px 0 0;font-size:18px;font-weight:700">🎤 {escape(subject)}</div>'

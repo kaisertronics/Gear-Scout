@@ -581,6 +581,15 @@ def run_routine_watch():
         logger.exception("Routine watchdog failed")
 
 
+def run_best_deals_email():
+    """8 AM email: today's best deals from the Home page."""
+    try:
+        from scrapers import mic_focus
+        mic_focus.daily_email(load_config())
+    except Exception:
+        logger.exception("Best deals email failed")
+
+
 def run_ai_briefing():
     if _mic_focus_on():
         return  # Mic Focus: mic alerts only
@@ -667,6 +676,8 @@ def run_schedule():
     # Every 3 hours: has the nightly update / code review stopped finishing?
     scheduler.add_job(run_routine_watch, IntervalTrigger(hours=3, timezone=tz_name),
                       name="gear_scout_routine_watch", max_instances=1, coalesce=True, misfire_grace_time=1800)
+    scheduler.add_job(run_best_deals_email, CronTrigger(hour=8, minute=0, timezone=tz_name),
+                      name="gear_scout_best_deals_email", misfire_grace_time=3600)
     # AI emails (only when a Gemini key is set): daily briefing and weekly notes.
     scheduler.add_job(run_ai_briefing, CronTrigger(hour=8, minute=0, timezone=tz_name),
                       name="gear_scout_ai_briefing", misfire_grace_time=3600)

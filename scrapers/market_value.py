@@ -34,7 +34,29 @@ _SKIP = re.compile(
     r"\bbrand new\b|\bnew in box\b|\bnib\b|\[new\]|\bsealed\b|\bunopened\b|\bmatched\b|\bquad\b|\btrio\b|"
     r"&|\bwith .*\band\b", re.I)
 
-_cache: dict = {"at": 0.0, "idx": None}
+_cache: dict = {"at": 0.0, "idx": None, "sold": None}
+
+
+def _ensure_sales(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS confirmed_sales (url TEXT PRIMARY KEY, title TEXT, price REAL, at TEXT)")
+
+
+def record_sale(url: str, amount) -> None:
+    """A Reverb listing that really sold (its API says "sold", not "ended"):
+    keep its last price. Reverb no longer shows accepted-offer prices or its
+    price guide, so these are the best sold prices there are."""
+    from scrapers.store import _conn
+    try:
+        price = float(amount)
+    except (TypeError, ValueError):
+        return
+    with _conn() as conn:
+        _ensure_sales(conn)
+        row = conn.execute("SELECT title FROM seen WHERE url = ?", (url,)).fetchone()
+        if row and row[0]:
+            conn.execute("INSERT OR IGNORE INTO confirmed_sales VALUES (?, ?, ?, ?)",
+                         (url, row[0], price, datetime.now(timezone.utc).isoformat()))
+            conn.commit()
 
 
 # A channel strip, module or fader from a console isn't the console.
@@ -86,6 +108,16 @@ def index(max_age: float = 1800) -> dict:
         k = _key(title)
         if k:
             asks.setdefault(k, []).append(v)
+    with _conn() as conn:
+        _ensure_sales(conn)
+        sales = conn.execute("SELECT title, price FROM confirmed_sales WHERE at >= ?", (cut,)).fetchall()
+    sold: dict = {}
+    for title, v in sales:
+        if title and v and not _SKIP.search(title) and not is_partial(title) and not is_accessory_only(title):
+            k = _key(title)
+            if k:
+                sold.setdefault(k, []).append(v)
+    _cache["sold"] = {k: (round(statistics.median(vs)), len(vs)) for k, vs in sold.items()}
     idx = {}
     for k, vs in asks.items():
         vs.sort()
@@ -97,12 +129,23 @@ def index(max_age: float = 1800) -> dict:
 
 
 def value(title: str) -> tuple[Optional[float], int]:
-    """(used value, listings behind it) — value is None under MIN_N."""
+    """(used value, listings behind it) — value is None under MIN_N.
+    3+ confirmed Reverb sales of the model beat asking prices (and only ever
+    lower the value: what sold is the real market)."""
     k = _key(title or "")
     if not k:
         return None, 0
     v, n = index().get(k, (None, 0))
+    sv, sn = (_cache.get("sold") or {}).get(k, (None, 0))
+    if sn >= MIN_N:
+        return (min(sv, v) if v and n >= MIN_N else sv), sn
     return (v if n >= MIN_N else None), n
+
+
+def basis(title: str) -> str:
+    k = _key(title or "")
+    sn = (_cache.get("sold") or {}).get(k, (None, 0))[1] if k else 0
+    return f"{sn} sales" if sn >= MIN_N else f"{index().get(k, (None, 0))[1] if k else 0} asking prices"
 
 
 def judge(title: str, unit: float) -> dict:
@@ -110,10 +153,10 @@ def judge(title: str, unit: float) -> dict:
     (over 75%), 'no_value' (too few listings) or None (not a deal)."""
     used, n = value(title)
     if not used:
-        return {"used": None, "n": n, "pct": None, "kind": "no_value"}
+        return {"used": None, "n": n, "pct": None, "kind": "no_value", "basis": ""}
     pct = round((1 - unit / used) * 100)
     kind = "too_good" if pct > TOO_GOOD_PCT else ("deal" if pct >= DEAL_PCT else None)
-    return {"used": used, "n": n, "pct": pct, "kind": kind}
+    return {"used": used, "n": n, "pct": pct, "kind": kind, "basis": basis(title)}
 
 
 def landing_deals(cfg: dict) -> list[dict]:

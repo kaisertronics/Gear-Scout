@@ -37,6 +37,10 @@
         {% endif %}
       {% endif %}
       {% if l.source_detail %}<div class="listing-source">{{ l.source_detail }}</div>{% endif %}
+      {% if l.warn %}<div class="lowest-tag lowest-tag-model" title="Signs this ad may be a scam or a mix-up">⚠️ Check first: {{ l.warn|join(' · ') }}</div>{% endif %}
+      {% if l.photo %}<div class="listing-each" title="The AI looked at the photo">📷 {% if l.photo.matches == 'yes' and not l.photo.stock %}Photo matches the title{% else %}{{ l.photo.note or 'Photo unclear' }}{% endif %}</div>{% endif %}
+      {% if l.offer %}<div class="listing-each offer-help">💬 Offer ~${{ '{:,}'.format(l.offer.amount) }} ({{ l.offer.why }})
+        <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.offer.msg }}">Copy message</button></div>{% endif %}
       {% if l.steal_check %}<div class="lowest-tag lowest-tag-model" title="A steal on paper, but only one price to compare against — check it's the real thing and the price isn't a typo">🔎 Steal? double-check · {{ l.comp.pct }}% under</div>{% endif %}
       {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}

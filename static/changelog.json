@@ -1,6 +1,19 @@
 [
   {
     "date": "2026-10-31",
+    "title": "Deal checks, offers, proposals and a morning email",
+    "items": [
+      "Scam check: deals with warning signs (a 'brand new, several available' ad, Zelle or wire requests, contact off the site, shipping only, a photo reused on another ad, a local ad far below market) aren't pushed. They sit under a ⚠️ line or in 'Check these'.",
+      "Photo check: the AI looks at each deal's photo and says whether it shows the item in the title. A wrong photo, or a catalogue photo on a local ad, counts as a warning.",
+      "Best deals are sorted by a deal score: the discount, plus a little for a fresh ad, a price cut or pickup within 150 miles.",
+      "Offer helper: ads whose price was cut, or that have sat 3+ weeks, show a suggested offer (about 15% under) with a Copy message button.",
+      "eBay auctions show the most to bid to stay 50% under the used value.",
+      "Real sold prices: Gear Scout now records Reverb listings that truly sold, not just ended. Once a model has 3+ sales, its used value comes from those. Reverb closed its public price history, so this builds up over the coming weeks.",
+      "A morning email at 8 AM with today's best deals, and a Proposals section on Home: a new idea each night, with Build or Skip."
+    ]
+  },
+  {
+    "date": "2026-10-31",
     "title": "New home page and honest used prices",
     "items": [
       "The Home page (was Mics) now opens with what's new since your last visit, then the best deals on everything on your Telex List posted in the last 150 days, then your mics.",

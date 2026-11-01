@@ -2350,7 +2350,11 @@ def mics_page():
         except Exception:
             pass
         l["auction_ends"] = (f"{mins} min" if mins < 90 else f"{mins // 60} h" if mins < 48 * 60 else f"{mins // 1440} days")
-        l["price_ctx"] = dict(l.get("price_ctx") or {}, note=f"Bid + shipping ${m['delivered']:,.0f} · your limit ${m['max_price']:,}")
+        ship = l["shipping"] if isinstance(l.get("shipping"), (int, float)) else 0
+        top = max(0, int(m["max_price"] - ship))
+        l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+            f"Bid + shipping ${m['delivered']:,.0f} · max bid ${top:,} to stay "
+            + ("50% under used" if m["target"] in pct_keys else "within your limit")))
     auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
     # Landing: the best deals on everything you hunt (last 150 days), and
     # what's new since your last visit across all of it.
@@ -2358,7 +2362,10 @@ def mics_page():
     for l in deals:
         d = l["deal"]
         l["age_days"] = _age_days(l)
-        l["comp"] = {"pct": d["pct"], "ref": f"${d['used']:,}", "est": False, "label": "Used market"}
+        l["comp"] = {"pct": d["pct"], "ref": f"${d['used']:,}", "est": False,
+                     "label": "Sold" if "sales" in (d.get("basis") or "") else "Used market"}
+    deals_warn = [l for l in deals if l.get("warn")]
+    deals = [l for l in deals if not l.get("warn")]
     since = _visit_marker()
     new = []
     if since:
@@ -2371,9 +2378,27 @@ def mics_page():
     from urllib.parse import quote
     mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
     return render_template("mics.html", st=st, hits=hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
-                           auctions=auctions, mercari=mercari, deals=deals, new=new, since=_ago(since) if since else None,
+                           auctions=auctions, mercari=mercari, deals=deals, deals_warn=deals_warn, new=new, proposals=_proposals_view(), since=_ago(since) if since else None,
                            check=check, pct_keys=pct_keys,
                            sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+
+
+def _proposals_view() -> dict:
+    from scrapers import proposals
+    items = proposals.load()
+    return {"open": [p for p in items if p["status"] == "proposed"],
+            "approved": [p for p in items if p["status"] == "approved"],
+            "built": sorted((p for p in items if p["status"] == "built"), key=lambda p: p.get("built_at") or "", reverse=True)[:5]}
+
+
+@app.route("/proposals/<pid>", methods=["POST"])
+def proposal_decide(pid):
+    """Build / Skip on a proposal (the nightly update builds approved ones)."""
+    from scrapers import proposals
+    action = request.form.get("action")
+    if action in ("approved", "skipped"):
+        proposals.set_status(pid, action)
+    return redirect(url_for("mics_page") + "#proposals")
 
 
 @app.route("/mics/built")

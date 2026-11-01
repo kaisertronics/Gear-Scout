@@ -21,7 +21,9 @@
     <h2>🔥 Best deals <span class="muted">— everything on your Telex List posted in the last 150 days, 50%+ under its used value, biggest discount first</span></h2>
     <p class="muted">Used value = the middle of what single, used, US listings of that exact model asked over the last year
       (3+ listings needed; pairs, bundles, new-in-box ads and parts left out). More than 75% under usually means a scam or a
-      mix-up, so those aren't shown.</p>
+      mix-up, so those aren't shown. Sorted by a deal score: the discount, plus a little for a fresh ad, a price cut or
+      pickup within 150 miles. The AI looks at each deal's photo, and ads that sat 3+ weeks or cut their price get a
+      suggested offer you can copy.</p>
     {% if deals %}
       <div class="listing-grid">{% for l in deals[:24] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if deals|length > 24 %}
@@ -32,6 +34,29 @@
     {% else %}
       <p class="muted">No 50%+ deals on your list right now.</p>
     {% endif %}
+    {% if deals_warn %}
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(deals_warn)) }}">
+        <summary>⚠️ {{ deals_warn|length }} more that look like deals but show warning signs (scam wording, a reused or wrong photo, far too cheap for a local ad)</summary>
+        <div class="listing-grid"></div>
+      </details>
+    {% endif %}
+  </section>
+
+  <section class="panel" id="proposals">
+    <h2>💡 Proposals <span class="muted">— new ideas for Gear Scout; tap Build and the nightly update makes it</span></h2>
+    {% if proposals.open %}
+      <ul class="proposal-list">
+      {% for p in proposals.open %}
+        <li><strong>{{ p.title }}</strong> — {{ p.why }}
+          <form method="post" action="{{ url_for('proposal_decide', pid=p.id) }}" style="display:inline">
+            <button class="btn btn-sm btn-primary" name="action" value="approved">Build</button>
+            <button class="btn btn-sm" name="action" value="skipped">Skip</button>
+          </form></li>
+      {% endfor %}
+      </ul>
+    {% else %}<p class="muted">No open proposals. A new one comes each night.</p>{% endif %}
+    {% if proposals.approved %}<p class="muted">Being built tonight: {% for p in proposals.approved %}{{ p.title }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if proposals.built %}<p class="muted">Recently built: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   </section>
 
   <section class="panel">
@@ -154,7 +179,7 @@
 
   {% if check %}
   <details class="panel" id="check">
-    <summary><h2 style="display:inline">🔎 Check these <span class="muted">— {{ check|length }} mics with no solid used value yet, or a price too good to be true</span></h2></summary>
+    <summary><h2 style="display:inline">🔎 Check these <span class="muted">— {{ check|length }} mics with no solid used value yet, a price too good to be true, or a warning sign</span></h2></summary>
     <p class="muted">Fewer than 3 other single, used listings of these models have turned up in the last year, so Gear Scout
       can't tell whether they're a deal. Grouped by brand, cheapest first. They don't push.</p>
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(check)) }}">

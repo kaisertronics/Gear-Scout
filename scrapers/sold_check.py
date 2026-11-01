@@ -119,6 +119,14 @@ def check_url(url: str) -> Optional[bool]:
         except Exception:
             pass
         slug = ((r.json().get("state") or {}).get("slug") or "").lower()
+        if slug == "sold":
+            # A real sale (not "ended" = taken down): its last price is the
+            # best sold price Reverb still shows — used values learn from these.
+            try:
+                from scrapers.market_value import record_sale
+                record_sale(url, (r.json().get("price") or {}).get("amount"))
+            except Exception:
+                logger.exception("Couldn't record a Reverb sale")
         return None if not slug else slug != "live"
     if "/products/" in url and "facebook.com" not in url:
         # Shopify product: its .js twin says whether any variant is for sale.
