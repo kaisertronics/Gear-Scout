@@ -6,3 +6,4 @@
 - Nov 1 (hourly): no errors in logs. Built 'Deal clock on every push' (scrapers/deal_clock.py; mic pushes end with typical time-to-sell from sold history). Marked built. Deployed: see next line.
 - Nov 1 11:30pm: only Traceback was eBay daily-limit RuntimeError in auction check; now logged as one INFO line (main.py, bc56865). NOT deployed: deploy refused twice (owner on the site); next run should run scripts/safe_deploy.sh both. Self-audit of Home/Mics skipped this run.
 - Nov 2 (hourly): no errors in logs. Tried to deploy the pending eBay-limit fix (bc56865) twice; refused, owner on the site. Still committed, not deployed; next run should run scripts/safe_deploy.sh both. No new code, self-audit skipped.
+- Nov 2 (hourly, 9:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again, owner on the site; still committed, not deployed. No new code.
