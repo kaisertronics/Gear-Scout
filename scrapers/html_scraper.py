@@ -370,6 +370,18 @@ def _scrape_craigslist_listings(
         no_results_text = soup.get_text().lower()
         if "no results found" in no_results_text:
             return [], None, None
+        # Craigslist's current zero-result page has NO "no results found"
+        # text: it is the normal search page with an empty static list and
+        # an empty schema.org ItemList. Treat that as "nothing matched"
+        # instead of launching a browser (~5 s each, 3 regions per term).
+        ld = soup.find("script", id="ld_searchpage_results")
+        if ld is not None and soup.select_one("ol.cl-static-search-results") is not None:
+            try:
+                import json as _json
+                if not _json.loads(ld.string or ld.get_text() or "{}").get("itemListElement"):
+                    return [], None, None
+            except Exception:
+                pass
 
         # Try Playwright as fallback (CL sometimes needs JS)
         logger.info("Craigslist: no results with requests, trying Playwright")

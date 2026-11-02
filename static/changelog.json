@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-11-01",
+    "title": "Mic searches run every 15 minutes again",
+    "items": [
+      "The 15-minute mic search was taking about 19 minutes, so every other round got skipped. Craigslist searches that found nothing were each launching a slow browser; they now finish instantly. Canadian stores are no longer searched, and a couple of mics are searched at once.",
+      "A full round of mic searches should now take a few minutes instead of 19."
+    ]
+  },
+  {
+    "date": "2026-11-01",
     "title": "Gear Scout improves itself every hour",
     "items": [
       "An hourly update now ships one improvement at a time on its own: new capabilities, sharper matching and better prices. Each is tested, and undone automatically if anything breaks.",

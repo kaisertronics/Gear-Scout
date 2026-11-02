@@ -111,6 +111,9 @@ FB_CABLE_EVERY_MIN = 72 * 60  # cable/connector terms on Facebook (see run_wante
 FB_TERMS_PER_CYCLE = 2  # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
 TYPOS_PER_CYCLE = 2
 FAST_BUDGET_SECONDS = 600
+SITE_WORKERS = 6  # sites searched at once for one term (not Facebook)
+CANADIAN_TYPES = {"kijiji", "long_mcquade"}
+TERMS_AT_ONCE = 2  # wanted-sweep terms searched in parallel (not Facebook)
 SWEEP_MARKER = "/data/last_sweep.json"
 
 
@@ -163,14 +166,17 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     from scrapers.fb_posts_background import facebook_paused, pause_facebook
     if "fb" in sites and facebook_paused():
         sites = sites - {"fb"}  # Facebook asked to slow down: wait out the pause
-    sources = [s for s in sweep_sources(cfg) if _site(s) in sites]
+    sources = [s for s in sweep_sources(cfg) if _site(s) in sites
+               and s.get("type") not in CANADIAN_TYPES]  # owner excludes Canadian stores
     site_of = {s["name"]: _site(s) for s in sources}
     kw = [search_query(term)]
     from scrapers import mic_focus
     if mic_focus.enabled(cfg):
         from scrapers.base import LooseTerm
         kw = LooseTerm(kw)  # "dachman microphone" also keeps "Dachman DA87"
-    results = run_sources(sources, kw, cfg)
+    # Non-Facebook sites can run many at once; Facebook stays gentle (one at a time).
+    results = run_sources(sources, kw, cfg, other_workers=int(
+        (cfg.get("wanted") or {}).get("site_workers", SITE_WORKERS)))
     if "fb" in sites and any(not r.success and re.search(r"checkpoint|temporarily blocked|slow down|confirm",
                                                           f"{r.error} {r.fix_hint}", re.I)
                              for r in results if site_of.get(r.source_name) == "fb"):
@@ -243,13 +249,22 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
             logger.exception("Wanted sweep failed for %r (%s)", term, label)
 
     out, start = [], time.time()
-    for term in sorted(ts, key=lambda t: (st.get((t, "fast")) or {}).get("searched_at") or ""):
+    # A few terms at once (Nov 1): one at a time, ~70 mic terms at ~10 s each
+    # ran past the 15-minute cycle, so every other cycle was skipped. Each
+    # term's sites already run in parallel; Facebook stays one at a time below.
+    def run_due(term):
         if time.time() - start > FAST_BUDGET_SECONDS:
-            logger.info("Wanted sweep: time's up for this cycle; the rest go first next time")
-            break
+            return None
         sites = {s for s, m in (("fast", fast_every), ("ebay", ebay_every)) if due(term, s, m)}
-        if sites:
-            out.append(run(term, sites, "+".join(sorted(sites))))
+        return run(term, sites, "+".join(sorted(sites))) if sites else None
+
+    from concurrent.futures import ThreadPoolExecutor
+    order = sorted(ts, key=lambda t: (st.get((t, "fast")) or {}).get("searched_at") or "")
+    with ThreadPoolExecutor(max_workers=int(wcfg.get("terms_at_once", TERMS_AT_ONCE)),
+                            thread_name_prefix="sweep") as pool:
+        out.extend(pool.map(run_due, order))
+    if time.time() - start > FAST_BUDGET_SECONDS:
+        logger.info("Wanted sweep: time's up for this cycle; the rest go first next time")
     from scrapers.fb_posts_background import marketplace_quiet_hours
     if marketplace_quiet_hours(cfg):
         fb_per_cycle = 0  # overnight: Facebook gets a rest (see marketplace_quiet_hours)
