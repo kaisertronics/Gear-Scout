@@ -27,8 +27,8 @@ def _stamp(l):
 
 def collapse_reposts(listings):
     """Return the new list. Same-key ads with different links fold into the
-    cheapest (ties: newest) one, placed where the group first appeared, with
-    repost_count set (>= 2). Any error returns the input list unchanged."""
+    cheapest (ties: newest) one (a copy), placed where the group first
+    appeared, with repost_count set (>= 2). Any error returns the input list unchanged."""
     try:
         groups, order = {}, []
         for i, l in enumerate(listings):
@@ -52,8 +52,9 @@ def collapse_reposts(listings):
                 continue
             from scrapers.enrich import parse_price
             best = min(members, key=lambda m: (parse_price(m.get("price")) or 0, _neg(_stamp(m))))
-            best["repost_count"] = len(urls)
-            out.append(best)
+            # A copy: callers pass dicts from the shared Feed cache, and the
+            # count must not stick to them on pages that don't fold the ad.
+            out.append(dict(best, repost_count=len(urls)))
         return out
     except Exception:
         logging.exception("repost grouping failed; showing ungrouped list")

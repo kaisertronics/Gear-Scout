@@ -288,7 +288,6 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     # days), so they're searched there every 3 days and their turns go to
     # mics and outboard gear — same number of Facebook searches, mics come
     # round sooner. Plain "XLR cable" / "DB25 snake" stay in the rotation.
-    fb_due = [t for t in ts if not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN)]
     if focus:
         fb_due = mic_focus.fb_terms(cfg)  # one broad Facebook search per mic brand
     else:  # the Telex List plus one broad search per mic brand, all in the same rotation

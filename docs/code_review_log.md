@@ -4,12 +4,15 @@ Daily line-by-line review (scheduled task "Gear Scout daily code review", 4 AM):
 new changes since the last reviewed commit, plus a rotating full read of the
 whole codebase (about once a week).
 
-Last reviewed commit: the "Code review (Oct 31)" commit (2026-10-31: reviewed 8a400d7..eb3c2f0) — next run's diff starts there
+Last reviewed commit: the "Code review (Nov 2)" commit (2026-11-02: reviewed 1cba48d..c59677d) — next run's diff starts there
 
 ## Files — last fully read
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
+| scrapers/fast_lane.py, deal_checks.py, deal_clock.py, market_pulse.py, market_value.py, reposts.py, proposals.py, shopping_list.py, telex_suggest.py | 2026-11-02 | all new since Oct 31, whole files; repost count mutated cached dicts (fixed) |
+| scrapers/telex.py, emailer.py, fb_posts.py, scripts/safe_deploy.sh, claude_job.sh, healthcheck.sh, routine_loop.sh, run_routine.sh | 2026-11-02 | whole files; telex.py had one dead assignment (removed) |
+| scrapers/mic_focus.py (find, build, _check_deals, alert, daily_email, _email_hits), main.py, base.py, comps.py, ebay_api.py, store.mark_seen, dashboard.py (_mics_ctx, _home_page, shopping, proposals, _decorate), templates home/shopping/mics/_listing_card/base/telex | 2026-11-02 (diff + surrounding functions) | all 31 GET pages return 200 |
 | scrapers/reverb_api.py (curl fallback diff), market.py, mic_focus.py deep_crawl, sold_check.check_url, shipping_backfill.py | 2026-10-31 (diff) | reverb_get fallback correct; sold_check now returns "unknown" on any non-OK answer |
 | scrapers/reverb_api.py, shopify_store.py, geo.py, image_cache.py | 2026-10-31 | whole files; no bugs (geo._load never retries after one failed download until restart — noted) |
 | scrapers/html_scraper.py | 2026-10-31 (600–1140) | file now fully read this week; Reverb page, eBay, Audiogon, Vintage King, USAM, forums |
@@ -101,6 +104,15 @@ Last reviewed commit: the "Code review (Oct 31)" commit (2026-10-31: reviewed 8a
 | 2026-10-29 | mic_focus.deep_crawl refreshed last_seen only; a Reverb mic wrongly marked sold stayed sold while the crawl saw it live. Its LIKE '%item/123%' also could match a longer id | also confirmed_live_at, un-marks sold; pattern '%item/ID-%' (all 19,649 stored Reverb links have the -slug) |
 
 | 2026-10-31 | The AI "verdict" button read a Reverb ad's full text with plain requests, which Cloudflare has been turning away (the Oct 31 curl fallback skipped it); it silently fell back to the short stored text | assistant._full_ad_text uses reverb_get. Tested live on a DB-free copy; all 30 dashboard GET pages return 200 |
+| 2026-11-02 | collapse_reposts() set repost_count on the original listing dict; Home passes it dicts from the shared Feed cache, so "reposted N×" could stay on a cached card on pages that don't fold the ad (reproduced: cached dict mutated) | folds into a copy (dict(best, repost_count=…)); re-run: cached dicts stay clean, 31 pages 200 |
+| 2026-11-02 | telex.run_wanted_sweep built `fb_due` once and then overwrote it in both branches (dead code) | removed |
+
+### Left for the owner (2026-11-02)
+- Design drift to confirm: the new Home "Smokin' hot deals" / Best deals use market_value.judge (50–75% under a model's median asking price, 3+ listings), not scrapers/steals.find. It looks deliberate (Oct 31 request), but it is a second deal calculation next to Deals/Steals. Today it finds 0 Telex List deals (1,063 Wanted ads in the last 150 days: 595 have a value but none is 50%+ under, 466 have no value yet), so that section on Home is empty apart from mic deals.
+- scripts/claude_job.sh `detect_limit` treats any run whose last 700 characters say "rate limit" / "limit reached" as out of usage (even with exit 0), then re-runs on the other account. A routine summary that mentions "eBay rate limit" could trigger it. Not seen in accounts_runs.log; not changed.
+- Fast lane uses one eBay call every 2 minutes (~720/day of eBay's ~5,000). No daily-limit hits in the last 24 h.
+- Reposts fold on same site + title + price + city + seller; Facebook Marketplace ads carry no seller, so two different sellers in one city with an identical title and price would fold into one card. Rare; noted only.
+- Deploy: safe_deploy.sh both (normal build) at ~19:40 PT from the fix commit; it also shipped the earlier undeployed Shopping list and seller-name fix. /login and / return 200; no Traceback in either container. The changelog line for this review is committed after the build, so it appears with the next deploy.
 
 ### Left for the owner (2026-10-31)
 - Nothing needing a decision. AudioKarma is still blocked (per the nightly's note).

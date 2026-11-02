@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-11-02",
+    "title": "Code review",
+    "items": [
+      "Home: a \"reposted N×\" tag could stick to an ad on other pages where the copies weren't folded together. It now only shows on the folded card."
+    ]
+  },
+  {
+    "date": "2026-11-02",
     "title": "Hourly improvements",
     "items": [
       "Offer helper: every mic deal now shows a suggested opening offer (about 10% under asking) and a walk-away price, with a Copy message button. Before, only price-dropped or long-listed ads got one."
