@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-11-02",
+    "title": "Hourly improvements",
+    "items": [
+      "Offer helper: every mic deal now shows a suggested opening offer (about 10% under asking) and a walk-away price, with a Copy message button. Before, only price-dropped or long-listed ads got one."
+    ]
+  },
+  {
+    "date": "2026-11-02",
     "title": "Nightly improvements",
     "items": [
       "New Shopping list page (in the menu next to Telex List): your cable and connector list from the Rev H wiring plan, each item matched to the 3 cheapest ads that are still for sale, with an estimated price including WA tax and shipping, and the price of buying new for comparison.",

@@ -84,14 +84,24 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
         weeks = (datetime.now(timezone.utc) - d).days // 7
     except (TypeError, ValueError):
         weeks = 0
-    if not r.get("previous_price") and weeks < 3:
+    if not unit or unit <= 0:
         return None
-    amt = max(25, int(round(unit * 0.85 / 25.0)) * 25)  # ~15% under: a normal opening offer
-    why = "the price was just cut" if r.get("previous_price") else f"it's been up {weeks} weeks"
+    if r.get("previous_price") or weeks >= 3:
+        amt = max(25, int(round(unit * 0.85 / 25.0)) * 25)  # ~15% under: a normal opening offer
+        why = "the price was just cut" if r.get("previous_price") else f"it's been up {weeks} weeks"
+    else:
+        amt = max(25, int(round(unit * 0.90 / 25.0)) * 25)  # ~10% under
+        why = "a fair opening offer"
+    walk = max(25, int(round(unit * 0.95 / 25.0)) * 25)
+    if used and used > 0:
+        cap = used * 0.6
+        walk = min(walk, cap) if cap >= amt else unit
+    walk = int(round(max(walk, amt) / 25.0)) * 25
+    walk = max(walk, amt)
     title = re.sub(r"\s+", " ", r.get("title") or "it")[:70]
     msg = (f"Hi! Is the {title} still available? I can pay ${amt:,} and pick up or pay for shipping "
            f"right away. Thanks!")
-    return {"amount": amt, "why": why, "msg": msg}
+    return {"amount": amt, "why": why, "msg": msg, "walk": walk}
 
 
 # ---------------------------------------------------------------- photo check
