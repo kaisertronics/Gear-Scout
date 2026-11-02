@@ -531,7 +531,12 @@ def run_watch_cycle():
         # "ending soon" alerts and the 9 PM overnight-auctions list.
         try:
             from scrapers import auctions
-            auctions.fetch_ebay_ending(cfg)
+            try:
+                auctions.fetch_ebay_ending(cfg)
+            except RuntimeError as e:
+                if "daily request limit" not in str(e):
+                    raise
+                logger.info("eBay ending-auctions fetch skipped: %s", e)
             auctions.check(cfg)
         except Exception:
             logger.exception("Auction check failed")
