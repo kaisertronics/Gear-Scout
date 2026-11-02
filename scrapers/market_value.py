@@ -34,7 +34,20 @@ _SKIP = re.compile(
     r"\bbrand new\b|\bnew in box\b|\bnib\b|\[new\]|\bsealed\b|\bunopened\b|\bmatched\b|\bquad\b|\btrio\b|"
     r"&|\bwith .*\band\b", re.I)
 
-_cache: dict = {"at": 0.0, "idx": None, "sold": None}
+_cache: dict = {"at": 0.0, "idx": None, "sold": None, "tiers": None}
+
+_MINT = re.compile(r"\bmint\b|\blike[- ]new\b|\bexcellent condition\b|\bpristine\b|\bbarely used\b|\bopen[- ]box\b", re.I)
+_ROUGH = re.compile(r"\bas[- ]is\b|\bcosmetic (?:wear|damage)\b|\bheavy wear\b|\bscratched\b|\bdents?\b|\bwell used\b|"
+                    r"\brough\b|\bbeat[- ]up\b|\bworn\b", re.I)
+
+
+def _tier(title: Optional[str], desc: Optional[str] = None) -> str:
+    """'mint', 'rough' or 'normal' from the title, then the first 300 chars
+    of the description. Rough beats mint."""
+    text = (title or "") + "\n" + (desc or "")[:300]
+    if _ROUGH.search(text):
+        return "rough"
+    return "mint" if _MINT.search(text) else "normal"
 
 
 def _ensure_sales(conn):
@@ -88,6 +101,7 @@ def index(max_age: float = 1800) -> dict:
     from scrapers.store import _conn
     cut = (datetime.now(timezone.utc) - timedelta(days=YEAR_DAYS)).isoformat()
     asks: dict = {}
+    tier_asks: dict = {}
     seen_ads = set()
     with _conn() as conn:
         rows = conn.execute(
@@ -108,6 +122,7 @@ def index(max_age: float = 1800) -> dict:
         k = _key(title)
         if k:
             asks.setdefault(k, []).append(v)
+            tier_asks.setdefault(k, {}).setdefault(_tier(title, desc), []).append(v)
     with _conn() as conn:
         _ensure_sales(conn)
         sales = conn.execute("SELECT title, price FROM confirmed_sales WHERE at >= ?", (cut,)).fetchall()
@@ -124,18 +139,37 @@ def index(max_age: float = 1800) -> dict:
         cut_n = len(vs) // 10 if len(vs) >= 10 else (1 if len(vs) >= 5 else 0)
         core = vs[cut_n:len(vs) - cut_n] if cut_n else vs
         idx[k] = (round(statistics.median(core)), len(vs))
-    _cache.update(at=time.time(), idx=idx)
+    tiers = {}
+    for k, by in tier_asks.items():
+        tiers[k] = {t: (round(statistics.median(vs)), len(vs)) for t, vs in by.items()}
+    _cache.update(at=time.time(), idx=idx, tiers=tiers)
     return idx
 
 
-def value(title: str) -> tuple[Optional[float], int]:
+def value(title: str, desc: Optional[str] = None) -> tuple[Optional[float], int]:
     """(used value, listings behind it) — value is None under MIN_N.
     3+ confirmed Reverb sales of the model beat asking prices (and only ever
-    lower the value: what sold is the real market)."""
+    lower the value: what sold is the real market).
+    A mint or rough ad is compared with same-condition ads when there are
+    MIN_N+ of them, never above the overall value (rough) or below it (mint)."""
     k = _key(title or "")
     if not k:
         return None, 0
     v, n = index().get(k, (None, 0))
+    base, bn = _overall(k, v, n)
+    t = _tier(title, desc)
+    if t != "normal" and base:
+        tv, tn = ((_cache.get("tiers") or {}).get(k) or {}).get(t, (None, 0))
+        if tv and tn >= MIN_N:
+            sv, sn = (_cache.get("sold") or {}).get(k, (None, 0))
+            if sn >= MIN_N:
+                tv = min(tv, sv)
+            tv = min(tv, base) if t == "rough" else max(tv, base)
+            return tv, tn
+    return base, bn
+
+
+def _overall(k, v, n):
     sv, sn = (_cache.get("sold") or {}).get(k, (None, 0))
     if sn >= MIN_N:
         return (min(sv, v) if v and n >= MIN_N else sv), sn
@@ -148,15 +182,15 @@ def basis(title: str) -> str:
     return f"{sn} sales" if sn >= MIN_N else f"{index().get(k, (None, 0))[1] if k else 0} asking prices"
 
 
-def judge(title: str, unit: float) -> dict:
+def judge(title: str, unit: float, desc: Optional[str] = None) -> dict:
     """{'used', 'n', 'pct', 'kind'}: kind is 'deal' (50–75% under), 'too_good'
     (over 75%), 'no_value' (too few listings) or None (not a deal)."""
-    used, n = value(title)
+    used, n = value(title, desc)
     if not used:
         return {"used": None, "n": n, "pct": None, "kind": "no_value", "basis": ""}
     pct = round((1 - unit / used) * 100)
     kind = "too_good" if pct > TOO_GOOD_PCT else ("deal" if pct >= DEAL_PCT else None)
-    return {"used": used, "n": n, "pct": pct, "kind": kind, "basis": basis(title)}
+    return {"used": used, "n": n, "pct": pct, "kind": kind, "basis": basis(title), "tier": _tier(title, desc)}
 
 
 def landing_deals(cfg: dict) -> list[dict]:
@@ -200,7 +234,7 @@ def landing_deals(cfg: dict) -> list[dict]:
         unit = unit or value_
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         delivered = round(unit + (ship or 0) / max(int(qty or 1), 1), 2)
-        j = judge(title, delivered)
+        j = judge(title, delivered, r.get("description"))
         if j["kind"] != "deal":
             continue
         ad = (title.lower().strip(), round(value_))
