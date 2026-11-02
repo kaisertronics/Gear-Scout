@@ -171,7 +171,7 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     site_of = {s["name"]: _site(s) for s in sources}
     kw = [search_query(term)]
     from scrapers import mic_focus
-    if mic_focus.enabled(cfg):
+    if mic_focus.enabled(cfg) or term in mic_focus.sweep_terms(cfg):
         from scrapers.base import LooseTerm
         kw = LooseTerm(kw)  # "dachman microphone" also keeps "Dachman DA87"
     # Non-Facebook sites can run many at once; Facebook stays gentle (one at a time).
@@ -213,9 +213,12 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     from scrapers import mic_focus
     from scrapers.wanted import terms as wanted_terms
     focus = mic_focus.enabled(cfg)
-    # Mic Focus (Oct 22): only the mics, fast sites every cycle (15 min),
+    # Mic Focus on (Oct 22): only the mics, fast sites every cycle (15 min),
     # eBay every 30 min; the Telex List is kept but not searched.
-    ts = mic_focus.sweep_terms(cfg) if focus else wanted_terms(cfg)
+    # Mic Focus off (Nov 1): the whole Telex List AND the mic terms, one shared
+    # rotation, every term at the same rate (least recently searched first).
+    mic_terms = mic_focus.sweep_terms(cfg)
+    ts = mic_terms if focus else list(dict.fromkeys(wanted_terms(cfg) + mic_terms))
     fast_every, ebay_every = (15, 45) if focus else (FAST_EVERY_MIN, EBAY_EVERY_MIN)
     if not ts:
         return []
@@ -276,6 +279,9 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     fb_due = [t for t in ts if not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN)]
     if focus:
         fb_due = mic_focus.fb_terms(cfg)  # one broad Facebook search per mic brand
+    else:  # the Telex List plus one broad search per mic brand, all in the same rotation
+        fb_due = list(dict.fromkeys([t for t in ts if t not in mic_terms and (not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN))]
+                                    + mic_focus.fb_terms(cfg)))
     for term in sorted(fb_due, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
         out.append(run(term, {"fb"}, "fb"))
     typos = list(dict.fromkeys(q for t in ts for q in misspellings(t)))

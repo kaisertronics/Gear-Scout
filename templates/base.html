@@ -30,10 +30,11 @@
         <details class="nav-more"><summary>More</summary><div class="nav-more-list">
         <a href="{{ url_for('feed', inbox=1) }}">📬 Inbox</a>
         {% else %}
-        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' else '' }}">📬 Inbox</a>
+        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' and not request.args else '' }}">🏠 Home</a>
         <a href="{{ url_for('mics_page') }}" class="{{ 'active' if request.endpoint == 'mics_page' else '' }}">🎤 Mics</a>
         {% endif %}
-        {% if not mic_focus_on %}<a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>{% endif %}
+        {% if not mic_focus_on %}<a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
+        <a href="{{ url_for('feed', inbox=1) }}" class="{{ 'active' if request.endpoint == 'feed' and request.args.get('inbox') else '' }}">📬 Inbox</a>{% endif %}
         <a href="{{ url_for('health') }}" class="{{ 'active' if request.endpoint == 'health' else '' }}">Health</a>
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}" title="Everything Gear Scout has collected, not just your Wanted list">Browse all</a>
         <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>

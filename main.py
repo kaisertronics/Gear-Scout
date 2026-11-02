@@ -502,11 +502,22 @@ def run_watch_cycle():
             from scrapers.telex import check_telex_lowest, run_wanted_sweep
             from scrapers.wanted import alert_new
             alert_new(cfg)  # what the refresh found, without waiting for the sweep
-            run_wanted_sweep(cfg)
+            run_wanted_sweep(cfg)  # the Telex List and the mic terms, one shared rotation
             alert_new(cfg)
             check_telex_lowest(cfg)
         except Exception:
             logger.exception("Wanted sweep / alerts failed")
+        # Mic deals keep their own rules and pushes (and the Distressor's) with Mic Focus off.
+        try:
+            mic_focus.alert(cfg)
+        except Exception:
+            logger.exception("Mic alerts failed")
+        try:
+            mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
+            mic_focus.fetch_auctions(cfg)  # hourly
+            mic_focus.alert_auctions(cfg)
+        except Exception:
+            logger.exception("Mic auctions failed")
         try:
             from scrapers import board
             built = board.load().get("built")
@@ -561,11 +572,9 @@ def _mic_focus_on(cfg=None) -> bool:
 
 
 def run_fast_lane():
-    """Every 2 minutes (Mic Focus only): newest Reverb / eBay mic listings."""
+    """Every 2 minutes: newest Reverb / eBay mic listings (always, Mic Focus or not)."""
     try:
         cfg = load_config()
-        if not _mic_focus_on(cfg):
-            return
         from scrapers import fast_lane
         fast_lane.tick(cfg)
     except Exception:

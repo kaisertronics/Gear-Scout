@@ -2289,6 +2289,12 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
 @app.route("/mics")
 def mics_page():
     """Mic Focus: the mics being hunted right now, best discount first."""
+    return render_template("mics.html", **_mics_ctx())
+
+
+def _mics_ctx() -> dict:
+    """Everything the Mics page and Home show about mics (and outboard
+    targets such as the Distressor, which are not mics)."""
     from scrapers import mic_focus
     cfg = load_config_raw()
     st = mic_focus.settings(cfg)
@@ -2361,7 +2367,9 @@ def mics_page():
             return min(found, p.astimezone(timezone.utc).isoformat()) if found else p.isoformat()
         except (TypeError, ValueError):
             return found
-    hits = sorted((l for l in rows if l["mic"]["hit"]), key=listed, reverse=True)
+    outboard_keys = {t["key"] for t in st["targets"] if t.get("outboard")}
+    all_hits = sorted((l for l in rows if l["mic"]["hit"]), key=listed, reverse=True)
+    hits = [l for l in all_hits if l["mic"]["target"] not in outboard_keys]  # the Distressor etc. aren't mics
     sweep = None
     try:
         info = json.loads(Path("/data/last_sweep.json").read_text())
@@ -2397,17 +2405,65 @@ def mics_page():
     new = []
     if since:
         seen_new = set()
-        for l in deals + hits + [l for t in ("united", "dachman", "distressor") for l in by.get(t, []) if l["mic"]["hit"]]:
+        for l in deals + all_hits + [l for t in ("united", "dachman") for l in by.get(t, []) if l["mic"]["hit"]]:
             if (l.get("first_seen") or "") > since and l["url"] not in seen_new:
                 seen_new.add(l["url"])
                 new.append(l)
         new.sort(key=listed, reverse=True)
     from urllib.parse import quote
     mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
-    return render_template("mics.html", st=st, hits=hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
-                           auctions=auctions, mercari=mercari, deals=deals, deals_warn=deals_warn, new=new, proposals=_proposals_view(), since=_ago(since) if since else None,
-                           check=check, pct_keys=pct_keys,
-                           sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+    return dict(st=st, hits=hits, all_hits=all_hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
+                auctions=auctions, mercari=mercari, deals=deals, deals_warn=deals_warn, new=new, proposals=_proposals_view(),
+                since=_ago(since) if since else None, since_iso=since, check=check, pct_keys=pct_keys, outboard_keys=outboard_keys,
+                listed=listed, shown=shown, sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+
+
+def _home_page():
+    """Home: new results, smokin' hot deals, outboard (Distressor), a compact
+    Mics section, what's coming next, and the "Check these" list last."""
+    ctx = _mics_ctx()
+    cfg = load_config_raw()
+    st, by, listed = ctx["st"], ctx["by"], ctx["listed"]
+    outboard_keys = ctx["outboard_keys"]
+    since = ctx["since_iso"]
+    # Smokin' hot: the Telex List's 50%+ deals and the mic deals, best score first.
+    hot, seen_urls = [], set()
+    for l in sorted(ctx["deals"] + ctx["hits"], key=lambda l: -(l.get("score") or 0)):
+        if l.get("url") not in seen_urls:
+            seen_urls.add(l.get("url"))
+            hot.append(l)
+    # Outboard targets (the Distressor; others can be added to mic_focus.TARGETS with outboard=True).
+    outboard = []
+    for t in st["targets"]:
+        if not t.get("outboard"):
+            continue
+        ls = [l for l in ctx["all_hits"] if l["mic"]["target"] == t["key"] and l.get("url") not in seen_urls]
+        outboard.append({"key": t["key"], "name": t["name"].replace("Empirical Labs ", ""), "note": t.get("note"),
+                         "on": t["on"], "rows": ls})
+    mic_keys = [t["key"] for t in st["targets"] if t["key"] not in outboard_keys]
+    mic_targets = [t for t in st["targets"] if t["key"] in mic_keys]
+    mic_count = sum(len(by.get(k) or []) for k in mic_keys)
+    # New since you last looked: all gear (Telex List and mics, outboard too).
+    new = list(ctx["new"])
+    if since:
+        have = {l.get("url") for l in new}
+        try:
+            for l in _feed_items(cfg):
+                age = l["age_days"] if l.get("age_days") is not None else 999
+                if (l.get("first_seen") or "") > since and age <= FEED_RECENT_DAYS and l.get("url") not in have \
+                        and not l.get("sold") and not l.get("hidden"):
+                    have.add(l.get("url"))
+                    new.append(l)
+        except Exception:
+            logging.exception("Home: Telex List new results failed")
+        for k in mic_keys + list(outboard_keys):
+            for l in by.get(k) or []:
+                if (l.get("first_seen") or "") > since and l.get("url") not in have:
+                    have.add(l.get("url"))
+                    new.append(l)
+        new.sort(key=listed, reverse=True)
+    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count)
+    return render_template("home.html", **ctx)
 
 
 def _proposals_view() -> dict:
@@ -2471,8 +2527,10 @@ def mics_settings():
 def feed():
     from scrapers import wanted
     cfg = load_config_raw()
-    if (cfg.get("mic_focus") or {}).get("enabled") and not request.args:
-        return mics_page()  # Mic Focus: the mics are the front page (the inbox is at /?inbox=1)
+    if not request.args:
+        if (cfg.get("mic_focus") or {}).get("enabled"):
+            return mics_page()  # Mic Focus: the mics are the front page (the inbox is at /?inbox=1)
+        return _home_page()  # new results + smokin' hot deals; the old inbox is at /?inbox=1
     terms = wanted.terms(cfg)
     items = _feed_items(cfg)
     if not (request.args.get("term") or request.args.get("show") or request.args.get("sort") or request.args.get("all")):

@@ -75,7 +75,7 @@
       list updated {{ built or 'not yet' }}</p>
     <form method="post" action="{{ url_for('mics_settings') }}" style="display:inline">
       <input type="hidden" name="enabled" value="{{ '0' if st.enabled else '1' }}">
-      <button type="submit" class="btn btn-sm{{ '' if st.enabled else ' btn-primary' }}">{{ 'Turn Mic Focus off (back to everything)' if st.enabled else 'Turn Mic Focus on' }}</button>
+      <button type="submit" class="btn btn-sm{{ '' if st.enabled else ' btn-primary' }}">{{ 'Turn Mic Focus off (back to everything)' if st.enabled else 'Turn Mic Focus on (mics only)' }}</button>
     </form>
   </section>
 
@@ -89,7 +89,7 @@
         {% for t in st.targets %}
           <tr>
             <td><input type="checkbox" name="on_{{ t.key }}" value="1" {{ 'checked' if t.on }} aria-label="Search and push {{ t.name }}"></td>
-            <td><a href="#t-{{ t.key }}">{{ t.name }}</a></td>
+            <td>{% if t.outboard %}<a href="{{ url_for('feed') }}#o-{{ t.key }}">{{ t.name }}</a> <span class="muted">(outboard, on Home)</span>{% else %}<a href="#t-{{ t.key }}">{{ t.name }}</a>{% endif %}</td>
             <td>{% if t.key in pct_keys %}<span class="muted">50%+ off used</span>{% else %}$<input type="number" name="price_{{ t.key }}" value="{{ t.max_price }}" min="0" step="50" inputmode="numeric">{% endif %}</td>
             <td>{{ (by.get(t.key) or [])|length }}</td>
           </tr>
@@ -149,7 +149,7 @@
     </script>
   </details>
 
-  {% for t in st.targets %}
+  {% for t in st.targets if not t.outboard %}
     {% set ls = by.get(t.key) or [] %}
     <section class="panel" id="t-{{ t.key }}">
       <h2>{{ t.name }} <span class="muted">— {% if t.key in pct_keys %}{{ ls|length }} at 50%+ under used{% else %}all {{ ls|length }} for sale{% endif %}, lowest price first · push {{ t.note or ('50%+ off used' if t.key in pct_keys else '$' ~ '{:,}'.format(t.min_price or st.min_price) ~ '–$' ~ '{:,}'.format(t.max_price)) }}{{ '' if t.on else ' (off)' }}</span></h2>
