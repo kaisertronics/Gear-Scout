@@ -64,6 +64,8 @@ def _model_tokens(text: str) -> set[str]:
     """Distinct model numbers in a piece of text ("VT-737SP", "18i20", "5150"),
     reduced to their digits so "VT-737SP" and "737 SP" count once."""
     out = set()
+    # Serial numbers ("Serial #1295", "SN 4411", "S/N: 889", "#1261Vintage") aren't models.
+    text = re.sub(r"(?:\b(?:serial(?:\s*(?:no\.?|number|num))?|s/n|sn|ser|no\.)\s*[:#]?\s*|#\s*)\d+", " ", text.lower())
     for m in re.finditer(r"\b(?=[a-z0-9-]*\d)[a-z0-9]+(?:-[a-z0-9]+)*\b", text.lower()):
         tok = m.group(0)
         digits = re.sub(r"\D", "", tok)
