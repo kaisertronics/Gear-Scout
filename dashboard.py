@@ -586,8 +586,9 @@ def _decorate(listings: list[dict]) -> list[dict]:
         # Days on market: a listing that has sat for weeks usually has a
         # seller open to an offer.
         try:
+            from scrapers.base import usable_seller
             l["seller_other"] = (max(0, seller_counts.get((l.get("source_name"), l.get("seller")), 0) - 1)
-                                 if l.get("seller") else 0)
+                                 if usable_seller(l.get("seller")) else 0)
         except Exception:
             l["seller_other"] = 0
         l["stale"] = None

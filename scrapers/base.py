@@ -11,6 +11,32 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+_GENERIC_SELLERS = {
+    "", "facebook", "facebook user", "unknown", "anonymous", "n/a", "na", "none", "null",
+    "seller", "private seller", "owner", "member", "user", "guest", "admin", "author",
+    "moderator", "top contributor", "rising contributor", "new member",
+}
+
+
+def seller_key(prefix: str, name: Optional[str]) -> Optional[str]:
+    """A source-prefixed seller key ('fb:Jane Doe'), or None when the name is
+    empty / generic / not plausibly a person or shop name."""
+    n = re.sub(r"\s+", " ", (name or "")).strip()
+    if not n or len(n) > 60 or n.lower() in _GENERIC_SELLERS or not re.search(r"[A-Za-z0-9]", n):
+        return None
+    return f"{prefix}:{n}"
+
+
+def usable_seller(key: Optional[str]) -> bool:
+    """True if a stored seller value should be counted (ignores generic names,
+    with or without a source prefix)."""
+    if not key:
+        return False
+    k = key.strip()
+    bare = k.split(":", 1)[1] if re.match(r"^[a-z]{2,4}:", k) else k
+    return bare.strip().lower() not in _GENERIC_SELLERS
+
+
 @dataclass
 class Listing:
     source_name: str

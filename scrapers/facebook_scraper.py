@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
 
-from .base import Listing, ScrapeResult, keyword_match, truncate
+from .base import Listing, ScrapeResult, keyword_match, seller_key, truncate
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +308,8 @@ def _parse_group_post(post: dict) -> Optional[dict]:
     lines = [l for l in post["lines"] if not l.lower().startswith("comment as")]
     # Skip the author name and the "·" separator after it.
     body_start = next((i + 1 for i, l in enumerate(lines[:4]) if l == "·"), 1)
+    # The author's name is the first line, already on the page (no extra load).
+    author = lines[0] if lines and not _is_ui_line(lines[0]) else None
     body = lines[body_start:]
 
     if post["listing"]:
@@ -330,6 +332,7 @@ def _parse_group_post(post: dict) -> Optional[dict]:
             "description": " ".join(body[:pi]),
             "url": f"https://www.facebook.com/marketplace/item/{post['listing']}/",
             "id": post["listing"],
+            "author": author,
         }
 
     content = [l for l in body if not _is_ui_line(l)]
@@ -345,6 +348,7 @@ def _parse_group_post(post: dict) -> Optional[dict]:
         "title": content[0], "price": price_match.group(0) if price_match else None,
         "location": None, "description": " ".join(content[1:]),
         "url": permalink, "id": post_id,
+        "author": author,
     }
 
 
@@ -511,6 +515,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                         image_url=post["img"],
                         listing_id=parsed["id"],
                         location=parsed["location"],
+                        seller=seller_key("fb", parsed.get("author")),
                     ))
                 except Exception as e:
                     logger.debug("Error parsing FB group post: %s", e)
