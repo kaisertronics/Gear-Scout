@@ -558,6 +558,21 @@ def _decorate(listings: list[dict]) -> list[dict]:
         sales, FAST_SALE_DAYS = {}, 0
     from scrapers.enrich import model_key, parse_price
     now = datetime.now(timezone.utc)
+    # How many ads each seller has (per site) in the last 90 days: one query.
+    seller_counts = {}
+    try:
+        from scrapers.store import _conn
+        _c = _conn()
+        try:
+            _cut = (now - timedelta(days=90)).isoformat()
+            for _src, _sel, _n in _c.execute(
+                    "SELECT source_name, seller, COUNT(*) FROM seen WHERE seller IS NOT NULL "
+                    "AND hidden = 0 AND duplicate = 0 AND first_seen >= ? GROUP BY source_name, seller", (_cut,)):
+                seller_counts[(_src, _sel)] = _n
+        finally:
+            _c.close()
+    except Exception:
+        logging.exception("Couldn't load seller counts")
     out = []
     for l in listings:
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
@@ -570,6 +585,11 @@ def _decorate(listings: list[dict]) -> list[dict]:
                       "price": f"${sale['price']:,.0f}", "n": sale["n"]} if sale else None)
         # Days on market: a listing that has sat for weeks usually has a
         # seller open to an offer.
+        try:
+            l["seller_other"] = (max(0, seller_counts.get((l.get("source_name"), l.get("seller")), 0) - 1)
+                                 if l.get("seller") else 0)
+        except Exception:
+            l["seller_other"] = 0
         l["stale"] = None
         try:
             since = datetime.fromisoformat(l.get("posted_at") or l.get("first_seen"))

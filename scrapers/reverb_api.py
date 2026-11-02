@@ -117,6 +117,7 @@ def _to_listing(item: dict, name: str) -> Listing:
         listing_id=str(item.get("id")),
         shipping=shipping_of(item),
         country=country_of(item),
+        seller=(item.get("shop_name") or (item.get("shop") or {}).get("name") or None),
     )
 
 

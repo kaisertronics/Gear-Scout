@@ -23,6 +23,7 @@ class Listing:
     listing_id: Optional[str] = None  # unique ID within source
     location: Optional[str] = None  # "City, ST" or a town name, for local-pickup sources
     shipping: Optional[float] = None  # US shipping in USD (0 = free); None = not known / local pickup
+    seller: Optional[str] = None      # seller / shop name where the site gives one (Reverb, eBay)
     country: Optional[str] = None     # where it's sold from ("US", "CA", "GB", "JPY"…); None = not known
 
     def __post_init__(self):

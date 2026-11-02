@@ -211,6 +211,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             auction.posted_at = posted_at
             auction.shipping = shipping_of(item)
             auction.country = country_of(item)
+            auction.seller = (item.get("seller") or {}).get("username")
             listings.append(auction)
             continue
         condition = item.get("condition")
@@ -225,6 +226,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             listing_id=item_id,
             shipping=shipping_of(item),
             country=country_of(item),
+            seller=(item.get("seller") or {}).get("username"),
         ))
 
     return ScrapeResult(
@@ -272,5 +274,6 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
             price=_format_price(item.get("price")), description=item.get("condition"),
             image_url=(item.get("image") or {}).get("imageUrl"), listing_id=item_id,
             location=location, shipping=shipping_of(item), country=country_of(item),
+            seller=(item.get("seller") or {}).get("username"),
         ))
     return out
