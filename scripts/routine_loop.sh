@@ -16,6 +16,7 @@ slot_due() {
   hm=$(date +%H%M); d=$(date +%Y%m%d); h=$(date +%H); m=$((10#$(date +%M)))
   case "$1" in
     hourly) [ "$m" -ge 27 ] && echo "$d$h" ;;
+    block) echo "b$(( $(date +%s) / 18000 ))" ;;   # once per 5-hour usage block
     nightly) [ "$hm" -ge 1010 ] && [ "$hm" -lt 1310 ] && echo "$d" ;;
     code-review) [ "$hm" -ge 1130 ] && [ "$hm" -lt 1430 ] && echo "$d" ;;
   esac
@@ -44,7 +45,7 @@ echo "$(date) routine loop started"
 wait_until=0
 while true; do
   if [ "$(date +%s)" -ge "$wait_until" ] && ! lock_busy; then
-    for r in hourly nightly code-review; do
+    for r in block hourly nightly code-review; do
       s=$(slot_due "$r")
       [ -n "$s" ] && [ "$(last_slot "$r")" != "$s" ] || continue
       mkdir "$LOCK" 2>/dev/null || break

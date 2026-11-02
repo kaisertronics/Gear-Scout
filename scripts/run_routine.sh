@@ -20,10 +20,15 @@ build_prompt() {
 
 run_main() {
   r="$1"
-  case "$r" in hourly) tmo=75;; nightly|code-review) tmo=120;; *) echo "usage: $0 hourly|nightly|code-review" >&2; exit 2;; esac
-  skill="$SKILLS/gear-scout-$r/SKILL.md"; [ -f "$skill" ] || { echo "missing $skill" >&2; exit 2; }
+  case "$r" in hourly) tmo=75;; block) tmo=150;; nightly|code-review) tmo=120;; *) echo "usage: $0 hourly|nightly|code-review|block" >&2; exit 2;; esac
   mkdir -p "$LOGDIR"; cd "$PROJECT" || exit 2
-  pf="$LOGDIR/prompt-$r.txt"; build_prompt "$skill" > "$pf"
+  pf="$LOGDIR/prompt-$r.txt"
+  if [ "$r" = block ]; then
+    { echo "$NOTE"; echo; cat "$DIR/block_prompt.txt"; } > "$pf"
+  else
+    skill="$SKILLS/gear-scout-$r/SKILL.md"; [ -f "$skill" ] || { echo "missing $skill" >&2; exit 2; }
+    build_prompt "$skill" > "$pf"
+  fi
   "$DIR/claude_job.sh" "$r" "$tmo" "$pf" >/dev/null; code=$?
   [ "$code" -eq 0 ] && [ "$r" != hourly ] && touch "$LOGDIR/plan2_heartbeat_$r"
   exit "$code"
