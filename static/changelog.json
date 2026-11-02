@@ -3,7 +3,8 @@
     "date": "2026-11-01",
     "title": "Hourly improvements",
     "items": [
-      "Telex page has a new \"Sharper terms\" box: for broad searches like 'ssl' or 'drawmer' it suggests specific models from mics you've starred, with a one-tap add."
+      "Telex page has a new \"Sharper terms\" box: for broad searches like 'ssl' or 'drawmer' it suggests specific models from mics you've starred, with a one-tap add.",
+      "Gear Scout now remembers who is selling each new Reverb and eBay ad. When a seller has 2+ other ads, the card shows a '🏪 N other ads' tag (likely a dealer or flipper, often open to bundle deals). It fills in as new ads arrive."
     ]
   },
   {
