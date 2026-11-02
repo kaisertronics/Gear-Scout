@@ -3,6 +3,7 @@
     "date": "2026-11-01",
     "title": "Hourly improvements",
     "items": [
+      "Mic deal pushes now end with how long similar mics usually take to sell (e.g. \"similar mics usually sell in ~4 days\"), so you know how fast to move.",
       "Mic Focus is off: Gear Scout searches your whole Telex List again, with the mic searches in the same rotation (every search gets the same check rate, least recently searched first). Home is now new results plus 'Smokin' hot deals' (Telex List and mic deals together, best score first), then a small Distressor section (it's a compressor, not a mic, so it's no longer under Mics), a collapsed Mics section with the lowest price per model, Coming next, and Check these. The full menu is back with Home first. The 2-minute fast lane now always runs, so hot mic deals still push right away, with the same deal rules. You can turn Mic Focus back on from the Mics page.",
       "Fast lane for fresh mics: every 2 minutes Gear Scout now checks only the newest Reverb and eBay Buy It Now mic listings, and a mic that meets your usual deal rules is pushed within a couple of minutes of being posted instead of waiting for the next 15-minute round. Same rules and prices as before; nothing is pushed twice.",
       "Telex page has a new \"Sharper terms\" box: for broad searches like 'ssl' or 'drawmer' it suggests specific models from mics you've starred, with a one-tap add.",

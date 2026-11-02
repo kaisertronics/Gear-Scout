@@ -690,8 +690,14 @@ def _line(r: dict) -> str:
           (f"used ~${m['used']:,}" if m["used"] else "")
     off = f"{m['pct']}% off {m['ref_kind']}" if m["pct"] is not None else "no price to compare yet"
     where = (r.get("location") or "").split(" @")[0]
+    try:
+        from scrapers.deal_clock import clock_text
+        clock = clock_text(r)
+    except Exception:
+        clock = ""
     return f"{_price_text(m)} · {off}" + (f" ({ref})" if ref else "") + \
-           f" · {r.get('source_name') or ''}" + (f" · {where}" if where else "")
+           f" · {r.get('source_name') or ''}" + (f" · {where}" if where else "") + \
+           (f" · {clock}" if clock else "")
 
 
 def alert(cfg: dict) -> int:
