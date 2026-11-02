@@ -27,6 +27,8 @@ the comparison price (comp) right, and is it still for sale?
 | 2026-10-30 (after fixes) | same | — | — | — | sold_check.py: Reverb ads (public API, no daily cap) get up to 250 checks an hour of their own, on top of the 120 slots for other sites. |
 | 2026-10-31 (before fixes) | health + logs only (no Feed sample tonight) | — | — | — | New ads: half within 0.3 h, 6 of 7 within 1 h. Reverb API answered Python requests with a Cloudflare 403 (curl from the same container got 200): the 2-hourly Mic deep read failed on all 29 terms every run since Oct 30, and Reverb sold checks/price lookups were exposed to it. AudioKarma still 403. |
 | 2026-10-31 (after fixes) | same | — | — | — | reverb_api.reverb_get: on a Cloudflare 403, retry with curl; used by the Reverb scrape, mic deep read, sold check, price lookups, shipping backfill. Tested in the container: search, single listing and sold check all 200. |
+| 2026-11-02 Feed (before fixes) | top 40 of the Feed | 97.5% (39/40; 2 Calrec consoles with "SSL modules" still left for the owner's SSL-style decision) | — | 100% of 25 checked (Reverb API, eBay; 15 Facebook ads not opened) · new ads: half within 2.2 h, 7/16 within 1 h, 10 within 6 h | Junk: MB Quart amp + "SSL Force" car subwoofer matching "ssl". Wanted terms searched 5–18 min ago on fast sites, eBay 1 h; Facebook rotation catching up after Mic Focus went off (many terms 10–11 d, others 0–12 h). |
+| 2026-11-02 (after fixes) | same | 100% (car-audio ad filtered) | — | — | enrich.py: "MB Quart" and "SSL Force" off-topic. |
 
 Next to watch: whether Reverb ads keep getting through (log shows "Mic deep read failed" if not); Feed sample not done Oct 31.
 

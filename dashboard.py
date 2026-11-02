@@ -2518,6 +2518,37 @@ def mics_built():
     return {"built": mic_focus.load().get("built")}
 
 
+@app.route("/shopping")
+def shopping():
+    """Studio shopping list: cheapest live listings per item, running total."""
+    from scrapers import shopping_list
+    return render_template("shopping.html", s=shopping_list.summary())
+
+
+@app.route("/shopping/state", methods=["POST"])
+def shopping_state():
+    """Saves a 'bought' count for one item, or the budget."""
+    from scrapers import shopping_list
+    d = request.get_json(silent=True) or {}
+    st = shopping_list.load_state()
+    if "budget" in d:
+        try:
+            st["budget"] = max(0, float(re.sub(r"[^\d.]", "", str(d["budget"])))) if str(d["budget"]).strip() else None
+        except ValueError:
+            return {"ok": False, "error": "Type the budget as a number, like 1500."}, 400
+    if "key" in d:
+        items = {i["key"]: i for i in shopping_list.build()["items"]}
+        if d["key"] not in items:
+            return {"ok": False, "error": "Unknown item."}, 400
+        try:
+            n = int(d.get("bought", 0))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Type how many as a whole number."}, 400
+        st["bought"][d["key"]] = min(max(n, 0), items[d["key"]]["qty"])
+    shopping_list.save_state(st)
+    return {"ok": True}
+
+
 @app.route("/mics/settings", methods=["POST"])
 def mics_settings():
     data = load_config_for_edit()
