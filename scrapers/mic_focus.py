@@ -246,6 +246,8 @@ _BRANDS = re.compile(r"\b(aea|akg|avantone|lauten|royer|sennheiser|shure|neumann
 # it's at least this far under what it sells for used; one with no known used
 # value goes to "Check these" at the end of the page instead.
 from scrapers.market_value import DEAL_PCT  # noqa: E402  (shared with the landing page's deals)
+PRICE_RANGE_UNDER = 20  # United / Dachman: in your price range AND this far under used
+
 # In a brand's own section these are copies, parts or memorabilia, not the mic.
 _NOT_THE_MIC = re.compile(r"\bbased\b|\bstyle\b|\binspired\b|\bclone\b|\bphoto\b|exhibit|\bbody\b|\bpcb\b|"
                           r"\bposter\b|\bpatch\b|\bpin\b|\bshirt\b|\bmug\b", re.I)
@@ -505,6 +507,16 @@ def find(cfg: dict) -> list[dict]:
         else:
             cap = t["max_price"]
             hit = t.get("min_price", floor) <= delivered <= t["max_price"]  # by price (Oct 22), not % off
+            if t.get("price_range"):
+                # United / Dachman (owner, Nov 1): every one shows in its own
+                # section, but only one at least 20% under its used value is a
+                # deal (pushed, emailed, in Mic deals and "New since").
+                from scrapers.market_value import value as used_value
+                v = used_value(title)[0]
+                if v:
+                    used, ref, ref_kind, new = v, v, "used", None
+                    pct = round((1 - delivered / v) * 100)
+                hit = hit and bool(v) and delivered <= v * (1 - PRICE_RANGE_UNDER / 100)
         r["mic"] = {"target": t["key"], "name": t["name"], "min_pct": t["min_pct"], "max_price": t["max_price"], "pct": pct,
                     "ref": round(ref) if ref else None, "ref_kind": ref_kind, "new": round(new) if new else None,
                     "used": round(used) if used else None, "delivered": delivered, "hit": hit, "qty": qty, "total": total, "cap": round(cap),

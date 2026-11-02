@@ -66,7 +66,7 @@
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
       OfferUp, ShopGoodwill and the other fast sites every time, eBay every 30 minutes, Facebook in rotation) and pushes
       each deal to your phone, once per price (a price drop sends it again): every brand at 50%+ under its used value
-      (and ${{ '{:,}'.format(st.min_price) }} or more), United and Dachman between your minimum and their price limit, the Distressor at its single / pair price. Everything else is paused: Telex matches, steals,
+      (and ${{ '{:,}'.format(st.min_price) }} or more), United and Dachman in your price range and 20%+ under used, the Distressor at its single / pair price. Everything else is paused: Telex matches, steals,
       price drops, auctions, the daily AI briefing. Your Telex List is kept, just not searched.
       {% else %}<strong>Off.</strong> Gear Scout is searching your whole Telex List as usual; this page still lists the mics.{% endif %}
       Prices are delivered (with listed shipping). The "% under" on each card compares that with what the model goes for <b>used</b>. US listings only, anything still for sale that a site showed in the last 90 days (pushes are only for ones seen in the last 10). Parts, power supplies, repair jobs and auctions are left out.
@@ -102,7 +102,7 @@
   </section>
 
   <section class="panel">
-    <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in their price range), newest ad first</span></h2>
+    <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}
