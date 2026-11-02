@@ -184,7 +184,9 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
                              for r in results if site_of.get(r.source_name) == "fb"):
         pause_facebook("Facebook asked to slow down or confirm the account", cfg)
     mp = [r for r in results if r.source_name.startswith("FB Marketplace")]
-    if mp and all((r.fix_hint or "") == "EMPTY_MARKETPLACE_SEARCH" for r in mp):
+    # A cable / connector part number ("Hosa DTP-805") legitimately has no Marketplace ads at all;
+    # that says nothing about the account, so it never triggers the 48-hour pause.
+    if mp and not _cable_part_number(term) and all((r.fix_hint or "") == "EMPTY_MARKETPLACE_SEARCH" for r in mp):
         from scrapers.fb_posts_background import pause_marketplace_search
         pause_marketplace_search(cfg)
     counts = {s: [0, 0] for s in sites}
