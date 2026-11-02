@@ -7,3 +7,4 @@
 - Nov 1 11:30pm: only Traceback was eBay daily-limit RuntimeError in auction check; now logged as one INFO line (main.py, bc56865). NOT deployed: deploy refused twice (owner on the site); next run should run scripts/safe_deploy.sh both. Self-audit of Home/Mics skipped this run.
 - Nov 2 (hourly): no errors in logs. Tried to deploy the pending eBay-limit fix (bc56865) twice; refused, owner on the site. Still committed, not deployed; next run should run scripts/safe_deploy.sh both. No new code, self-audit skipped.
 - Nov 2 (hourly, 9:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again, owner on the site; still committed, not deployed. No new code.
+- Nov 2 (hourly, ~11:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again (15-minute sweep running), tried 3 times; still committed, not deployed. No new code.
