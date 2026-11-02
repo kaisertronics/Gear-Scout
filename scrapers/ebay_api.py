@@ -134,19 +134,23 @@ def _format_price(price: Optional[dict]) -> Optional[str]:
     return f"{symbol}{amount:,.0f}" if amount == int(amount) else f"{symbol}{amount:,.2f}"
 
 
-def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeResult:
+def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: int = 0) -> ScrapeResult:
     name = source["name"]
     start = time.time()
     # A single term (live search) goes to eBay's own search; the full keyword
     # list (scheduled runs) fetches the newest listings in the category and
     # filters locally — one API call per run instead of one per keyword.
-    is_live_search = len(keywords) == 1 and keywords[0].strip()
+    # newest=N (the fast lane): just the N newest Buy It Now listings, no keyword filter.
+    is_live_search = not newest and len(keywords) == 1 and keywords[0].strip()
     params = {
         "category_ids": PRO_AUDIO_CATEGORY,
         "filter": CONDITION_FILTER,
         "sort": "newlyListed",
         "limit": "200",
     }
+    if newest:
+        params["limit"] = str(newest)
+        params["filter"] += ",buyingOptions:{FIXED_PRICE}"
     if is_live_search:
         params["q"] = keywords[0].strip()
         # A specific model ("Avalon 737", "V76") is searched on all of eBay:
@@ -195,7 +199,7 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
     for item in items:
         title = item.get("title") or ""
         from scrapers.store import is_overseas
-        if not title or not keyword_match(title, keywords) or is_overseas(country_of(item)):
+        if not title or not (newest or keyword_match(title, keywords)) or is_overseas(country_of(item)):
             continue  # overseas sellers are left out
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         posted_at = None

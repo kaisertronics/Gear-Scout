@@ -560,6 +560,18 @@ def _mic_focus_on(cfg=None) -> bool:
         return False
 
 
+def run_fast_lane():
+    """Every 2 minutes (Mic Focus only): newest Reverb / eBay mic listings."""
+    try:
+        cfg = load_config()
+        if not _mic_focus_on(cfg):
+            return
+        from scrapers import fast_lane
+        fast_lane.tick(cfg)
+    except Exception:
+        logger.exception("Fast lane failed")
+
+
 def run_fb_posts_batch():
     # Leaves the machine to a scrape that's already running (CPU, memory
     # and the Facebook account) — the next batch is 15 minutes away.
@@ -665,6 +677,10 @@ def run_schedule():
         coalesce=True,
         misfire_grace_time=600,
     )
+
+    # Fast lane (Nov 1): the newest Reverb / eBay mics every 2 minutes, deals pushed at once.
+    scheduler.add_job(run_fast_lane, IntervalTrigger(minutes=2, timezone=tz_name),
+                      name="fast lane", max_instances=1, coalesce=True, misfire_grace_time=60)
 
     # Both jobs always run and re-read their settings each time, so changes
     # made on the FB Posts page apply without restarting anything.

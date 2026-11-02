@@ -398,8 +398,9 @@ def _candidates() -> list[dict]:
         return [dict(r) for r in conn.execute(sql, [cut] + [f"%{w}%" for w in likes])]
 
 
-def find(cfg: dict) -> list[dict]:
-    """Every live US listing that belongs to a Mic Focus target, with
+def find(cfg: dict, rows: Optional[list[dict]] = None) -> list[dict]:
+    """Every live US listing that belongs to a Mic Focus target (or only the
+    given stored rows, for the fast lane), with
     r['mic'] = {target, name, min_pct, pct, ref, ref_kind, new, used,
     delivered, hit, model}. Best discount first."""
     from scrapers.comps import evaluate, price_index, similar_index, similar_price
@@ -413,7 +414,7 @@ def find(cfg: dict) -> list[dict]:
     exclude_words = cfg.get("exclude_words") or []
     market = index = similar = None
     out, seen_ads = [], set()
-    for r in _candidates():
+    for r in (_candidates() if rows is None else rows):
         title = r.get("title") or ""
         t = classify(title, targets)
         if not t:
