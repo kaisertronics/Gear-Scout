@@ -2418,6 +2418,24 @@ def _mics_ctx() -> dict:
                 listed=listed, shown=shown, sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
 
 
+OUTBOARD_MAX_AGE_DAYS = 45
+OUTBOARD_PICKUP_MAX_MILES = 500
+
+
+def _outboard_fresh_near(l: dict) -> bool:
+    """Outboard section: ads up to 45 days old; local-pickup ads only within 500 miles of home."""
+    age = l.get("age_days")
+    if age is None:
+        age = _age_days(l)
+    if age is None or age > OUTBOARD_MAX_AGE_DAYS:
+        return False
+    if _is_local_pickup(l.get("source_name") or ""):
+        d = l.get("distance")
+        if d is not None and d > OUTBOARD_PICKUP_MAX_MILES:
+            return False
+    return True
+
+
 def _home_page():
     """Home: new results, smokin' hot deals, outboard (Distressor), a compact
     Mics section, what's coming next, and the "Check these" list last."""
@@ -2437,7 +2455,8 @@ def _home_page():
     for t in st["targets"]:
         if not t.get("outboard"):
             continue
-        ls = [l for l in ctx["all_hits"] if l["mic"]["target"] == t["key"] and l.get("url") not in seen_urls]
+        ls = [l for l in ctx["all_hits"] if l["mic"]["target"] == t["key"] and l.get("url") not in seen_urls
+              and _outboard_fresh_near(l)]
         outboard.append({"key": t["key"], "name": t["name"].replace("Empirical Labs ", ""), "note": t.get("note"),
                          "on": t["on"], "rows": ls})
     mic_keys = [t["key"] for t in st["targets"] if t["key"] not in outboard_keys]
