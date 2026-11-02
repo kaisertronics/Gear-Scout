@@ -2300,7 +2300,8 @@ def _mics_ctx() -> dict:
     st = mic_focus.settings(cfg)
     data = mic_focus.load()
     # Hidden (✕), sold or pending since the list was built: gone right away.
-    rows = _decorate(mic_focus.still_showing(data.get("rows") or []))
+    from scrapers.reposts import collapse_reposts
+    rows = collapse_reposts(_decorate(mic_focus.still_showing(data.get("rows") or [])))
     for l in rows:
         l["age_days"] = _age_days(l)
         m = l["mic"]
@@ -2393,7 +2394,7 @@ def _mics_ctx() -> dict:
     auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
     # Landing: the best deals on everything you hunt (last 150 days), and
     # what's new since your last visit across all of it.
-    deals = _decorate(mic_focus.still_showing(data.get("deals") or []))
+    deals = collapse_reposts(_decorate(mic_focus.still_showing(data.get("deals") or [])))
     for l in deals:
         d = l["deal"]
         l["age_days"] = _age_days(l)
@@ -2445,8 +2446,9 @@ def _home_page():
     outboard_keys = ctx["outboard_keys"]
     since = ctx["since_iso"]
     # Smokin' hot: the Telex List's 50%+ deals and the mic deals, best score first.
+    from scrapers.reposts import collapse_reposts
     hot, seen_urls = [], set()
-    for l in sorted(ctx["deals"] + ctx["hits"], key=lambda l: -(l.get("score") or 0)):
+    for l in collapse_reposts(sorted(ctx["deals"] + ctx["hits"], key=lambda l: -(l.get("score") or 0))):
         if l.get("url") not in seen_urls:
             seen_urls.add(l.get("url"))
             hot.append(l)
@@ -2481,6 +2483,7 @@ def _home_page():
                     have.add(l.get("url"))
                     new.append(l)
         new.sort(key=listed, reverse=True)
+        new = collapse_reposts(new)
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count)
     return render_template("home.html", **ctx)
 
