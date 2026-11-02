@@ -10,6 +10,7 @@
     "date": "2026-11-02",
     "title": "Hourly improvements",
     "items": [
+      "Price history: ads whose price has changed now show a tiny line chart next to the price (green = cheaper, red = pricier). Hover or long-press to see each price.",
       "Sold-out alert: when a listing you starred sells or is taken down, you get one push and email (only for ones that sold in the last 2 days).",
       "Price targets: new panel on the Mics page. Type a model and the most you'd pay; you get a push the moment any ad for it, deal or not, is at or under that price.",
       "Offer helper: every mic deal now shows a suggested opening offer (about 10% under asking) and a walk-away price, with a Copy message button. Before, only price-dropped or long-listed ads got one."

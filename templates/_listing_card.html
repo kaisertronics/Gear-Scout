@@ -28,6 +28,7 @@
           {% else %}<span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>{% endif %}
           {% if l.price|orig_price %}<span class="listing-was" style="text-decoration:none;">{{ l.price|orig_price }}</span>{% endif %}
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
+          {% if l.spark %}<svg class="price-spark" width="{{ l.spark.w }}" height="{{ l.spark.h }}" viewBox="0 0 {{ l.spark.w }} {{ l.spark.h }}" style="vertical-align:middle;" role="img" aria-label="Price history {{ l.spark.title }}"><title>{{ l.spark.title }}</title><polyline points="{{ l.spark.points }}" fill="none" stroke="{{ l.spark.color }}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="{{ l.spark.cx }}" cy="{{ l.spark.cy }}" r="2.2" fill="{{ l.spark.color }}"/></svg>{% endif %}
           {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_left %} · <span class="gs-countdown{% if l.auction_left.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.auction_left.ts }}" {% if l.auction_ends %}title="ends {{ l.auction_ends }}"{% endif %}>{{ l.auction_left.label }}</span>{% elif l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}

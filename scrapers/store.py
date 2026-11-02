@@ -94,6 +94,25 @@ def _conn() -> sqlite3.Connection:
         for gid, url, key, title in conn.execute(
                 "SELECT global_id, url, dup_key, title FROM seen WHERE hidden = 1").fetchall():
             _remember_hidden(conn, gid, url, key, title)
+    # Every price a listing has had, oldest first (for the price-cut sparkline).
+    conn.execute("CREATE TABLE IF NOT EXISTS price_history "
+                 "(global_id TEXT, price TEXT, value REAL, at TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS price_history_gid ON price_history(global_id)")
+    # Lazy, idempotent backfill from previous_price: only rows with no history yet.
+    conn.execute("""
+        INSERT INTO price_history (global_id, price, value, at)
+        SELECT global_id, previous_price, NULL, COALESCE(first_seen, price_dropped_at) FROM seen
+        WHERE previous_price IS NOT NULL AND price_dropped_at IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM price_history h WHERE h.global_id = seen.global_id)""")
+    conn.execute("""
+        INSERT INTO price_history (global_id, price, value, at)
+        SELECT global_id, price, NULL, price_dropped_at FROM seen
+        WHERE previous_price IS NOT NULL AND price_dropped_at IS NOT NULL AND price IS NOT NULL
+          AND (SELECT COUNT(*) FROM price_history h WHERE h.global_id = seen.global_id) = 1""")
+    if conn.execute("SELECT 1 FROM price_history WHERE value IS NULL LIMIT 1").fetchone():
+        from scrapers.enrich import parse_price
+        for rowid, p in conn.execute("SELECT rowid, price FROM price_history WHERE value IS NULL").fetchall():
+            conn.execute("UPDATE price_history SET value = ? WHERE rowid = ?", (parse_price(p), rowid))
     conn.execute("PRAGMA optimize")
     conn.commit()
     if "dup_key" not in existing_cols:
@@ -206,6 +225,37 @@ def set_pending(url: str, pending: bool) -> None:
         conn.commit()
 
 
+def _record_price(conn, global_id: str, price, at: str) -> None:
+    """Appends a price to the listing's history unless it equals the last one."""
+    from scrapers.enrich import parse_price
+
+    value = parse_price(price)
+    if value is None:
+        return
+    last = conn.execute(
+        "SELECT value FROM price_history WHERE global_id = ? ORDER BY at DESC, rowid DESC LIMIT 1",
+        (global_id,)).fetchone()
+    if last and last[0] is not None and abs(last[0] - value) < 0.005:
+        return
+    conn.execute("INSERT INTO price_history (global_id, price, value, at) VALUES (?,?,?,?)",
+                 (global_id, price, value, at))
+
+
+def price_history_for(global_ids: list) -> dict:
+    """{global_id: [(at, value), ...]} oldest first, in one query."""
+    ids = list(dict.fromkeys(g for g in global_ids if g))
+    out: dict = {}
+    with _conn() as conn:
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            marks = ",".join("?" * len(chunk))
+            for gid, at, value in conn.execute(
+                    f"SELECT global_id, at, value FROM price_history WHERE global_id IN ({marks}) "
+                    "AND value IS NOT NULL ORDER BY at, rowid", chunk):
+                out.setdefault(gid, []).append((at, value))
+    return out
+
+
 def mark_seen(listing, live_only: bool = False) -> str:
     """Stores a listing. Returns "new", "duplicate" (same item already
     stored from elsewhere), "price_drop" (seen before, now cheaper) or
@@ -251,11 +301,15 @@ def mark_seen(listing, live_only: bool = False) -> str:
                        drop_notified = 0 WHERE global_id = ?""",
                     (listing.price, existing[0], now, listing.global_id),
                 )
+                _record_price(conn, listing.global_id, existing[0], now)
+                _record_price(conn, listing.global_id, listing.price, now)
                 status = "price_drop"
             elif old_value and new_value and new_value > old_value * 1.01:
                 # Price went up: show the current price (no "was" price).
                 conn.execute("UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
                              (listing.price, listing.global_id))
+                _record_price(conn, listing.global_id, existing[0], now)
+                _record_price(conn, listing.global_id, listing.price, now)
             _record_status(conn, listing)
             if not live_only:
                 # A standing-keyword scrape found something a live search
@@ -301,6 +355,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 getattr(listing, "seller", None),
             ),
         )
+        _record_price(conn, listing.global_id, listing.price, now)
         _record_status(conn, listing)
         if hidden:
             conn.commit()
@@ -340,11 +395,15 @@ def update_price(url: str, price: str) -> str:
                     (price, old, datetime.now(timezone.utc).isoformat(), gid),
                 )
                 result = "drop"
+                _record_price(conn, gid, old, datetime.now(timezone.utc).isoformat())
+                _record_price(conn, gid, price, datetime.now(timezone.utc).isoformat())
             else:
                 conn.execute(
                     "UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
                     (price, gid),
                 )
+                _record_price(conn, gid, old, datetime.now(timezone.utc).isoformat())
+                _record_price(conn, gid, price, datetime.now(timezone.utc).isoformat())
                 result = "raise" if result == "same" else result
         conn.commit()
     return result

@@ -651,7 +651,38 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if worth_only and not (l["price_ctx"] or {}).get("worth"):
             continue
         out.append(l)
+    _attach_sparklines(out)
     return out
+
+
+def _attach_sparklines(listings: list[dict]) -> None:
+    """Adds l["spark"] (tiny SVG price-history line) to listings with 2+
+    recorded prices. One database query for the whole page."""
+    try:
+        from scrapers.store import price_history_for
+        history = price_history_for([l.get("global_id") for l in listings])
+    except Exception:
+        logging.exception("Couldn't load price history")
+        return
+    w, h, pad = 80, 20, 3
+    for l in listings:
+        pts = history.get(l.get("global_id")) or []
+        if len(pts) < 2:
+            continue
+        pts = pts[-12:]
+        vals = [v for _, v in pts]
+        lo, hi = min(vals), max(vals)
+        span = (hi - lo) or 1
+        step = (w - 2 * pad) / (len(vals) - 1)
+        xy = [(pad + i * step, pad + (h - 2 * pad) * (1 - (v - lo) / span) if hi != lo else h / 2)
+              for i, v in enumerate(vals)]
+        l["spark"] = {
+            "w": w, "h": h,
+            "points": " ".join(f"{x:.1f},{y:.1f}" for x, y in xy),
+            "cx": round(xy[-1][0], 1), "cy": round(xy[-1][1], 1),
+            "color": "var(--green-text)" if vals[-1] < vals[0] else ("var(--red)" if vals[-1] > vals[0] else "var(--muted)"),
+            "title": " → ".join(f"${v:,.0f}" for v in vals),
+        }
 
 
 def _last_scraped_by_site() -> dict[str, str]:
