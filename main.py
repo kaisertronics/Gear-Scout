@@ -548,6 +548,12 @@ def run_watch_cycle():
             price_drops.alert(cfg)
         except Exception:
             logger.exception("Price-drop check failed")
+        # Listings at/under the max price you set for a model (Price targets on Mics): push + email.
+        try:
+            from scrapers import price_targets
+            price_targets.alert(cfg)
+        except Exception:
+            logger.exception("Price-target check failed")
         # A starred listing that just sold or vanished: one push + email.
         try:
             from scrapers import sold_alerts

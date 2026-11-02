@@ -2290,10 +2290,30 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
 @app.route("/mics")
 def mics_page():
     """Mic Focus: the mics being hunted right now, best discount first."""
-    from scrapers import market_pulse
+    from scrapers import market_pulse, price_targets
     ctx = _mics_ctx()
     ctx["pulse"] = market_pulse.pulse(load_config_raw())  # weekly trend per mic (read-only, cached 30 min)
+    try:
+        ctx["price_targets"] = price_targets.status(load_config_raw())
+    except Exception:
+        app.logger.exception("price targets panel")
+        ctx["price_targets"] = []
     return render_template("mics.html", **ctx)
+
+
+@app.route("/price-targets/add", methods=["POST"])
+def price_targets_add():
+    """Saves a model + the most you'd pay (only writes /data/price_targets.json)."""
+    from scrapers import price_targets
+    price_targets.add(request.form.get("text"), request.form.get("max_price"))
+    return redirect(url_for("mics_page") + "#price-targets")
+
+
+@app.route("/price-targets/remove", methods=["POST"])
+def price_targets_remove():
+    from scrapers import price_targets
+    price_targets.remove(request.form.get("id") or "")
+    return redirect(url_for("mics_page") + "#price-targets")
 
 
 def _mics_ctx() -> dict:

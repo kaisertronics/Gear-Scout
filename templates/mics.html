@@ -59,8 +59,32 @@
     {% if proposals.built %}<p class="muted">Recently shipped: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   </section>
 
+  <section class="panel" id="price-targets">
+    <h2>💲 Price targets <span class="muted">— the most you'd pay for a model</span></h2>
+    <p class="muted">Type a model (like "Neumann U87") and the most you'd pay, delivered. Gear Scout pushes and emails you when any new listing of that model is at or under your price, even if it isn't a big discount.</p>
+    {% if price_targets %}
+      <ul class="proposal-list">
+      {% for t in price_targets %}
+        <li><strong>{{ t.text }}</strong> — up to ${{ '{:,}'.format(t.max_price) }}
+          <span class="muted">·
+          {% if t.n %}{{ t.n }} listing{{ '' if t.n == 1 else 's' }} now, cheapest <a href="{{ t.cheapest.url }}" target="_blank" rel="noopener">${{ '{:,.0f}'.format(t.cheapest.total) }}</a>{% if t.n_under %} ({{ t.n_under }} within your price){% endif %}
+          {% else %}no listings right now{% endif %}</span>
+          <form method="post" action="{{ url_for('price_targets_remove') }}" style="display:inline">
+            <input type="hidden" name="id" value="{{ t.id }}">
+            <button class="btn btn-sm">Remove</button>
+          </form></li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    <form method="post" action="{{ url_for('price_targets_add') }}">
+      <input type="text" name="text" placeholder="Model, e.g. Neumann U87" required maxlength="80">
+      $<input type="number" name="max_price" placeholder="Max price" min="1" step="1" required style="width:7em">
+      <button class="btn btn-sm btn-primary">Add</button>
+    </form>
+  </section>
+
   <section class="panel">
-    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
+    <h2>🎤 Mic Focus<span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
     <p class="muted">
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
