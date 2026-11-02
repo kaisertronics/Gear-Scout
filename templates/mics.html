@@ -43,20 +43,20 @@
   </section>
 
   <section class="panel" id="proposals">
-    <h2>💡 Proposals <span class="muted">— new ideas for Gear Scout; tap Build and the nightly update makes it</span></h2>
+    <h2>💡 Coming next <span class="muted">— Gear Scout builds these on its own, about one an hour; tap Skip on any you don't want</span></h2>
     {% if proposals.open %}
       <ul class="proposal-list">
       {% for p in proposals.open %}
         <li><strong>{{ p.title }}</strong> — {{ p.why }}
           <form method="post" action="{{ url_for('proposal_decide', pid=p.id) }}" style="display:inline">
-            <button class="btn btn-sm btn-primary" name="action" value="approved">Build</button>
+            <button class="btn btn-sm btn-primary" name="action" value="approved">Do this first</button>
             <button class="btn btn-sm" name="action" value="skipped">Skip</button>
           </form></li>
       {% endfor %}
       </ul>
-    {% else %}<p class="muted">No open proposals. A new one comes each night.</p>{% endif %}
-    {% if proposals.approved %}<p class="muted">Being built tonight: {% for p in proposals.approved %}{{ p.title }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
-    {% if proposals.built %}<p class="muted">Recently built: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% else %}<p class="muted">Nothing queued: the next hourly update picks its own improvement.</p>{% endif %}
+    {% if proposals.approved %}<p class="muted">Up first: {% for p in proposals.approved %}{{ p.title }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if proposals.built %}<p class="muted">Recently shipped: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   </section>
 
   <section class="panel">

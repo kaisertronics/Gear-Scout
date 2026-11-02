@@ -28,6 +28,15 @@ if [ "$target" != "dashboard" ]; then
     exit 1
   fi
 fi
+if [ "$target" != "dashboard" ]; then
+  # The 15-minute Mic Focus / Wanted sweep isn't a "scheduled scrape" above:
+  # don't cut it off either (Nov 1: a deploy did, mid-sweep).
+  quiet=$(docker exec gear-scout python -c "import sqlite3,datetime as d;c=sqlite3.connect('/data/seen_listings.db');t=c.execute('select max(searched_at) from wanted_sweep').fetchone()[0];print(int((d.datetime.now(d.timezone.utc)-d.datetime.fromisoformat(t)).total_seconds()) if t else 9999)" 2>/dev/null || echo 9999)
+  if [ "$quiet" -lt 120 ]; then
+    echo "Not deploying: the 15-minute sweep is running (last search ${quiet}s ago). Try again in a few minutes."
+    exit 1
+  fi
+fi
 case "$target" in
   dashboard) docker compose build dashboard >/dev/null && docker compose up -d dashboard ;;
   scout) docker compose build scout >/dev/null && docker compose up -d scout ;;

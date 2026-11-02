@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-11-01",
+    "title": "Gear Scout improves itself every hour",
+    "items": [
+      "An hourly update now ships one improvement at a time on its own: new capabilities, sharper matching and better prices. Each is tested, and undone automatically if anything breaks.",
+      "Proposals became 'Coming next' on Home. They're built without waiting for you. Tap Skip on any you don't want, or 'Do this first' to move one up.",
+      "Updates never restart Gear Scout in the middle of a 15-minute sweep any more."
+    ]
+  },
+  {
+    "date": "2026-11-01",
     "title": "Only real deals in your updates",
     "items": [
       "United and Dachman mics still all show in their own sections, but they reach your updates, Mic deals, pushes and the morning email only when they're in your price range AND at least 20% under their used value. Before, a $899 UT FET47 (its normal used price) and a Dachman priced over used got in."
