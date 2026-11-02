@@ -478,7 +478,8 @@ def run_watch_cycle():
             except Exception:
                 logger.exception("Mic Focus sweep / alerts failed")
             try:
-                mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
+                if time.time() - cycle_start < 600:  # ~4 min: a cycle already past 10 min leaves it for the next one
+                    mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
                 mic_focus.fetch_auctions(cfg)  # hourly
                 mic_focus.alert_auctions(cfg)
             except Exception:
@@ -514,7 +515,8 @@ def run_watch_cycle():
         except Exception:
             logger.exception("Mic alerts failed")
         try:
-            mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
+            if time.time() - cycle_start < 600:  # ~4 min: a cycle already past 10 min leaves it for the next one
+                mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
             mic_focus.fetch_auctions(cfg)  # hourly
             mic_focus.alert_auctions(cfg)
         except Exception:
