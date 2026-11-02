@@ -12,7 +12,9 @@ WLOG=$PROJ/docs/watchdog_log.md
 DASH_URL=${HC_DASH_URL:-http://localhost:8420/login}
 DRY=${DRY_RUN:-0}
 mkdir -p "$LOGDIR"
-cd "$PROJ" || exit 1
+# launchd jobs are blocked (TCC) from ~/Documents, so the installed copy lives in ~/Library/gear-scout;
+# anything needing the project dir is best-effort.
+HAVE_PROJ=0; cd "$PROJ" 2>/dev/null && ls docker-compose.y*ml compose.y*ml >/dev/null 2>&1 && HAVE_PROJ=1
 
 now() { date +%s; }
 log() {
@@ -20,7 +22,7 @@ log() {
   [ "$DRY" = 1 ] && pre="[dry-run] " || pre=""
   echo "$ts $pre$*" >> "$LOG"
   if [ "$DRY" != 1 ]; then
-    [ -d "$PROJ/docs" ] && echo "- $ts healthcheck: $*" >> "$WLOG"
+    [ "$HAVE_PROJ" = 1 ] && [ -d "$PROJ/docs" ] && echo "- $ts healthcheck: $*" >> "$WLOG" 2>/dev/null
   fi
   # keep log small
   if [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 1000000 ]; then
@@ -53,7 +55,8 @@ do_restart() { # service reason
   if [ "$DRY" = 1 ]; then log "would restart $1 ($2)"; return; fi
   log "restarting $1 ($2)"
   now > "$LOGDIR/restart.stamp"
-  $DOCKER compose restart "$1" >/dev/null 2>&1
+  case "$1" in dashboard) cn=gear-scout-dashboard;; *) cn=gear-scout;; esac
+  $DOCKER restart "$cn" >/dev/null 2>&1
 }
 
 # 2. Containers running?
@@ -62,8 +65,7 @@ for c in gear-scout gear-scout-dashboard; do
   if ! echo "$running" | grep -qx "$c"; then
     if busy_deploy; then log "skip compose up ($c down): deploy/build in progress"; continue; fi
     if [ "$DRY" = 1 ]; then log "would run docker compose up -d --no-build ($c not running)"
-    else log "$c not running; docker compose up -d --no-build"; $DOCKER compose up -d --no-build >/dev/null 2>&1; fi
-    break
+    else log "$c not running; starting it (docker start, else compose up -d --no-build)"; $DOCKER start "$c" >/dev/null 2>&1 || { [ "$HAVE_PROJ" = 1 ] && $DOCKER compose up -d --no-build >/dev/null 2>&1; }; fi
   fi
 done
 
