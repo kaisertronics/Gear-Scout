@@ -10,6 +10,7 @@ Last reviewed commit: the "Code review (Nov 2)" commit (2026-11-02: reviewed 1cb
 
 | File | Last fully read | Notes |
 |------|-----------------|-------|
+| scrapers/brand.py, models.py, steals.py | 2026-11-02 (second run) | whole files; no bugs. Only a stale "60%+" docstring in dashboard._steals (code uses the 50% the owner chose) — comment fixed, no deploy needed. No new commits since the morning review. |
 | scrapers/fast_lane.py, deal_checks.py, deal_clock.py, market_pulse.py, market_value.py, reposts.py, proposals.py, shopping_list.py, telex_suggest.py | 2026-11-02 | all new since Oct 31, whole files; repost count mutated cached dicts (fixed) |
 | scrapers/telex.py, emailer.py, fb_posts.py, scripts/safe_deploy.sh, claude_job.sh, healthcheck.sh, routine_loop.sh, run_routine.sh | 2026-11-02 | whole files; telex.py had one dead assignment (removed) |
 | scrapers/mic_focus.py (find, build, _check_deals, alert, daily_email, _email_hits), main.py, base.py, comps.py, ebay_api.py, store.mark_seen, dashboard.py (_mics_ctx, _home_page, shopping, proposals, _decorate), templates home/shopping/mics/_listing_card/base/telex | 2026-11-02 (diff + surrounding functions) | all 31 GET pages return 200 |

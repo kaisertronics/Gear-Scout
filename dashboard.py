@@ -1262,7 +1262,7 @@ def _all_deals(background: bool = False) -> dict:
 
 
 def _steals(min_pct: int, background: bool = False) -> dict:
-    """Listings 60%+ (or the chosen level) under used prices."""
+    """Listings 50%+ (or the chosen level) under used prices."""
     d = _all_deals(background)
     return {name: [l for l in d[name] if l["comp"]["pct"] >= min_pct] for name in ("trusted", "rough")}
 
