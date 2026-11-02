@@ -8,3 +8,4 @@
 - Nov 2 (hourly): no errors in logs. Tried to deploy the pending eBay-limit fix (bc56865) twice; refused, owner on the site. Still committed, not deployed; next run should run scripts/safe_deploy.sh both. No new code, self-audit skipped.
 - Nov 2 (hourly, 9:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again, owner on the site; still committed, not deployed. No new code.
 - Nov 2 (hourly, ~11:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again (15-minute sweep running), tried 3 times; still committed, not deployed. No new code.
+- Nov 2 (hourly, ~1pm): no errors in logs. Deployed both: eBay-limit fix (bc56865) and Repost finder (778506c) now live; login 200, no Tracebacks. Repost finder proposal marked built. No new code, self-audit skipped.
