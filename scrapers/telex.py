@@ -111,6 +111,8 @@ FB_CABLE_EVERY_MIN = 72 * 60  # cable/connector terms on Facebook (see run_wante
 FB_TERMS_PER_CYCLE = 2  # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
 TYPOS_PER_CYCLE = 2
 FAST_BUDGET_SECONDS = 600
+CYCLE_TARGET_SECONDS = 840  # refresh + sweep + Facebook should end before the next 15-minute start
+FB_SECONDS_PER_TERM = 150  # one Facebook term (Marketplace regions + groups) takes ~2-2.5 min
 SITE_WORKERS = 6  # sites searched at once for one term (not Facebook)
 CANADIAN_TYPES = {"kijiji", "long_mcquade"}
 TERMS_AT_ONCE = 2  # wanted-sweep terms searched in parallel (not Facebook)
@@ -204,7 +206,7 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     return {"term": term, "sites": sorted(sites), "found": found, "new": new}
 
 
-def run_wanted_sweep(cfg: dict) -> list[dict]:
+def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     """One cycle (every 30 minutes): every Wanted term that's due on the
     fast sites (and eBay every 2 hours), then the few terms searched longest
     ago on Facebook, then a couple of misspelled versions of your terms."""
@@ -229,6 +231,14 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
         logger.exception("Telex term price lookup failed")
     wcfg = cfg.get("wanted") or {}
     fb_per_cycle = int(wcfg.get("fb_terms_per_cycle", FB_TERMS_PER_CYCLE))
+    budget = FAST_BUDGET_SECONDS
+    if cycle_start is not None:
+        # The whole cycle (hourly refresh + this sweep + the Facebook searches) has to finish inside
+        # the 15-minute interval, or the next one is skipped. What the refresh already used comes
+        # off this sweep's time; terms not reached go first next cycle (least recently searched).
+        from scrapers.fb_posts_background import marketplace_quiet_hours as _quiet
+        fb_reserve = 0 if _quiet(cfg) else fb_per_cycle * FB_SECONDS_PER_TERM
+        budget = int(min(FAST_BUDGET_SECONDS, max(0, CYCLE_TARGET_SECONDS - (time.time() - cycle_start) - fb_reserve)))
     st = sweep_state()
     now = datetime.now(timezone.utc)
 
@@ -256,7 +266,7 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     # ran past the 15-minute cycle, so every other cycle was skipped. Each
     # term's sites already run in parallel; Facebook stays one at a time below.
     def run_due(term):
-        if time.time() - start > FAST_BUDGET_SECONDS:
+        if time.time() - start > budget:
             return None
         sites = {s for s, m in (("fast", fast_every), ("ebay", ebay_every)) if due(term, s, m)}
         return run(term, sites, "+".join(sorted(sites))) if sites else None
@@ -266,7 +276,7 @@ def run_wanted_sweep(cfg: dict) -> list[dict]:
     with ThreadPoolExecutor(max_workers=int(wcfg.get("terms_at_once", TERMS_AT_ONCE)),
                             thread_name_prefix="sweep") as pool:
         out.extend(pool.map(run_due, order))
-    if time.time() - start > FAST_BUDGET_SECONDS:
+    if time.time() - start > budget:
         logger.info("Wanted sweep: time's up for this cycle; the rest go first next time")
     from scrapers.fb_posts_background import marketplace_quiet_hours
     if marketplace_quiet_hours(cfg):

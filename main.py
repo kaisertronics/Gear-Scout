@@ -460,6 +460,7 @@ def run_watch_cycle():
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
         from scrapers import mic_focus
+        cycle_start = time.time()
         if mic_focus.enabled(cfg):
             # Mic Focus (Oct 22): every cycle searches only the focus mics and
             # pushes the ones that clear their discount; the other alerts
@@ -472,7 +473,7 @@ def run_watch_cycle():
             try:
                 from scrapers.telex import run_wanted_sweep
                 mic_focus.alert(cfg)  # what the refresh found, without waiting for the sweep
-                run_wanted_sweep(cfg)
+                run_wanted_sweep(cfg, cycle_start)
                 mic_focus.alert(cfg)
             except Exception:
                 logger.exception("Mic Focus sweep / alerts failed")
@@ -502,7 +503,7 @@ def run_watch_cycle():
             from scrapers.telex import check_telex_lowest, run_wanted_sweep
             from scrapers.wanted import alert_new
             alert_new(cfg)  # what the refresh found, without waiting for the sweep
-            run_wanted_sweep(cfg)  # the Telex List and the mic terms, one shared rotation
+            run_wanted_sweep(cfg, cycle_start)  # the Telex List and the mic terms, one shared rotation
             alert_new(cfg)
             check_telex_lowest(cfg)
         except Exception:
