@@ -221,6 +221,26 @@
   }
 </script>
 <script>
+  // Auction countdowns: refresh every 30s from data-end-ts.
+  (function () {
+    function tick() {
+      const now = Date.now() / 1000;
+      document.querySelectorAll('.gs-countdown[data-end-ts]').forEach((el) => {
+        const mins = Math.floor((el.dataset.endTs - now) / 60);
+        let t;
+        if (el.dataset.endTs - now <= 0) t = 'ended';
+        else if (mins < 60) t = Math.max(mins, 1) + ' min left';
+        else if (mins < 1440) t = Math.floor(mins / 60) + 'h ' + String(mins % 60).padStart(2, '0') + 'm left';
+        else { const d = Math.floor(mins / 1440); t = d + ' day' + (d === 1 ? '' : 's') + ' left'; }
+        el.textContent = t;
+        el.classList.toggle('gs-urgent', el.dataset.endTs - now > 0 && mins < 60);
+      });
+    }
+    tick();
+    setInterval(tick, 30000);
+  })();
+</script>
+<script>
   // Progress bar inside a status banner. `data` is a status payload:
   // {done, total, started (seconds), current_source}. With no total yet it
   // shows a moving "working" bar.

@@ -524,6 +524,31 @@ def _price_index() -> dict:
     return price_index(force=forced)
 
 
+def auction_countdown(description, now=None) -> Optional[dict]:
+    """Countdown for an auction description ("... ends YYYY-MM-DD HH:MM", Pacific)."""
+    m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", description or "")
+    if not m:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        end = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+    except ValueError:
+        return None
+    ts = int(end.timestamp())
+    secs = ts - int(now if now is not None else time.time())
+    if secs <= 0:
+        return {"label": "ended", "urgent": False, "ts": ts}
+    mins = secs // 60
+    if mins < 60:
+        label = f"{max(mins, 1)} min left"
+    elif mins < 24 * 60:
+        label = f"{mins // 60}h {mins % 60:02d}m left"
+    else:
+        d = mins // 1440
+        label = f"{d} day{'s' if d != 1 else ''} left"
+    return {"label": label, "urgent": mins < 60, "ts": ts}
+
+
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
@@ -609,6 +634,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
                                        description=l.get("description"))
         # A current auction bid isn't a sale price, so it's never a "deal".
         l["is_auction"] = (l.get("description") or "").startswith("Auction")
+        l["auction_left"] = auction_countdown(l.get("description")) if l["is_auction"] else None
         if (l.get("sold") or l.get("pending") or l["is_auction"]) and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
             l["price_ctx"]["worth"] = False  # a current bid isn't a price
