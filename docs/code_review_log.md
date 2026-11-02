@@ -11,6 +11,7 @@ Last reviewed commit: the "Code review (Nov 2)" commit (2026-11-02: reviewed 1cb
 | File | Last fully read | Notes |
 |------|-----------------|-------|
 | scrapers/brand.py, models.py, steals.py | 2026-11-02 (second run) | whole files; no bugs. Only a stale "60%+" docstring in dashboard._steals (code uses the 50% the owner chose) — comment fixed, no deploy needed. No new commits since the morning review. |
+| scrapers/facebook_scraper.py (whole file), scrapers/enrich.py (1–600), templates/feed.html, feed_all.html | 2026-11-02 (second run) | no new commits since the earlier review; no bugs. Checked the Marketplace "sold"/"pending" card regexes against 29,834 stored Facebook titles: only 3 look sold (all genuinely "Sold…"), no false hits |
 | scrapers/fast_lane.py, deal_checks.py, deal_clock.py, market_pulse.py, market_value.py, reposts.py, proposals.py, shopping_list.py, telex_suggest.py | 2026-11-02 | all new since Oct 31, whole files; repost count mutated cached dicts (fixed) |
 | scrapers/telex.py, emailer.py, fb_posts.py, scripts/safe_deploy.sh, claude_job.sh, healthcheck.sh, routine_loop.sh, run_routine.sh | 2026-11-02 | whole files; telex.py had one dead assignment (removed) |
 | scrapers/mic_focus.py (find, build, _check_deals, alert, daily_email, _email_hits), main.py, base.py, comps.py, ebay_api.py, store.mark_seen, dashboard.py (_mics_ctx, _home_page, shopping, proposals, _decorate), templates home/shopping/mics/_listing_card/base/telex | 2026-11-02 (diff + surrounding functions) | all 31 GET pages return 200 |
@@ -107,6 +108,10 @@ Last reviewed commit: the "Code review (Nov 2)" commit (2026-11-02: reviewed 1cb
 | 2026-10-31 | The AI "verdict" button read a Reverb ad's full text with plain requests, which Cloudflare has been turning away (the Oct 31 curl fallback skipped it); it silently fell back to the short stored text | assistant._full_ad_text uses reverb_get. Tested live on a DB-free copy; all 30 dashboard GET pages return 200 |
 | 2026-11-02 | collapse_reposts() set repost_count on the original listing dict; Home passes it dicts from the shared Feed cache, so "reposted N×" could stay on a cached card on pages that don't fold the ad (reproduced: cached dict mutated) | folds into a copy (dict(best, repost_count=…)); re-run: cached dicts stay clean, 31 pages 200 |
 | 2026-11-02 | telex.run_wanted_sweep built `fb_due` once and then overwrote it in both branches (dead code) | removed |
+
+### Second run, 2026-11-02 (no code changes)
+- Nothing new to diff (HEAD is still the earlier review commit). Rotation read: facebook_scraper.py (1,022 lines), enrich.py 1–600, feed.html, feed_all.html. No bugs; no deploy needed. Next in rotation: enrich.py 600–1194, dashboard.py chunks, static/style.css (never read), scripts not yet read this week.
+- Noted only: facebook_scraper's sold regex (`,\s*sold\b`) would mark a card sold if a title contained ", sold separately"; no such title exists among stored ads today.
 
 ### Left for the owner (2026-11-02)
 - Design drift to confirm: the new Home "Smokin' hot deals" / Best deals use market_value.judge (50–75% under a model's median asking price, 3+ listings), not scrapers/steals.find. It looks deliberate (Oct 31 request), but it is a second deal calculation next to Deals/Steals. Today it finds 0 Telex List deals (1,063 Wanted ads in the last 150 days: 595 have a value but none is 50%+ under, 466 have no value yet), so that section on Home is empty apart from mic deals.
