@@ -9,3 +9,4 @@
 - Nov 2 (hourly, 9:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again, owner on the site; still committed, not deployed. No new code.
 - Nov 2 (hourly, ~11:30am): no errors in logs. Deploy of eBay-limit fix (bc56865) refused again (15-minute sweep running), tried 3 times; still committed, not deployed. No new code.
 - Nov 2 (hourly, ~1pm): no errors in logs. Deployed both: eBay-limit fix (bc56865) and Repost finder (778506c) now live; login 200, no Tracebacks. Repost finder proposal marked built. No new code, self-audit skipped.
+- Nov 2 (hourly, ~2pm): no errors in logs. Shipped first slice of "Mic market pulse" (scrapers/market_pulse.py, panel on /mics: weekly new ads, median ask, days to sell per mic brand; trend arrow only with enough history). Deployed dashboard (1136260); login 200, no Tracebacks. Proposal marked built. Self-audit skipped.
