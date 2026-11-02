@@ -548,6 +548,12 @@ def run_watch_cycle():
             price_drops.alert(cfg)
         except Exception:
             logger.exception("Price-drop check failed")
+        # A starred listing that just sold or vanished: one push + email.
+        try:
+            from scrapers import sold_alerts
+            sold_alerts.alert(cfg)
+        except Exception:
+            logger.exception("Sold-favorite alert failed")
         # New steals (steals.MIN_PCT, 50%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new
