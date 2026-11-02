@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-11-01",
+    "title": "Hourly improvements",
+    "items": [
+      "Telex page has a new \"Sharper terms\" box: for broad searches like 'ssl' or 'drawmer' it suggests specific models from mics you've starred, with a one-tap add."
+    ]
+  },
+  {
+    "date": "2026-11-01",
     "title": "Mic searches run every 15 minutes again",
     "items": [
       "The 15-minute mic search was taking about 19 minutes, so every other round got skipped. Craigslist searches that found nothing were each launching a slow browser; they now finish instantly. Canadian stores are no longer searched, and a couple of mics are searched at once.",

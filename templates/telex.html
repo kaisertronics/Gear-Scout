@@ -46,6 +46,19 @@
         {% endfor %}
       </div>
     {% endif %}
+    {% if sharper %}
+      <div class="sharper-terms">
+        <p class="muted">🎯 Sharper terms — from gear you starred, instead of the broad word:</p>
+        <div class="telex-terms">
+          {% for s in sharper %}
+            <form method="post" action="{{ url_for('telex_add_from_listing') }}" class="listing-telex-form" style="position:static;display:inline-block;">
+              <input type="hidden" name="title" value="{{ s.title }}">
+              <button type="submit" class="btn btn-sm" title="Add “{{ s.term }}” (you have “{{ s.broad }}”)">+ {{ s.term }} <span class="muted">({{ s.broad }})</span></button>
+            </form>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
     {% if model_groups %}
       <div class="telex-terms">
         {% for g in model_groups %}

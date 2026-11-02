@@ -1538,7 +1538,14 @@ def telex():
     new_items = sorted(new_all.values(), key=lambda x: age(x[0]))
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
-    return render_template("telex.html", feed_counts=feed_counts, terms=terms, view=view, new_items=new_items,
+    try:
+        from scrapers.telex_suggest import suggest_terms
+        sharper = suggest_terms(terms, [f.get("title") for f in favorite_listings(limit=300)],
+                                term_for=_telex_term_for)
+    except Exception:
+        logging.exception("Sharper terms failed")
+        sharper = []
+    return render_template("telex.html", sharper=sharper, feed_counts=feed_counts, terms=terms, view=view, new_items=new_items,
                            sort=sort, total=sum(feed_counts.values()), sweep=telex_state(),
                            model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 
