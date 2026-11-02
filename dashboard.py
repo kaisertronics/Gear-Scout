@@ -2289,7 +2289,10 @@ def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
 @app.route("/mics")
 def mics_page():
     """Mic Focus: the mics being hunted right now, best discount first."""
-    return render_template("mics.html", **_mics_ctx())
+    from scrapers import market_pulse
+    ctx = _mics_ctx()
+    ctx["pulse"] = market_pulse.pulse(load_config_raw())  # weekly trend per mic (read-only, cached 30 min)
+    return render_template("mics.html", **ctx)
 
 
 def _mics_ctx() -> dict:

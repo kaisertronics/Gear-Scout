@@ -101,6 +101,37 @@
     </form>
   </section>
 
+  <section class="panel" id="pulse">
+    <h2>📈 Market pulse <span class="muted">— new listings and asking prices for your mics, last 8 weeks</span></h2>
+    {% if pulse %}
+      <p class="muted">Ads are counted by the date the seller posted them (the date Gear Scout first saw them when that's unknown);
+        hidden and duplicate ads, and anything under $150 or the brand's minimum (accessories, parts), are left out.
+        Bars = new listings per week (oldest left, this week right); weeks from before Gear Scout was running are left out;
+        line = the middle asking price each week (needs 3+ ads that week). The arrow compares the latest 4 weeks with the 4 before
+        and only appears with 5+ ads in each.</p>
+      <table class="mic-targets">
+        <thead><tr><th>Mic</th><th>New per week</th><th>Asking price</th><th>Latest 4 weeks vs the 4 before</th><th>Usually sells in</th></tr></thead>
+        <tbody>
+        {% for p in pulse %}
+          <tr>
+            <td><a href="#t-{{ p.key }}">{{ p.name }}</a> <span class="muted">({{ p.total }} listings)</span></td>
+            <td><svg width="80" height="22" viewBox="0 0 80 22" role="img" aria-label="New listings per week: {% for w in p.weeks if w.n is not none %}{{ w.n }}{{ ', ' if not loop.last }}{% endfor %}">
+              {% for w in p.weeks %}{% if w.n is not none %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 22 - w.h - 1 }}" width="8" height="{{ w.h or 1 }}" fill="#7aa2f7"><title>{{ w.n }} new</title></rect>{% endif %}{% endfor %}</svg></td>
+            <td>{% if p.line %}<svg width="80" height="22" viewBox="0 0 80 22" role="img" aria-label="Middle asking price per week"><polyline points="{{ p.line }}" fill="none" stroke="#9ece6a" stroke-width="2"/></svg>
+              {% for w in p.weeks if w.median %}{% if loop.last %}<span class="muted">${{ '{:,}'.format(w.median) }}</span>{% endif %}{% endfor %}{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td>{% if p.trend %}{% set d = p.trend.dir %}<strong>{{ '▲' if d == 'up' else ('▼' if d == 'down' else '▶') }}</strong>
+              {{ 'up' if d == 'up' else ('down' if d == 'down' else 'flat') }}{% if d != 'flat' %} {{ p.trend.pct|abs }}%{% endif %}
+              <span class="muted">(${{ '{:,}'.format(p.trend.before) }} → ${{ '{:,}'.format(p.trend.now) }})</span>{% else %}<span class="muted">not enough history yet</span>{% endif %}</td>
+            <td>{% if p.sell %}{{ p.sell.days }} days <span class="muted">({{ p.sell.n }} sold)</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Not enough listings yet to show a trend.</p>
+    {% endif %}
+  </section>
+
   <section class="panel">
     <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
     {% if hits %}
