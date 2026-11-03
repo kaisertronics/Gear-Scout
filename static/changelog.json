@@ -10,6 +10,8 @@
     "date": "2026-11-02",
     "title": "Hourly improvements",
     "items": [
+      "Bundle breakdown: when an ad sells several things together (mic + preamp + cables), Gear Scout adds up the used value of each piece and tags the card \"Bundle: $X vs ~$Y of parts\" if the ask is 40%+ under.",
+      "Quiet auctions: new Home section listing eBay mic auctions ending within 6 hours with zero bids and a price 40%+ under used value, soonest first.",
       "Stubborn-seller flag: ads whose price has been cut 2 or more times get a \"Cut 2x — motivated\" tag, a good sign to lowball.",
       "Room to haggle: ads that say OBO, \"make offer\" or \"must sell\" get a tag, and the offer helper opens about 20% lower on them.",
       "Sunday buyer's report: every Sunday at 8:30 AM you get one email with the week's new mics, price drops, what sold and a market headline.",
