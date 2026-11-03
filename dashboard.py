@@ -975,6 +975,13 @@ def _rare_find(l):
     return rare_finds.rare_find(l.get("title"), l.get("brand")) if hasattr(l, "get") else None
 
 
+@app.template_filter("seller_reply")
+def _seller_reply(l):
+    """How often this seller answered your offers, or None (see scrapers/seller_reply.py)."""
+    from scrapers import seller_reply
+    return seller_reply.reply_chip(l.get("source_name"), l.get("seller")) if hasattr(l, "get") else None
+
+
 @app.template_test("local_pickup")
 def _is_local_pickup(source_name: str) -> bool:
     """Sites where you pick the item up yourself (no shipping)."""

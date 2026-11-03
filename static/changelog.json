@@ -3,6 +3,7 @@
     "date": "2026-11-03",
     "title": "Nightly check",
     "items": [
+      "Seller reply chip: cards from sellers you've sent offers to now show how many of your offers they answered (e.g. \"Replied to 1 of 2 offers\").",
       "Checked everything: no errors in the logs, every Wanted term searched within the hour on the quick sites, and new ads reach you in about 0.6 hours (12 of 14 within an hour).",
       "A stair lift (\"Harmar SSL-SL300\") was showing up under your \"ssl\" term. Stair lifts are now filtered out.",
       "Rare finds radar: rare or vintage models (U47, C12, Pultec, Fairchild and similar) now also send a phone push when they're not on your Wanted list, up to 3 per half hour. Tell me if it's too chatty.",

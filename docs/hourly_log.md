@@ -36,3 +36,4 @@
 - Hourly: Nov 3 (4:30pm): no Tracebacks. Built Price-per-channel chip (scrapers/price_per_channel.py, on listing cards; pages 200). Marked built. Deployed: yes (dashboard).
 - Hourly: Nov 3 (5:30pm): no Tracebacks. Serial-number age check was already live (marked built). Built Channel-count sanity check (warning instead of a wrong per-channel price). All GET pages non-500. Deployed: yes (both).
 - Hourly: Nov 3 (6:30pm): no Tracebacks. Built Rare finds radar first slice (scrapers/rare_finds.py, purple chip on cards; 50 unit tests pass, pages 200; ~581 active listings match, may be a lot, tighten if noisy). Self-audit skipped. Deploy: dashboard.
+- Hourly: Nov 3 (6:30pm run, 2nd): no Tracebacks. Built Seller-reply speed first slice (scrapers/seller_reply.py, chip "Replied to X of N offers"; no reply timestamps exist yet, so speed waits on new proposal Reply-time logging). 16 tests pass, / /mics /offers 200. Deployed: yes (dashboard).
