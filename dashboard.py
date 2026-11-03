@@ -2399,6 +2399,8 @@ def mics_page():
     ctx["history"] = price_history.history(load_config_raw())  # asking-price history per model (cached 30 min)
     from scrapers import wait_signal
     ctx["waits"] = wait_signal.signals(ctx["history"])  # buy-now / wait / steady badge per model, from that same history
+    from scrapers import best_month
+    ctx["best_months"] = best_month.best_months(load_config_raw())  # cheapest calendar month per model; empty until the data is thick enough
     from scrapers import regional_gap
     ctx["regional_gaps"] = regional_gap.regional_gaps(load_config_raw())  # same model far cheaper in another state (cached 30 min)
     try:

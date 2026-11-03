@@ -182,7 +182,8 @@
           {% for p in h.points %}<circle cx="{{ p.x }}" cy="{{ p.y }}" r="3" fill="#9ece6a"><title>{{ p.label }}: ${{ '{:,}'.format(p.median) }} ({{ p.n }} ads)</title></circle>{% endfor %}
         </svg>
         <p class="muted">Per {{ 'week' if h.weekly else 'month' }}, {{ h.points[0].label }} to {{ h.points[-1].label }}: ${{ '{:,}'.format(h.lo) }} low, ${{ '{:,}'.format(h.hi) }} high.
-          {% if h.sold %}Sold: ${{ '{:,}'.format(h.sold.median) }} middle price ({{ h.sold.n }} sales).{% endif %}</p>
+          {% if h.sold %}Sold: ${{ '{:,}'.format(h.sold.median) }} middle price ({{ h.sold.n }} sales).{% endif %}
+          {% set bm = best_months.get(key) if best_months else None %}{% if bm %}<strong>{{ bm.line }}.</strong>{% endif %}</p>
       </details>
     {% endfor %}
   </section>
