@@ -2366,6 +2366,8 @@ def mics_page():
     from scrapers import market_pulse, price_targets
     ctx = _mics_ctx()
     ctx["pulse"] = market_pulse.pulse(load_config_raw())  # weekly trend per mic (read-only, cached 30 min)
+    from scrapers import price_history
+    ctx["history"] = price_history.history(load_config_raw())  # asking-price history per model (cached 30 min)
     try:
         ctx["price_targets"] = price_targets.status(load_config_raw())
     except Exception:
@@ -2477,8 +2479,7 @@ def _mics_ctx() -> dict:
             g["n"] += 1
         models[k] = sorted(groups.values(), key=lambda g: shown(g["best"]))
         for g in models[k]:
-            g["price"] = shown(g["best"])
-            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
+            g["price"] = shown(g["best"])            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
             # tag and border the Price Board uses) — here and in "In your price range".
             if g["n"] > 1:
                 g["best"]["model_lowest"] = True
