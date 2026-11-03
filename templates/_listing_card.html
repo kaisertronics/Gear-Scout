@@ -1,5 +1,5 @@
 {% macro listing_card(l) %}
-<div class="listing-card{{ ' is-deal' if l.is_deal else '' }}{{ ' is-lowest' if l.lowest_for else (' is-model-lowest' if l.model_lowest else '') }}">
+<div{% if l.price_dim %} title="Dimmed: outside your usual price range"{% endif %} class="listing-card{{ ' price-dim' if l.price_dim else '' }}{{ ' is-deal' if l.is_deal else '' }}{{ ' is-lowest' if l.lowest_for else (' is-model-lowest' if l.model_lowest else '') }}">
   {% set card_body %}
     {% if l.image_url %}
       <img src="{{ l.image_url|img }}" alt="" class="listing-img" loading="lazy"

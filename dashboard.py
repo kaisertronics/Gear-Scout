@@ -549,6 +549,16 @@ def auction_countdown(description, now=None) -> Optional[dict]:
     return {"label": label, "urgent": mins < 60, "ts": ts}
 
 
+def _collision_ok(title, description=None) -> bool:
+    """Display-time twin of the ingest check: hides records/non-gear that were
+    stored before the guard existed. Never deletes rows; fails open."""
+    try:
+        from scrapers.collision_guard import collision_ok
+        return collision_ok(title, description)
+    except Exception:
+        return True
+
+
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
@@ -583,6 +593,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
         sales, FAST_SALE_DAYS = {}, 0
     from scrapers.enrich import model_key, parse_price
     now = datetime.now(timezone.utc)
+    from scrapers import price_band as _pb
+    _band = _pb.band() if request.endpoint in ("index", "mics_page") else None  # Home and Mics only
     # How many ads each seller has (per site) in the last 90 days: one query.
     seller_counts = {}
     try:
@@ -602,7 +614,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
     for l in listings:
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
                 or (hide_acc and is_accessory_only(l.get("title")))
-                or (hide_pedals and item_form(l.get("title")) == "pedal")):
+                or (hide_pedals and item_form(l.get("title")) == "pedal")
+                or not _collision_ok(l.get("title"), l.get("description"))):
             continue
         # Learned from listings that sold: how fast this model goes, and at what price.
         sale = sales.get(model_key(l.get("title")) or "")
@@ -683,6 +696,13 @@ def _decorate(listings: list[dict]) -> list[dict]:
         l["is_deal"] = bool(l["price_ctx"] and l["price_ctx"].get("deal"))
         if deals_only and not l["is_deal"]:
             continue
+        # Display only: dim (never hide) cards priced far outside what you star.
+        # Starred ads, deals, Best deals (50%+ under used) and Telex deals stay bright.
+        _m = l.get("mic") or {}
+        l["price_dim"] = bool(
+            _band and not l.get("favorite") and not l["is_deal"] and not l.get("deal")
+            and not ((_m.get("pct") or 0) >= 50) and not ((l.get("comp") or {}).get("pct", 0) >= 50)
+            and _pb.is_outside(parse_price(l.get("price")), _band))
         # "Worth it only": 10%+ under B-stock value (or a solid used value for
         # vintage gear); listings without a comp yet are left out.
         if worth_only and not (l["price_ctx"] or {}).get("worth"):

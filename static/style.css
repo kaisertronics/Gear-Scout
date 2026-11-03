@@ -214,6 +214,8 @@ body {
   color: inherit;
 }
 .listing-card-nolink { opacity: 0.6; cursor: default; }
+.listing-card.price-dim { opacity: 0.5; }
+.listing-card.price-dim:hover { opacity: 0.9; }
 .listing-img {
   width: 100%;
   height: 140px;
