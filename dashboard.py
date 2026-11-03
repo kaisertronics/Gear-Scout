@@ -975,6 +975,13 @@ def _rare_find(l):
     return rare_finds.rare_find(l.get("title"), l.get("brand")) if hasattr(l, "get") else None
 
 
+@app.template_filter("unnamed_mic")
+def _unnamed_mic(l):
+    """'Might be ...' guesses for a generic-titled mic, or None (see scrapers/unnamed_mic.py)."""
+    from scrapers import unnamed_mic
+    return unnamed_mic.identify(l.get("title"), l.get("description")) if hasattr(l, "get") else None
+
+
 @app.template_filter("seller_reply")
 def _seller_reply(l):
     """How often this seller answered your offers, or None (see scrapers/seller_reply.py)."""
