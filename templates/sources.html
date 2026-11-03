@@ -42,6 +42,18 @@
     </p>
   </section>
 
+  {% if catch_speed %}
+  <section class="panel" id="catch-speed">
+    <h2>⏱ Catch speed <span class="muted">— minutes from the seller posting an ad to us catching it, last 14 days</span></h2>
+    <table class="data">
+      <tr><th>Source</th><th>Typical (median)</th><th>Slowest 1 in 10</th><th>Ads</th></tr>
+      {% for r in catch_speed %}
+      <tr><td>{{ r.source }}</td><td>{{ r.median_text }}</td><td>{{ r.p90_text }}</td><td>{{ r.n }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2>Current sources <span class="muted">— {{ sources|length }}</span></h2>
     <table class="status-table">

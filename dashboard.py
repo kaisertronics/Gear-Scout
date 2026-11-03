@@ -4011,8 +4011,12 @@ def listing_tags():
 @app.route("/sources")
 def sources():
     cfg = load_config_raw()
+    from scrapers import catch_speed
+    speed = [dict(r, median_text=catch_speed.fmt(r["median"]), p90_text=catch_speed.fmt(r["p90"]))
+             for r in catch_speed.scoreboard()]  # read-only, cached 10 min
     return render_template(
         "sources.html",
+        catch_speed=speed,
         sources=cfg.get("sources", []),
         source_types=SOURCE_TYPES,
         fb_session=fb_session_status(),
