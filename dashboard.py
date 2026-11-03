@@ -2590,7 +2590,18 @@ def _home_page():
                          "ref": f"${l['used_value']:,}", "est": False, "label": f"AI guess: {l['guess']}"}
     except Exception:
         logging.exception("Home: mislabeled finder failed")
-    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled)
+    quiet = []
+    try:
+        from scrapers import mic_focus, quiet_auctions
+        quiet = _decorate(mic_focus.still_showing(quiet_auctions.find(cfg)))
+        for l in quiet:
+            q = l["quiet"]
+            l["comp"] = {"pct": q["pct"], "ref": f"${q['used']:,}", "est": False, "label": "Used market"}
+        quiet.sort(key=lambda l: l["quiet"]["ends"])
+    except Exception:
+        logging.exception("Home: quiet auctions failed")
+    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
+               quiet=quiet)
     return render_template("home.html", **ctx)
 
 

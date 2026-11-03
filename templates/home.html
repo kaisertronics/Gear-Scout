@@ -43,6 +43,13 @@
     {% endif %}
   </section>
 
+  {% if quiet %}
+  <section class="panel" id="quiet-auctions">
+    <h2>🔔 Quiet auctions: bid now <span class="muted">— {{ quiet|length }} mic auction{{ '' if quiet|length == 1 else 's' }} ending within 6 hours with 0 bids, 40%+ under used value · soonest first</span></h2>
+    <div class="listing-grid">{% for l in quiet[:8] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if mislabeled %}
   <section class="panel" id="mislabeled">
     <h2>🕵️ Possible mislabeled bargains <span class="muted">— {{ mislabeled|length }} · vague titles where the AI named the gear from the photo; 50%+ under its used value, $300+ (double-check the photo)</span></h2>
