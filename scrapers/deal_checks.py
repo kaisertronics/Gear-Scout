@@ -34,6 +34,13 @@ def scam_flags(r: dict, used: Optional[float], unit: float) -> list[str]:
     local = bool(_LOCAL.search(r.get("source_name") or ""))
     if used and local and unit < used * 0.35:
         out.append(f"a local ad at {round((1 - unit / used) * 100)}% under")
+    try:  # the ad text names a different model / calls it a clone (scrapers/spec_mismatch.py)
+        from scrapers.spec_mismatch import check as _spec_check
+        why = _spec_check(r.get("title"), r.get("description"))
+        if why:
+            out.append(why)
+    except Exception:
+        logger.exception("Spec mismatch check failed")
     return out
 
 
