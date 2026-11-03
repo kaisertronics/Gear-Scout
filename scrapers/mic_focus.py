@@ -532,6 +532,17 @@ def _ad_sig(title, price) -> tuple:
     return (re.sub(r"\s+", " ", (title or "").lower()).strip(), str(price or "").strip())
 
 
+_hidden_cache: dict = {"at": 0.0, "sigs": set()}
+
+
+def _hidden_sigs(conn) -> set:
+    """Signatures of every hidden ad, kept 15 s (it's read many times per page)."""
+    if time.time() - _hidden_cache["at"] > 15:
+        _hidden_cache["sigs"] = {_ad_sig(t, p) for t, p in conn.execute("SELECT title, price FROM seen WHERE hidden = 1")}
+        _hidden_cache["at"] = time.time()
+    return _hidden_cache["sigs"]
+
+
 def still_showing(rows: list[dict]) -> list[dict]:
     """Drops what you've hidden (the ✕) or what sold / went pending since the
     list was built — checked when the page opens, so a hidden ad doesn't come
@@ -548,7 +559,7 @@ def still_showing(rows: list[dict]) -> list[dict]:
             gone |= {u for (u,) in conn.execute(
                 f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(chunk))})"
                 " AND (hidden = 1 OR COALESCE(sold, 0) = 1 OR COALESCE(pending, 0) = 1)", chunk)}
-        hidden = {_ad_sig(t, p) for t, p in conn.execute("SELECT title, price FROM seen WHERE hidden = 1")}
+        hidden = _hidden_sigs(conn)
     return [r for r in rows if r.get("url") not in gone and _ad_sig(r.get("title"), r.get("price")) not in hidden]
 
 

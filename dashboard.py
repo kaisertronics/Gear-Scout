@@ -666,6 +666,13 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if not l.get("sold"):
             from scrapers.accessory_check import check as accessory_check
             l["no_acc"] = accessory_check(l.get("title"), l.get("description"))
+        l["serial_note"] = None
+        try:
+            if not l.get("sold"):
+                from scrapers.serial_check import check as serial_check
+                l["serial_note"] = serial_check(l.get("title"), l.get("description"))
+        except Exception:
+            l["serial_note"] = None
         from scrapers.condition_grade import grade as condition_grade
         l["cond_grade"] = condition_grade(l.get("title"), l.get("description"))
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
@@ -4328,6 +4335,11 @@ def _keep_caches_warm():
             load_market()
             from scrapers import market_value as _mvw
             _mvw.index(max_age=1200)  # refreshed here, before page loads find it stale
+            try:
+                from scrapers import market_pulse as _MP
+                _MP.pulse(load_config_raw())
+            except Exception:
+                logging.exception('Cache warm-up: market pulse failed')
             from scrapers import mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
             _cfg = load_config_raw()
             for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find)):

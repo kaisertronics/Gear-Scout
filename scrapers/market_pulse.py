@@ -13,6 +13,7 @@ only (hidden and duplicate rows ignored); no network calls. A number is only sho
 is better than a misleading figure from one or two ads.
 """
 import logging
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from statistics import median
@@ -26,6 +27,7 @@ TREND_MIN = 5      # ads needed in EACH 4-week half before an arrow is shown
 MIN_ASK = 150      # under this (or the brand's own minimum, if higher) it's an accessory or a part
 FLAT_PCT = 3      # a change smaller than this counts as "flat"
 _TTL = 30 * 60
+_lock = threading.Lock()
 _cache: dict = {"at": 0.0, "out": None}
 
 
@@ -158,10 +160,13 @@ def pulse(cfg: dict) -> list[dict]:
     """build(), cached for 30 minutes; never raises (an empty list on trouble)."""
     if _cache["out"] is not None and time.time() - _cache["at"] < _TTL:
         return _cache["out"]
-    try:
-        out = build(cfg)
-    except Exception:
-        logger.exception("Market pulse failed")
-        return []
-    _cache["out"], _cache["at"] = out, time.time()
-    return out
+    with _lock:
+        if _cache["out"] is not None and time.time() - _cache["at"] < _TTL:
+            return _cache["out"]
+        try:
+            out = build(cfg)
+        except Exception:
+            logger.exception("Market pulse failed")
+            return []
+        _cache["out"], _cache["at"] = out, time.time()
+        return out
