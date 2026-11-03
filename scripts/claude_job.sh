@@ -44,7 +44,7 @@ pick_account() {
 run_once() { # account log timeout_seconds promptfile -> sets code
   if [ "$1" = plan2 ]; then export CLAUDE_CONFIG_DIR="$HOME/.claude-plan2"; else unset CLAUDE_CONFIG_DIR; fi
   prompt=$(cat "$4")
-  "$CLAUDE" -p --model sonnet --permission-mode bypassPermissions "$prompt" >"$2" 2>&1 </dev/null &
+  "$CLAUDE" -p --model "${CLAUDE_JOB_MODEL:-sonnet}" --permission-mode bypassPermissions "$prompt" >"$2" 2>&1 </dev/null &
   pid=$!
   ( sleep "$3"; kill -TERM "$pid" 2>/dev/null; sleep 20; kill -KILL "$pid" 2>/dev/null ) &
   wd=$!
