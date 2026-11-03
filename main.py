@@ -631,6 +631,15 @@ def run_best_deals_email():
         logger.exception("Best deals email failed")
 
 
+def run_weekly_report():
+    """Sunday 8:30 AM email: the week's buyer's report."""
+    try:
+        from scrapers import weekly_report
+        weekly_report.send_weekly(load_config())
+    except Exception:
+        logger.exception("Weekly buyer's report failed")
+
+
 def run_ai_briefing():
     if _mic_focus_on():
         return  # Mic Focus: mic alerts only
@@ -723,6 +732,8 @@ def run_schedule():
                       name="gear_scout_routine_watch", max_instances=1, coalesce=True, misfire_grace_time=1800)
     scheduler.add_job(run_best_deals_email, CronTrigger(hour=8, minute=0, timezone=tz_name),
                       name="gear_scout_best_deals_email", misfire_grace_time=3600)
+    scheduler.add_job(run_weekly_report, CronTrigger(day_of_week="sun", hour=8, minute=30, timezone=tz_name),
+                      name="gear_scout_weekly_report", misfire_grace_time=3600)
     # AI emails (only when a Gemini key is set): daily briefing and weekly notes.
     scheduler.add_job(run_ai_briefing, CronTrigger(hour=8, minute=0, timezone=tz_name),
                       name="gear_scout_ai_briefing", misfire_grace_time=3600)
