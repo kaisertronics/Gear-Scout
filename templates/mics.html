@@ -184,8 +184,23 @@
   </section>
   {% endif %}
 
+  {% if regional_gaps %}
+  <section class="panel" id="regional-gap">
+    <h2>🗺️ Regional price gap <span class="muted">— same model, far cheaper in another state</span></h2>
+    <p class="muted">Middle live asking price per state against your home state ({{ regional_gaps[0].home }}); a state needs 3+ ads of the
+      model and has to be 25%+ under. Only ads with a "City, ST" location count. Worth a road trip or a shipped deal.</p>
+    <ul>
+    {% for m in regional_gaps %}{% for g in m.gaps %}
+      <li><strong>{{ m.label }}</strong> in {{ g.region }}: ${{ '{:,}'.format(g.median) }} middle price, {{ g.pct }}% under {{ g.base_label }} (${{ '{:,}'.format(g.base) }})
+        <span class="muted">({{ g.n }} ads, from ${{ '{:,}'.format(g.low) }})</span>
+        {% for a in g.ads %}<a href="{{ a.url }}" target="_blank" rel="noopener">${{ '{:,}'.format(a.price|round|int) }} {{ a.location }}</a>{{ ' · ' if not loop.last }}{% endfor %}</li>
+    {% endfor %}{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section class="panel">
-    <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
+    <h2>Mic deals<span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}
