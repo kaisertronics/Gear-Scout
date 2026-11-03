@@ -646,6 +646,10 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if l["price_ctx"] and l["price_ctx"].get("deal"):
             from scrapers.resale_profit import estimate as resale_estimate
             l["resale"] = resale_estimate(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["no_acc"] = None
+        if not l.get("sold"):
+            from scrapers.accessory_check import check as accessory_check
+            l["no_acc"] = accessory_check(l.get("title"), l.get("description"))
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
         # Listings with no known distance (shipped-item sites, older rows)
         # stay visible — the radius only filters what can be measured.
