@@ -427,7 +427,7 @@ def require_login():
     if request.endpoint in ("login", "static"):
         return None
     if not session.get("authenticated"):
-        return redirect(url_for("login", next=request.path))
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
     return None
 
 
@@ -2484,6 +2484,22 @@ def offers_add():
     o = offer_log.add(f.get("url"), f.get("title"), f.get("source"), f.get("seller"),
                       f.get("asking"), f.get("offered"), f.get("reply"), f.get("counter"))
     return jsonify(ok=bool(o), discount=offer_log.discount(o) if o else None), (200 if o else 400)
+
+
+@app.route("/offer")
+def offer_page():
+    """One-tap instant offer: the page every deal push/email links to."""
+    from scrapers import instant_offer as io
+    url = (request.args.get("url") or "").strip()
+    l = io.lookup(url) if url else None
+    if not l:
+        return render_template("offer.html", l=None, url=url), 404
+    ask = l.get("ask")
+    ch = io.channel(url, l.get("offers_ok"), _inject_ebay_connected().get("ebay_connected"))
+    amount = io.suggest(ask)
+    return render_template("offer.html", l=l, url=url, ask=ask, amount=amount, channel=ch,
+                           floor=io.min_offer(ask) if ask else None,
+                           msg=io.message(l.get("title"), amount) if amount else "", ship_note=io.SHIP_NOTE)
 
 
 @app.route("/reverb/offer", methods=["POST"])

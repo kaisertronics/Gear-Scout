@@ -246,7 +246,7 @@ def hits_in(cfg: dict, rows: list[dict]) -> list:
 def push_hit(cfg: dict, r: dict, found: list[str]):
     """The single "New: ..." push for one Wanted match (Reverb ads that take
     offers also say so, with the usual opening offer)."""
-    from scrapers import deal_checks as D
+    from scrapers import deal_checks as D, instant_offer
     from scrapers.enrich import parse_price
     from scrapers.notify import send_push
     where = (r.get("location") or "").split(" @")[0] or r.get("source_name") or ""
@@ -256,7 +256,8 @@ def push_hit(cfg: dict, r: dict, found: list[str]):
         offers = ""
     return send_push(cfg, f"New: {r['title'][:80]}",
                      f"{r.get('price') or 'no price'} · {where}\nWanted: {found[0]}" + (f"\n{offers}" if offers else ""),
-                     url=r["url"], tags=["new"], image=r.get("image_url"))
+                     url=r["url"], tags=["new"], image=r.get("image_url"),
+                     actions=instant_offer.push_actions(cfg, r["url"], instant_offer.suggested_for(r)))
 
 
 def _ensure_fast(conn):

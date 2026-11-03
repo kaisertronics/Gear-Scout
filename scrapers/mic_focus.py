@@ -725,6 +725,7 @@ def offers_text(r: dict) -> str:
 def alert(cfg: dict) -> int:
     """Rebuilds the list, then pushes each new hit once per price. The very
     first run sends one summary push instead of the whole backlog."""
+    from scrapers import instant_offer
     from scrapers.notify import push_enabled, send_push
     from scrapers.store import _conn
     data = build(cfg)
@@ -753,7 +754,8 @@ def alert(cfg: dict) -> int:
                     (f" ({m['pct']}% off {m['ref_kind']})" if m["pct"] and m["pct"] > 0 else "")
                 chk = " (double-check)" if m["check"] else ""
                 send_push(cfg, f"🎤 {m['name']}: {head}{chk}", f"{r['title'][:100]}\n{_line(r)}" + offers_text(r),
-                          url=r["url"], tags=["microphone"], image=r.get("image_url"))
+                          url=r["url"], tags=["microphone"], image=r.get("image_url"),
+                          actions=instant_offer.push_actions(cfg, r["url"], instant_offer.suggested_for(r)))
                 sent += 1
     now = datetime.now(timezone.utc).isoformat()
     with _conn() as conn:
@@ -1032,6 +1034,18 @@ def deep_crawl(cfg: dict) -> int:
 # Email for mic alerts (the push-only version left out the emails every other
 # Gear Scout alert sends).
 
+def _offer_link(cfg_email: dict, r: dict) -> str:
+    """"Offer $X" link to the one-tap offer page, for a deal email."""
+    from html import escape
+    from scrapers import instant_offer
+    href = instant_offer.link({"email": cfg_email}, r.get("url"))
+    amt = instant_offer.suggested_for(r)
+    if not href:
+        return ""
+    return (f'<div style="margin-top:6px"><a href="{escape(href)}" style="background:#166534;color:#fff;padding:6px 12px;'
+            f'border-radius:6px;text-decoration:none;font-size:13px;font-weight:700">Offer{f" ${amt:,}" if amt else ""}</a></div>')
+
+
 def _email_hits(cfg: dict, subject: str, rows: list[dict]) -> bool:
     email_cfg = cfg.get("email") or {}
     if not (email_cfg.get("from") and email_cfg.get("password") and rows):
@@ -1052,7 +1066,8 @@ def _email_hits(cfg: dict, subject: str, rows: list[dict]) -> bool:
                   f'<div style="font-size:18px;font-weight:700;color:#166534">{escape(_price_text(m).replace(" delivered", ""))}'
                   f'<span style="font-size:12px;color:#64748b;font-weight:400"> {dl}{escape(off)}</span></div>'
                   f'<div style="font-size:12px;color:#64748b">{escape(str(r.get("source_name") or ""))}'
-                  f'{" · " + escape(str(r["location"]).split(" @")[0]) if r.get("location") else ""}</div></td></tr>')
+                  f'{" · " + escape(str(r["location"]).split(" @")[0]) if r.get("location") else ""}</div>'
+                  f'{_offer_link(email_cfg, r)}</td></tr>')
     more = f'<p style="color:#64748b">+ {len(rows) - 25} more on the Home page.</p>' if len(rows) > 25 else ""
     link = f'<p><a href="{escape(dash)}/mics">Open Gear Scout →</a></p>' if dash else ""
     html = (f'<!DOCTYPE html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,sans-serif">'

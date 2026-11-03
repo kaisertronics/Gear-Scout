@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Make offer · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .io-wrap { max-width: 520px; margin: 0 auto; }
+  .io-img { width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; }
+  .io-row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border); }
+  .io-amt { font-size: 28px; width: 100%; padding: 10px; box-sizing: border-box; }
+  .io-btn { width: 100%; font-size: 18px; padding: 14px; margin-top: 10px; }
+  .io-msg { width: 100%; box-sizing: border-box; min-height: 90px; margin-top: 8px; }
+</style>
+<div class="io-wrap">
+{% if not l %}
+  <section class="panel"><h2>Listing not found</h2><p class="muted">Gear Scout doesn't have that listing: {{ url }}</p></section>
+{% else %}
+<section class="panel">
+  <h2>💬 One-tap offer</h2>
+  {% if l.image_url and l.image_url.startswith('http') %}<img class="io-img" src="{{ l.image_url }}" alt="">{% endif %}
+  <p><a href="{{ l.url }}" target="_blank" rel="noopener"><strong>{{ l.title }}</strong></a></p>
+  <div class="io-row"><span>Ask</span><strong>{{ l.price }}</strong></div>
+  {% if l.shipping is number %}<div class="io-row"><span>Shipping</span><span>{% if l.shipping == 0 %}free{% else %}${{ '{:,.0f}'.format(l.shipping) }}{% endif %}, {{ ship_note }}</span></div>{% endif %}
+  {% if l.used %}<div class="io-row"><span>Used value</span><span>~${{ '{:,.0f}'.format(l.used) }}</span></div>{% endif %}
+  <div class="io-row"><span>Where</span><span>{{ (l.location or l.source_name or '')|truncate(40) }}</span></div>
+  {% if l.sold or l.pending %}<p class="login-error">This listing is marked {{ 'sold' if l.sold else 'pending' }}.</p>{% endif %}
+
+  {% if not ask %}
+    <p class="muted">No asking price to base an offer on. Open the listing to message the seller.</p>
+  {% else %}
+  <p class="muted">Suggested: ${{ '{:,}'.format(amount) }} (about 15% under the ask, never under ${{ '{:,}'.format(floor) }}, rounded to $5, {{ ship_note }}).</p>
+  <label>Your offer ($)<input id="io-amount" class="io-amt" type="number" inputmode="numeric" min="{{ floor }}" max="{{ ask|int }}" step="5" value="{{ amount }}"></label>
+
+  {% if channel in ('reverb', 'ebay') %}
+  {% set name = 'Reverb' if channel == 'reverb' else 'eBay' %}
+  <div id="io-send-box" data-url="{{ l.url }}" data-title="{{ l.title }}" data-asking="{{ l.price }}" data-seller="{{ l.seller or '' }}" data-endpoint="/{{ channel }}/offer" data-name="{{ name }}">
+    <button type="button" class="btn btn-primary io-btn" id="io-send">Send offer to {{ name }}</button>
+    <div id="io-confirm" hidden>
+      <div id="io-q"></div>
+      <button type="button" class="btn io-btn" id="io-yes">Confirm</button>
+      <button type="button" class="btn io-btn" id="io-no">Cancel</button>
+    </div>
+    <div id="io-result" class="muted"></div>
+  </div>
+  <script>
+  (function () {
+    var box = document.getElementById('io-send-box'), amt = document.getElementById('io-amount');
+    var q = document.getElementById('io-q'), conf = document.getElementById('io-confirm'), send = document.getElementById('io-send');
+    var res = document.getElementById('io-result');
+    send.onclick = function () {
+      var v = parseFloat(amt.value);
+      if (!(v >= +amt.min && v <= +amt.max)) { res.textContent = 'Offer must be between $' + amt.min + ' and $' + amt.max; return; }
+      q.textContent = 'Send $' + v.toLocaleString() + ' offer for ' + box.dataset.title + ' to ' + box.dataset.name + '? This is a real, binding offer.';
+      conf.hidden = false; send.hidden = true;
+    };
+    document.getElementById('io-no').onclick = function () { conf.hidden = true; send.hidden = false; };
+    document.getElementById('io-yes').onclick = function () {
+      var fd = new FormData(); fd.append('confirm', '1'); fd.append('amount', amt.value);
+      ['url', 'title', 'asking', 'seller'].forEach(function (k) { fd.append(k, box.dataset[k]); });
+      conf.hidden = true; res.textContent = 'Sending...';
+      fetch(box.dataset.endpoint, {method: 'POST', body: fd}).then(function (r) { return r.json(); }).then(function (j) {
+        res.textContent = j.ok ? 'Offer sent' : box.dataset.name + ' said: ' + (String(j.message || '').replace(/^(Reverb|eBay) said: /, '') || 'no reason given');
+        if (!j.ok && j.copy_msg) { document.getElementById('io-copy-box').hidden = false; document.getElementById('io-msg').value = j.copy_msg; }
+      }).catch(function () { res.textContent = box.dataset.name + ' said: could not send (network error)'; });
+    };
+  })();
+  </script>
+  {% endif %}
+
+  <div id="io-copy-box" {% if channel != 'copy' %}hidden{% endif %}>
+    <textarea id="io-msg" class="io-msg">{{ msg }}</textarea>
+    <button type="button" class="btn {% if channel == 'copy' %}btn-primary {% endif %}io-btn" onclick="var t=document.getElementById('io-msg'); t.value=t.value.replace(/\$[\d,]+/, '$'+(parseFloat(document.getElementById('io-amount').value)||0).toLocaleString()); navigator.clipboard && navigator.clipboard.writeText(t.value); this.textContent='Copied'">Copy message</button>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+</div>
+{% endblock %}

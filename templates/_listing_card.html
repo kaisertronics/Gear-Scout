@@ -48,6 +48,7 @@
       {% if l.photo %}<div class="listing-each" title="The AI looked at the photo">📷 {% if l.photo.matches == 'yes' and not l.photo.stock %}Photo matches the title{% else %}{{ l.photo.note or 'Photo unclear' }}{% endif %}</div>{% endif %}
       {% if l.offer %}<div class="listing-each offer-help">💬 Offer ~${{ '{:,}'.format(l.offer.amount) }} ({{ l.offer.why }}){% if l.offer.walk %} · walk away above ${{ '{:,}'.format(l.offer.walk) }}{% endif %}
         <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.offer.msg }}">Copy message</button>
+        {% if l.url and l.price %}<a class="btn btn-sm btn-primary" href="/offer?url={{ l.url|urlencode }}" onclick="event.stopPropagation()" title="One-tap offer page">Offer ${{ '{:,}'.format(l.offer.amount) }}</a>{% endif %}
         {% if l.is_deal and l.url and 'reverb.com/item/' in l.url %}
         <button type="button" class="btn btn-sm reverb-offer-btn" title="Sends a real offer through your Reverb account (asks to confirm first)" onclick="event.preventDefault(); event.stopPropagation(); this.parentNode.querySelector('.ro-confirm').hidden=false; this.hidden=true">Send offer on Reverb</button>
         <div class="ro-confirm" hidden onclick="event.preventDefault(); event.stopPropagation()" data-url="{{ l.url }}" data-amount="{{ l.offer.amount }}" data-title="{{ l.title }}" data-asking="{{ l.price }}" data-seller="{{ l.seller or '' }}">

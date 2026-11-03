@@ -3,6 +3,7 @@
     "date": "2026-11-03",
     "title": "Hourly improvements",
     "items": [
+      "One-tap instant offer: every mic/outboard deal push now has an \"Offer $X\" button and the deal emails an Offer link. It opens a phone-friendly /offer page with the ask, used value, a suggested offer (about 15% under, never under 70% of the ask, rounded to $5, shipped to Seattle), an editable amount, and one Send button (Reverb/eBay offers, with the usual confirm, logged in the offer log) or a Copy message button for other sites. Home cards with a suggested offer show the same \"Offer $X\" link.",
       "Rare find chip: listings of rare/vintage models (Neumann U47, AKG C12, Telefunken ELA M 251, Pultec, Fairchild and similar) get a purple \"Rare find\" tag on the card, whatever the price.",
       "Price per channel: multi-channel preamps and interfaces (like an 8-channel preamp) now show \"$X per channel\" on the card, in green when it's $75 or less per channel.",
       "Outboard page: lists current 1176, LA-2A, Fairchild, EQP-1A/Pultec, API/CAPI 500 module, Distressor, WA-412, Neve and Neumann/Telex preamps and compressors asking 20%+ under their used value, newest and biggest discount first (very big discounts are marked double-check).",

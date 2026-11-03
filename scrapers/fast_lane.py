@@ -102,7 +102,7 @@ def _fetch_ebay(cfg: dict) -> list:
 
 def tick(cfg: dict) -> dict:
     """One pass. Returns {"seen", "new", "pushed", "requests", "seconds"}."""
-    from scrapers import mic_focus
+    from scrapers import instant_offer, mic_focus
     from scrapers import deal_checks as D
     from scrapers.enrich import drop_excluded
     from scrapers.notify import push_enabled, send_push
@@ -160,7 +160,8 @@ def tick(cfg: dict) -> dict:
             if push_enabled(cfg):
                 ok = send_push(cfg, f"🎤 {m['name']}: {head}{chk}",
                                f"{r['title'][:100]}\n{mic_focus._line(r)}" + mic_focus.offers_text(r),
-                               url=r["url"], tags=["microphone"], image=r.get("image_url"))
+                               url=r["url"], tags=["microphone"], image=r.get("image_url"),
+                               actions=instant_offer.push_actions(cfg, r["url"], instant_offer.suggested_for(r)))
             if ok is not False:
                 sent.append(r)
         if sent:
