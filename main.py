@@ -566,6 +566,12 @@ def run_watch_cycle():
             sold_alerts.alert(cfg)
         except Exception:
             logger.exception("Sold-favorite alert failed")
+        # New listings from sellers you watch (reads the database only): one push each.
+        try:
+            from scrapers import seller_watch
+            seller_watch.alert(cfg)
+        except Exception:
+            logger.exception("Watched-seller alert failed")
         # New steals (steals.MIN_PCT, 50%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new

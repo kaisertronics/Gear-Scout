@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Watched sellers · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .sw-list { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+</style>
+
+<section class="panel">
+  <h2>👀 Watched sellers</h2>
+  <p class="muted">Tap "Watch seller" on a listing card. You get a push when Gear Scout first sees a new listing from a seller you watch.</p>
+  {% if not rows %}<p>No sellers watched yet.</p>{% endif %}
+</section>
+
+{% for w in rows %}
+<section class="panel">
+  <h3>{{ w.seller }} <span class="muted">· {{ w.source }}</span></h3>
+  <form method="post" action="{{ url_for('sellers_watch') }}">
+    <input type="hidden" name="source" value="{{ w.source }}"><input type="hidden" name="seller" value="{{ w.seller }}"><input type="hidden" name="unwatch" value="1">
+    <button class="btn btn-sm" type="submit">Unwatch</button>
+  </form>
+  {% if w['items'] %}
+  <ul class="sw-list">
+    {% for l in w['items'] %}<li><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.title or l.url }}</a>{% if l.price %} · {{ l.price }}{% endif %}{% if l.sold %} · <span class="muted">sold</span>{% endif %} <span class="muted">· {{ (l.first_seen or '')[:10] }}</span></li>{% endfor %}
+  </ul>
+  {% else %}<p class="muted">No listings seen yet.</p>{% endif %}
+</section>
+{% endfor %}
+{% endblock %}

@@ -2406,6 +2406,43 @@ def offers_remove():
     return redirect(url_for("offers_page"))
 
 
+def _seller_watched(source, seller) -> bool:
+    from scrapers import seller_watch
+    return seller_watch.is_watched(source, seller)
+
+
+app.jinja_env.globals["seller_watched"] = _seller_watched  # a global so the card macro sees it
+
+
+@app.route("/sellers")
+def sellers_page():
+    """Watched sellers and their latest listings (read from the database only)."""
+    from scrapers import seller_watch
+    rows = []
+    for w in seller_watch.load():
+        try:
+            items = seller_watch.latest(w)
+        except Exception:
+            app.logger.exception("watched seller listings")
+            items = []
+        rows.append({**w, "items": items})
+    return render_template("sellers.html", rows=rows)
+
+
+@app.route("/sellers/watch", methods=["POST"])
+def sellers_watch():
+    """Follows or unfollows a seller (only writes /data/watched_sellers.json)."""
+    from scrapers import seller_watch
+    f = request.form
+    if f.get("unwatch") == "1":
+        ok = seller_watch.remove(f.get("source"), f.get("seller"))
+    else:
+        ok = bool(seller_watch.add(f.get("source"), f.get("seller")))
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=ok), (200 if ok else 400)
+    return redirect(url_for("sellers_page"))
+
+
 @app.route("/price-targets/add", methods=["POST"])
 def price_targets_add():
     """Saves a model + the most you'd pay (only writes /data/price_targets.json)."""
