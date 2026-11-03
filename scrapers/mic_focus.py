@@ -628,20 +628,18 @@ def _check_deals(cfg: dict, deals: list, rows: list) -> tuple[list, list]:
     imgs = {(r.get("image_url") or "").split("?")[0] for r in every if r.get("image_url")}
     reused = set()
     if imgs:
-        with _conn() as conn:
-            for img, n in conn.execute(
-                    "SELECT substr(image_url, 1, CASE WHEN instr(image_url, '?') > 0 THEN instr(image_url, '?') - 1"
-                    " ELSE length(image_url) END) AS img, COUNT(DISTINCT lower(substr(title, 1, 40)) || '|' || COALESCE(location, ''))"
-                    " FROM seen WHERE image_url IS NOT NULL AND duplicate = 0 GROUP BY img HAVING COUNT(*) > 1"):
-                if img in imgs and n > 1:
-                    reused.add(img)
+        try:
+            with _conn() as conn:
+                reused = D.stolen_photos(conn, imgs)
+        except Exception:
+            logger.exception("Stolen-photo check failed")
     home = str(cfg.get("home_zip") or "")
     for r in every:
         info = r.get("deal") or r["mic"]
         used, unit = info.get("used"), info.get("delivered") or 0
         warn = D.scam_flags(r, used, unit)
         if (r.get("image_url") or "").split("?")[0] in reused:
-            warn.append("the same photo is on another ad")
+            warn.append("this photo is also on another seller's ad (possible stolen photo)")
         p = photos.get(r["url"])
         if p:
             r["photo"] = p

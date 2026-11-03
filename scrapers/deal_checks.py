@@ -53,6 +53,34 @@ def photo_reuse(rows: list[dict]) -> dict:
     return out
 
 
+_PLACEHOLDER = re.compile(r"placeholder|no[-_]?image|noimage|default|blank|coming[-_]?soon|logo|spacer|avatar|\.gif", re.I)
+_MAX_SELLERS = 5   # a photo on more ad-owners than this is a stock/catalogue shot
+
+
+def _img_key(url: Optional[str]) -> str:
+    return (url or "").split("?")[0]
+
+
+def stolen_photos(conn, imgs: set) -> set:
+    """Photo addresses (without ?query) from `imgs` that ALSO appear on an ad
+    by a different seller (or, when no seller is known, a different source or
+    place). Same seller reposting is fine; stock photos shared by many
+    sellers and placeholder images are ignored. Uses stored rows only."""
+    imgs = {i for i in imgs if i and not _PLACEHOLDER.search(i)}
+    if not imgs:
+        return set()
+    owners: dict = {}
+    for img, seller, src, loc in conn.execute(
+            "SELECT substr(image_url, 1, CASE WHEN instr(image_url, '?') > 0 THEN instr(image_url, '?') - 1"
+            " ELSE length(image_url) END), seller, source_name, location"
+            " FROM seen WHERE image_url IS NOT NULL AND duplicate = 0"):
+        if img in imgs:
+            who = ("s", seller.strip().lower()) if seller and seller.strip() else \
+                  ("p", (src or "").lower(), (loc or "").lower())
+            owners.setdefault(img, set()).add(who)
+    return {img for img, w in owners.items() if 1 < len(w) <= _MAX_SELLERS}
+
+
 def score(r: dict, pct: int) -> int:
     """Discount first, then a bit for: posted this week (+12) or month (+6),
     a price drop (+8), local pickup within 150 miles (+5); scam signs −40."""
