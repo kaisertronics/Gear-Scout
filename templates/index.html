@@ -264,6 +264,15 @@
   </section>
   {% endif %}
 
+  {% if usually_hidden_total %}
+  <section class="panel">
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(usually_hidden)) }}">
+      <summary class="muted">{{ usually_hidden_total }} ad{{ '' if usually_hidden_total == 1 else 's' }} from brands you usually hide ({{ usually_hidden_brands|map('title')|join(', ') }}) — tap to look</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endif %}
+
   {% if no_comp_total %}
   <section class="panel">
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(no_comp)) }}">

@@ -1213,6 +1213,7 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
         if d:
             yield d["no_comp"]
             yield d.get("old", [])
+            yield d.get("usually_hidden", [])
             yield d["for_you"]
             yield d["deals"]
             for _, items in d["grouped"]:
@@ -3273,6 +3274,9 @@ def index():
         last_refresh=last_refresh,
         no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
         old_items=data.get("old", []),
+        usually_hidden=data.get("usually_hidden", [])[:150],
+        usually_hidden_total=len(data.get("usually_hidden", [])),
+        usually_hidden_brands=sorted({l.get("hidden_brand") for l in data.get("usually_hidden", []) if l.get("hidden_brand")}),
         new_items=new_items[:48], new_total=len(new_items), new_since=since,
         auctions=data.get("auctions", []),
         scraped_at=_last_scraped_by_site(),
@@ -3399,6 +3403,21 @@ def _build_index_listings(cfg) -> dict:
                  key=lambda l: -(l.get("comp") or {}).get("pct", 0))
     old_ids = {id(l) for l in old}
     worth = [l for l in worth if id(l) not in old_ids]
+    # Brands you keep hiding drop to a collapsed line (unless 60%+ under comp).
+    usually_hidden, kept = [], []
+    try:
+        from scrapers.hidden_brands import is_usually_hidden, usually_hidden_brands
+        _hb = usually_hidden_brands()
+        for l in worth:
+            b = is_usually_hidden(l, _hb)
+            if b:
+                l["hidden_brand"] = b
+                usually_hidden.append(l)
+            else:
+                kept.append(l)
+        worth = kept
+    except Exception:
+        logging.exception("Hidden-brand memory failed")
     grouped = _group_by_source(worth[:300], decorated=True)
     from zoneinfo import ZoneInfo
     now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
@@ -3415,7 +3434,7 @@ def _build_index_listings(cfg) -> dict:
     picked = {l.get("url") for l in for_you}
     return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you,
             "deals": [l for l in _deals_from(grouped) if l.get("url") not in picked],  # each ad once
-            "auctions": auctions, "old": old}
+            "auctions": auctions, "old": old, "usually_hidden": usually_hidden}
 
 
 @app.route("/scrape/start", methods=["POST"])
