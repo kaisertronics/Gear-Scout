@@ -164,7 +164,7 @@ def search_query(term: str) -> str:
 def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     """Searches one term on the given site groups and stores what it finds."""
     from scrapers.enrich import drop_excluded
-    from scrapers.wanted import is_cable_term
+    from scrapers.wanted import derived_terms, is_cable_term
     from scrapers.runner import run_sources
     from scrapers.fb_posts_background import facebook_paused, pause_facebook
     if "fb" in sites and facebook_paused():
@@ -190,10 +190,11 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     if mp and not _cable_part_number(term) and all((r.fix_hint or "") == "EMPTY_MARKETPLACE_SEARCH" for r in mp):
         from scrapers.fb_posts_background import pause_marketplace_search
         pause_marketplace_search(cfg)
+    keep_acc = is_cable_term(term) or term in derived_terms(cfg)
     counts = {s: [0, 0] for s in sites}
     for r in results:
         c = counts.setdefault(site_of.get(r.source_name, "fast"), [0, 0])
-        for l in drop_excluded(r.listings, cfg, keep_accessories=is_cable_term(term)):
+        for l in drop_excluded(r.listings, cfg, keep_accessories=keep_acc):
             c[0] += 1
             if mark_seen(l) == "new":
                 c[1] += 1
@@ -216,7 +217,7 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     import json
     from pathlib import Path
     from scrapers import mic_focus
-    from scrapers.wanted import terms as wanted_terms
+    from scrapers.wanted import derived_terms, terms as wanted_terms
     focus = mic_focus.enabled(cfg)
     # Mic Focus on (Oct 22): only the mics, fast sites every cycle (15 min),
     # eBay every 30 min; the Telex List is kept but not searched.
@@ -224,6 +225,10 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     # rotation, every term at the same rate (least recently searched first).
     mic_terms = mic_focus.sweep_terms(cfg)
     ts = mic_terms if focus else list(dict.fromkeys(wanted_terms(cfg) + mic_terms))
+    # Sibling Hosa models and the shopping list's items (wanted.derived_terms): searched on the fast
+    # sites and eBay at the same rate as every term, even with Mic Focus on, but not on Facebook.
+    derived = derived_terms(cfg)
+    ts = list(dict.fromkeys(ts + derived))
     fast_every, ebay_every = (15, 45) if focus else (FAST_EVERY_MIN, EBAY_EVERY_MIN)
     if not ts:
         return []
@@ -292,11 +297,11 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     if focus:
         fb_due = mic_focus.fb_terms(cfg)  # one broad Facebook search per mic brand
     else:  # the Telex List plus one broad search per mic brand, all in the same rotation
-        fb_due = list(dict.fromkeys([t for t in ts if t not in mic_terms and (not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN))]
+        fb_due = list(dict.fromkeys([t for t in ts if t not in mic_terms and t not in derived and (not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN))]
                                     + mic_focus.fb_terms(cfg)))
     for term in sorted(fb_due, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
         out.append(run(term, {"fb"}, "fb"))
-    typos = list(dict.fromkeys(q for t in ts for q in misspellings(t)))
+    typos = list(dict.fromkeys(q for t in ts if t not in derived for q in misspellings(t)))
     for q in sorted(typos, key=lambda q: (st.get((q, "fast")) or {}).get("searched_at") or "")[:TYPOS_PER_CYCLE]:
         if due(q, "fast", TYPO_EVERY_MIN):
             out.append(run(q, {"fast"}, "misspelling"))

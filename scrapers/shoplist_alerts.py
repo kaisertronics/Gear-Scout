@@ -51,7 +51,7 @@ def find(cfg: dict) -> list:
             continue
         for it in shopping_list.ITEMS:
             try:
-                ok = it["match"](r["title"])
+                ok = shopping_list.matches_item(it, r["title"], r.get("description"))
             except Exception:
                 ok = False
             if not ok or _targeted(it, r["title"], targets):

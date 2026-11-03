@@ -249,7 +249,8 @@ def keywords_with_learned(cfg: dict) -> list[str]:
     try:
         from scrapers import base as scraper_base
         from scrapers.telex import term_matcher
-        scraper_base.WANTED_MATCHERS[:] = [term_matcher(t) for t in wanted_terms(cfg)]
+        from scrapers.wanted import derived_terms
+        scraper_base.WANTED_MATCHERS[:] = [term_matcher(t) for t in wanted_terms(cfg) + derived_terms(cfg)]
     except Exception:
         pass
     telex = []

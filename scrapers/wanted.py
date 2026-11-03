@@ -40,12 +40,28 @@ def terms(cfg: dict) -> list[str]:
     return out
 
 
+def derived_terms(cfg: dict) -> list[str]:
+    """Terms the app adds itself, never written to config.yaml: sibling Hosa snake models of the
+    Telex List's ("Hosa STX-807F" -> STX-805F, STX-803F...) and one search per studio shopping-list
+    item. The sweep searches them like any term; opt out with wanted.derived_terms: false."""
+    if (cfg.get("wanted") or {}).get("derived_terms") is False:
+        return []
+    from scrapers.cable_family import siblings
+    from scrapers.shopping_list import search_terms
+    own = terms(cfg)
+    have = {t.lower() for t in own}
+    return [t for t in dict.fromkeys(siblings(own) + search_terms()) if t.lower() not in have]
+
+
 def matchers(cfg: dict) -> list[tuple[str, Callable[[str], bool], Optional[str], bool]]:
     """[(term, match(text), item form the term asks for, is_specific)]"""
     from scrapers.board import _is_specific
     from scrapers.enrich import item_form
     from scrapers.telex import term_matcher
-    return [(t, term_matcher(t), item_form(t), _is_specific(t)) for t in terms(cfg)]
+    from scrapers.cable_family import siblings
+    own = terms(cfg)
+    sib = siblings(own) if (cfg.get("wanted") or {}).get("derived_terms") is not False else []
+    return [(t, term_matcher(t), item_form(t), _is_specific(t)) for t in own + sib]
 
 
 # Words that make a listing audio gear. A broad term ("DIY", "Golden age")

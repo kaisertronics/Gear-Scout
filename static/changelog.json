@@ -3,6 +3,7 @@
     "date": "2026-11-03",
     "title": "Nightly check",
     "items": [
+      "Shopping list items are now searched on their own: every /shopping item (Hosa STX-805F, DTP-802 and the rest) is a search term on eBay, Reverb and Craigslist at the same rate as the Telex List, matched on the title or the description, and the cheapest live one (price + shipping, per unit) feeds the running total. Hosa snake sibling models (STX-803F/805F/805M, DTP-803, CSS-802/803/807, XLR-803/805...) are searched too, without touching your Telex List. Cheap cables are no longer hidden by a high-priced look-alike family.",
       "Seller reply chip: cards from sellers you've sent offers to now show how many of your offers they answered (e.g. \"Replied to 1 of 2 offers\").",
       "Checked everything: no errors in the logs, every Wanted term searched within the hour on the quick sites, and new ads reach you in about 0.6 hours (12 of 14 within an hour).",
       "A stair lift (\"Harmar SSL-SL300\") was showing up under your \"ssl\" term. Stair lifts are now filtered out.",

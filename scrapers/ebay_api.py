@@ -235,6 +235,9 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
             listings.append(auction)
             continue
         condition = item.get("condition")
+        if is_live_search and item.get("shortDescription") and not keyword_match(title, keywords):
+            # Found through its description: keep the start of it (the Shopping page matches the model there too).
+            condition = f"{condition or ''} · {re.sub(r'<[^>]+>', ' ', item['shortDescription'])[:300]}".strip(" ·")
         listings.append(Listing(
             source_name=name,
             title=truncate(title, 120),

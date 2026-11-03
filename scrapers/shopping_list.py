@@ -92,7 +92,9 @@ ITEMS = [
          note="Must be the Tascam (DTP / Digidesign) pinout. Mogami Gold DB25-TRS and Hosa DTP-80x are."),
     dict(key="stx", name="8 × XLR female → ¼\" TRS snake, about 5 m (15–16 ft)", qty=3, need="L03, L05, L06: left-wing outputs → bays",
          new=69.00, nsrc="eBay (Hosa STX-805F)", nurl="https://www.ebay.com/itm/267177294758",
-         match=lambda t: re.search(r"stx[- ]?80[3-7]f|stx ?800|8.{0,15}xlr.{0,6}(f|female).{0,20}trs.{0,15}snake", t, re.I) and no(t, r"xlr ?m(ale)?\b(?!.*female)", r"\d ?xlr ?m\b|xlrm") and (length_ok((13, 25))(t) or bool(re.search(r"stx-?80[57]f", t, re.I)))),
+         match=lambda t: (re.search(r"stx[- ]?80[3-7]f|stx ?800|8.{0,15}xlr.{0,6}(f|female).{0,20}trs.{0,15}snake", t, re.I)
+                          or (re.search(r"stx[- ]?80[3-7](?![a-z0-9])", t, re.I) and has(t, r"female")))  # "Hosa STX-805 ... TRS to Female XLR"
+                         and no(t, r"xlr ?m(ale)?\b(?!.*female)", r"\d ?xlr ?m\b|xlrm") and (length_ok((13, 25))(t) or bool(re.search(r"stx-?80[57]f?", t, re.I)))),
     dict(key="cpp", name="8 × ¼\" TS ↔ TS snake, about 5 m", qty=1, need="L08 MLA7 outputs → Bay 4",
          new=54.89, nsrc="eBay (Hosa CPP-805)", nurl="https://www.ebay.com/itm/256284378367",
          match=lambda t: re.search(r"cpp[- ]?80[2-5]|8.{0,10}(ch|channel).{0,15}\bts\b.{0,15}snake", t, re.I) and no(t, r"patch ?bay", r"bundle", r"rca")),
@@ -173,6 +175,49 @@ ITEMS = [
 ]
 
 
+# What the sweep types into eBay / Reverb / Craigslist for each item (one search per item, every
+# sweep, same rate as every Telex term). The match() above still decides what counts.
+SEARCH = {
+    "nys": ["Neutrik NYS-SPP-L1"], "p16": ["ART P16 patchbay"], "dtp": ["Hosa DTP-802", "Mogami DB25 TRS snake"],
+    "stx": ["Hosa STX-805F"], "cpp": ["Hosa CPP-805"], "sacb": ["8 channel XLR snake 25 ft"],
+    "css": ["Hosa CSS-802"], "sntx15": ["8 channel TRS XLR male snake 15 ft"], "sntx25": ["8 channel TRS XLR male snake 25 ft"],
+    "snxt25": ["8 channel XLR female TRS snake 25 ft"], "disn": ["8 channel XLR snake 15 ft"],
+    "brush": ["1U rack brush panel"], "xftrs15": ["XLR female to TRS cable 15 ft"], "xftrs10": ["XLR female to TRS cable 10 ft"],
+    "trsxm15": ["TRS to XLR male cable 15 ft"], "trsxm10": ["TRS to XLR male cable 10 ft"], "trs6": ["TRS to TRS cable 6 ft"],
+    "trs1": ["TRS patch cable 1 ft"], "trs2": ["TRS patch cable 2 ft"], "trs10": ["TRS to TRS cable 10 ft"],
+    "xlr3": ["XLR cable 3 ft"], "ts25": ["instrument cable 25 ft"], "bnc": ["BNC word clock cable 75 ohm"],
+    "nc3fd": ["Sescom NC3FD-SCREW"], "nc3md": ["Sescom NC3MD-SCREW"], "nj3": ["Neutrik NJ3FP6C"],
+    "penn": ["Penn Elcom R1269"], "ha400": ["Behringer HA400"],
+}
+# The exact model, accepted when it is only in the listing's description ("Hosa STX-805" titled
+# "8-Channel Audio Snake Cable"); the optional F/M after the digits is the gender, not a model.
+MODEL = {
+    "dtp": r"dtp[- ]?80[2-5]", "stx": r"stx[- ]?80[3-7][fm]?", "cpp": r"cpp[- ]?80[2-5]", "css": r"css[- ]?80[2-3]",
+    "nys": r"nys[- ]?spp", "nc3fd": r"nc3fd[- ]?screw", "nc3md": r"nc3md[- ]?screw", "nj3": r"nj3fp6",
+    "penn": r"r1269", "ha400": r"ha-?400", "bnc": r"bnc-59",
+}
+
+
+def search_terms():
+    """Every shopping-list item's own search terms, for the sweep."""
+    return list(dict.fromkeys(q for it in ITEMS for q in SEARCH.get(it["key"], [])))
+
+
+def is_search_term(term):
+    return term in set(search_terms())
+
+
+def matches_item(it, title, description=None):
+    """Title matches the item, or the exact model is written in the description."""
+    if it["match"](title):
+        return True
+    model, desc = MODEL.get(it["key"]), re.sub(r"<[^>]+>", " ", description or "")
+    if not model or not re.search(r"(?<![a-z0-9])" + model + r"(?![a-z0-9])", desc, re.I):
+        return False
+    others = re.findall(r"\b(?:dtp|stx|cpp|css)[- ]?8\d{2}[fm]?\b", title, re.I)  # the title names a different model
+    return not any(not re.fullmatch(model, o, re.I) for o in others)
+
+
 def _unit_of(r):
     v = parse_price(r["price"])
     if not v or v < 1:
@@ -206,7 +251,7 @@ def _build():
         live, hist = [], []
         for r in rows:
             t = r["title"]
-            if not it["match"](t) or not _usable(r):
+            if not matches_item(it, t, r["description"]) or not _usable(r):
                 continue
             price, qty, unit = _unit_of(r)
             if not unit:
@@ -228,7 +273,9 @@ def _build():
                 uniq.append(rec)
         med = statistics.median(hist) if len(hist) >= 3 else None
         if med:  # drop junk prices far under the market (a $3 "cable" that's a plug)
-            uniq = [x for x in uniq if x["unit"] >= med * 0.25]
+            # Floor is a quarter of the market median or of the new price, whichever is lower: a pricey
+            # outlier family (Mogami $230 DB25 snakes) must not hide a $22 Hosa (Nov 3).
+            uniq = [x for x in uniq if x["unit"] >= min(med, it["new"]) * 0.25]
         if it["key"] not in ("nys", "p16", "dtp", "penn"):
             uniq = [x for x in uniq if x["unit"] <= it["new"] * 4]
         out.append({k: v for k, v in it.items() if k != "match"} | {
