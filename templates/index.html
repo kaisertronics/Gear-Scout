@@ -273,6 +273,15 @@
   </section>
   {% endif %}
 
+  {% for g in shop_folds %}
+  <section class="panel">
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(g['items'])) }}">
+      <summary class="muted">{{ g['count'] }} shop cop{{ 'y' if g['count'] == 1 else 'ies' }} of {{ g['model'] }}{% if g['low'] %}, lowest ${{ '{:,.0f}'.format(g['low']) }}{% endif %} — tap to look</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endfor %}
+
   {% if no_comp_total %}
   <section class="panel">
     <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(no_comp)) }}">

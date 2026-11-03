@@ -1214,6 +1214,8 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
             yield d["no_comp"]
             yield d.get("old", [])
             yield d.get("usually_hidden", [])
+            for g in d.get("shop_folds", []):
+                yield g["items"]
             yield d["for_you"]
             yield d["deals"]
             for _, items in d["grouped"]:
@@ -3276,6 +3278,7 @@ def index():
         old_items=data.get("old", []),
         usually_hidden=data.get("usually_hidden", [])[:150],
         usually_hidden_total=len(data.get("usually_hidden", [])),
+        shop_folds=data.get("shop_folds", []),
         usually_hidden_brands=sorted({l.get("hidden_brand") for l in data.get("usually_hidden", []) if l.get("hidden_brand")}),
         new_items=new_items[:48], new_total=len(new_items), new_since=since,
         auctions=data.get("auctions", []),
@@ -3418,7 +3421,14 @@ def _build_index_listings(cfg) -> dict:
         worth = kept
     except Exception:
         logging.exception("Hidden-brand memory failed")
-    grouped = _group_by_source(worth[:300], decorated=True)
+    # Reverb shops' new / B-stock Lauten and Warm Audio copies: one line per model.
+    shop_folds = []
+    try:
+        from scrapers.shop_fold import fold_shop_stock
+        worth, shop_folds = fold_shop_stock(worth)
+    except Exception:
+        logging.exception("Shop-stock fold failed")
+    grouped =_group_by_source(worth[:300], decorated=True)
     from zoneinfo import ZoneInfo
     now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
     auctions = sorted((a for a in getattr(_apply_comp_rule, "auctions", []) if (a.get("auction_ends") or "9") >= now_s),
@@ -3434,7 +3444,8 @@ def _build_index_listings(cfg) -> dict:
     picked = {l.get("url") for l in for_you}
     return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you,
             "deals": [l for l in _deals_from(grouped) if l.get("url") not in picked],  # each ad once
-            "auctions": auctions, "old": old, "usually_hidden": usually_hidden}
+            "auctions": auctions, "old": old, "usually_hidden": usually_hidden,
+            "shop_folds": shop_folds}
 
 
 @app.route("/scrape/start", methods=["POST"])
