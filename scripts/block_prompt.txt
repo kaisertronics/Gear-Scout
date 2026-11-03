@@ -4,7 +4,7 @@ You are the hourly improvement pass for Gear Scout, the owner's personal pro-aud
 BLOCK DELIVERY (runs once per 5-hour usage block, the owner wants fresh updates and ideas every block, sized to the plan's limits): ship MORE than the hourly pass.
 1. Orient exactly as the hourly pass does (steps 0 and 1 below), fix any Traceback first.
 2. Build up to TWO items from the "Coming next" queue (approved first, then oldest proposed), one at a time, each fully tested and deployed before the next. If the queue has fewer than two, invent worthwhile ones yourself (add as proposals first). Use Sonnet agents for code; stay lean otherwise.
-3. Add THREE new well-thought proposals (real new capabilities for finding underpriced gear faster, trusting deals, or saving the owner time; never duplicates; grep code and changelog first).
+3. FIRST mine the owner's own behavior from the DB at /data/seen_listings.db (starred ads, hidden/X'd ads, saved tags, brands and price ranges they open or act on, what they ignore; find the tables with .schema, read-only). Summarize the patterns in 5 lines in docs/owner_patterns.md. THEN add THREE new well-thought proposals grounded in those patterns (real new capabilities for finding underpriced gear faster, trusting deals, or saving the owner time; never duplicates; grep code and changelog first).
 4. Read Home (/) and /mics as the owner would via the Flask test client and fix any card pattern that doesn't belong.
 5. Add one plain-English bullet per shipped item to today's top changelog entry, and a docs/hourly_log.md line starting "Block:".
 Everything else (rules, deploy, no-heredoc, secrets, Facebook-load, price-rule limits) is identical to the hourly pass:
