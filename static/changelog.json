@@ -3,6 +3,7 @@
     "date": "2026-11-03",
     "title": "Hourly improvements",
     "items": [
+      "Best month to buy: under a mic model's price chart on the Mics page, a line like \"Cheapest month to buy: June (about 18% under average)\" appears when there's at least a year of ads to back it up.",
       "Catch speed: the Sources page has a new card showing, for each site, how many minutes after an ad is posted Gear Scout typically finds it (Facebook times are rough).",
       "Starred-ad nudge: if an ad you starred is still for sale a day later, you get one gentle push (\"Still thinking about this one? It's still up at $X\"), at most twice a day and only in daytime.",
       "Shopping-list deals: a brand-new listing for something on your studio shopping list that is 25%+ under its usual price now sends a push (items with your own price target keep using that target).",
