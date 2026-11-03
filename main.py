@@ -568,6 +568,12 @@ def run_watch_cycle():
             sold_alerts.alert(cfg)
         except Exception:
             logger.exception("Sold-favorite alert failed")
+        # A starred ad still up after 24h+: one gentle nudge (max 2/day, daytime only).
+        try:
+            from scrapers import star_nudge
+            star_nudge.alert(cfg)
+        except Exception:
+            logger.exception("Starred-ad nudge failed")
         # New listings from sellers you watch (reads the database only): one push each.
         try:
             from scrapers import seller_watch
