@@ -217,8 +217,14 @@ def run_refresh_cycle(cfg: dict):
         cache_images([l.image_url for l in all_listings if l.image_url])
         cache_recent(days=2)
 
+    def mislabeled_job():
+        # Vague-title ads: the AI names the gear from the photo (a few per hour).
+        from scrapers import mislabeled
+        mislabeled.run(cfg)
+
     jobs = [threading.Thread(target=timed, args=(n, f), daemon=True)
-            for n, f in (("sold check", sold_job), ("price lookups", market_job), ("pictures", picture_job))]
+            for n, f in (("sold check", sold_job), ("price lookups", market_job), ("pictures", picture_job),
+                         ("mislabeled", mislabeled_job))]
     for j in jobs:
         j.start()
     for j in jobs:

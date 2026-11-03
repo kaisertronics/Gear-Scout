@@ -2571,7 +2571,18 @@ def _home_page():
                     new.append(l)
         new.sort(key=listed, reverse=True)
         new = collapse_reposts(new)
-    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count)
+    # Vague-title ads the AI named from the photo and that are 50%+ under used.
+    mislabeled = []
+    try:
+        from scrapers import mic_focus, mislabeled as ML
+        from scrapers.enrich import parse_price
+        mislabeled = _decorate(mic_focus.still_showing(ML.find(cfg)))
+        for l in mislabeled:
+            l["comp"] = {"pct": round((1 - (parse_price(l.get("price")) or 0) / l["used_value"]) * 100),
+                         "ref": f"${l['used_value']:,}", "est": False, "label": f"AI guess: {l['guess']}"}
+    except Exception:
+        logging.exception("Home: mislabeled finder failed")
+    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled)
     return render_template("home.html", **ctx)
 
 

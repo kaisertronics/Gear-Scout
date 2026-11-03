@@ -43,6 +43,13 @@
     {% endif %}
   </section>
 
+  {% if mislabeled %}
+  <section class="panel" id="mislabeled">
+    <h2>🕵️ Possible mislabeled bargains <span class="muted">— {{ mislabeled|length }} · vague titles where the AI named the gear from the photo; 50%+ under its used value, $300+ (double-check the photo)</span></h2>
+    <div class="listing-grid">{% for l in mislabeled[:12] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% for o in outboard %}
   <section class="panel" id="o-{{ o.key }}">
     <h2>{{ o.name }} <span class="muted">— {{ o.rows|length }} deal{{ '' if o.rows|length == 1 else 's' }}{% if o.note %} · {{ o.note }}{% endif %}{{ '' if o.on else ' (off)' }}, newest first</span></h2>
