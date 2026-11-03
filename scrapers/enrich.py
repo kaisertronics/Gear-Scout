@@ -512,7 +512,9 @@ def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> li
     hide_acc = cfg.get("hide_accessories", True)
     term_key = tuple(terms) if terms and len(terms) > 1 and cfg.get("relevance_check", True) else None
     hide_pedals = not wants_pedals(cfg)
+    from scrapers.collision_guard import collision_ok
     return [l for l in listings if not is_not_audio(l.title)
+            and collision_ok(l.title, getattr(l, "description", None))
             and not (hide_pedals and item_form(l.title) == "pedal")
             and not (hide_acc and is_accessory_only(l.title))
             and not (words and exclude_match(l.title, words))
