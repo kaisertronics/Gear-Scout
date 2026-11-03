@@ -50,6 +50,13 @@
   </section>
   {% endif %}
 
+  {% if motivated %}
+  <section class="panel" id="motivated-sellers">
+    <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
+    <div class="listing-grid">{% for l in motivated[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if mislabeled %}
   <section class="panel" id="mislabeled">
     <h2>🕵️ Possible mislabeled bargains <span class="muted">— {{ mislabeled|length }} · vague titles where the AI named the gear from the photo; 50%+ under its used value, $300+ (double-check the photo)</span></h2>

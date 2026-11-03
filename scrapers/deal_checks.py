@@ -5,6 +5,7 @@ Checks on a deal before it's put in front of you (owner, Oct 31):
   photo_check  — the AI looks at the photo: is it the gear in the title?
   score        — one number to sort deals by (discount, freshness, drop, distance)
   offer        — a suggested offer and message for ads that dropped or sat
+                 (a little lower when the seller says they're motivated)
 """
 import json
 import logging
@@ -140,6 +141,16 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
         low = max(25, int(round(unit * 0.80 / 25.0)) * 25)  # ~20% under: the ad invites offers
         if low <= amt:
             amt, why = low, "the ad says it's open to offers"
+    try:  # a seller who says why they need it gone: ~5 points deeper, never under 70% of asking
+        from scrapers.motivated import reason as motivated_reason
+        why_m = motivated_reason(r)
+    except Exception:
+        why_m = None
+    if why_m and not _NO_HAGGLE.search(f"{r.get('title') or ''} {r.get('description') or ''}"):
+        deeper = max(25, int(round((amt - unit * 0.05) / 25.0)) * 25)
+        floor = max(25, int(round(unit * 0.70 / 25.0)) * 25)
+        if max(deeper, floor) < amt:
+            amt, why = max(deeper, floor), f"the seller says: {why_m.lower()}"
     walk = max(25, int(round(unit * 0.95 / 25.0)) * 25)
     if used and used > 0:
         cap = used * 0.6
@@ -152,6 +163,8 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     out = {"amount": amt, "why": why, "msg": msg, "walk": walk}
     if open_to:
         out["haggle"] = True
+    if why_m:
+        out["motivated"] = why_m
     try:  # optional: what your own logged offers got accepted at (scrapers/offer_log.py)
         from scrapers.offer_log import hint
         if hint():

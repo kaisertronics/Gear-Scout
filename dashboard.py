@@ -627,6 +627,11 @@ def _decorate(listings: list[dict]) -> list[dict]:
                 l["stale"] = {"days": days, "offer": f"${max(5, round(value * 0.85 / 5) * 5):,}"}
         except (TypeError, ValueError):
             pass
+        try:
+            from scrapers.motivated import reason as motivated_reason
+            l["motivated"] = motivated_reason(l)
+        except Exception:
+            l["motivated"] = None
         l["age_days"] = _age_days(l)
         l["age_known"] = bool(l.get("posted_at"))
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
@@ -2672,8 +2677,18 @@ def _home_page():
         quiet.sort(key=lambda l: l["quiet"]["ends"])
     except Exception:
         logging.exception("Home: quiet auctions failed")
+    motivated = []
+    try:
+        from scrapers import mic_focus, motivated as MOT
+        motivated = _decorate(mic_focus.still_showing(MOT.find(cfg)))
+        for l in motivated:
+            m = l["motivated_ad"]
+            l["comp"] = {"pct": m["pct"], "ref": f"${m['used']:,}", "est": False, "label": "Used market"}
+        motivated = collapse_reposts(sorted(motivated, key=lambda l: -l["motivated_ad"]["pct"]))
+    except Exception:
+        logging.exception("Home: motivated sellers failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
-               quiet=quiet)
+               quiet=quiet, motivated=motivated)
     return render_template("home.html", **ctx)
 
 
