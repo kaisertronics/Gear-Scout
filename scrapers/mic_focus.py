@@ -657,6 +657,7 @@ def _check_deals(cfg: dict, deals: list, rows: list) -> tuple[list, list]:
         r["flags"] = warn
         r["score"] = D.score(r, info.get("pct") or 0)
         r["offer"] = D.offer(r, unit, used)
+        r["haggle"] = D.haggle(r)
     for r in mic_deals:
         if r["warn"]:
             m = r["mic"]

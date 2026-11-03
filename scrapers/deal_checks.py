@@ -74,6 +74,21 @@ def score(r: dict, pct: int) -> int:
     return s
 
 
+_HAGGLE = re.compile(
+    r"\bobo\b|\bor\s+best\s+offer\b|\bbest\s+offer\b|\bmake\s+(?:me\s+)?an?\s+offer\b|\bmake\s+(?:me\s+)?offer\b"
+    r"|\bmust\s+sell\b|\bneed\s+to\s+sell\b|\bwilling\s+to\s+negotiate\b|\b(?:price\s+)?negotiable\b"
+    r"|\bopen\s+to\s+(?:reasonable\s+)?offers\b", re.I)
+_NO_HAGGLE = re.compile(r"\bfirm\b|\bno\s+(?:\w+\s+)?offers?\b|\bno\s+trades?\s+or\s+offers?\b|\bno\s+lowball", re.I)
+
+
+def haggle(r: dict) -> bool:
+    """True when the ad invites offers (OBO, make offer, must sell...) and isn't firm."""
+    text = f"{r.get('title') or ''} {r.get('description') or ''}"
+    if _NO_HAGGLE.search(text):
+        return False
+    return bool(_HAGGLE.search(text))
+
+
 def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     """For an ad whose price dropped or that's sat 3+ weeks: a suggested
     offer (about 15% under the asking price) and a short message to copy."""
@@ -92,6 +107,11 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     else:
         amt = max(25, int(round(unit * 0.90 / 25.0)) * 25)  # ~10% under
         why = "a fair opening offer"
+    open_to = haggle(r)
+    if open_to:
+        low = max(25, int(round(unit * 0.80 / 25.0)) * 25)  # ~20% under: the ad invites offers
+        if low <= amt:
+            amt, why = low, "the ad says it's open to offers"
     walk = max(25, int(round(unit * 0.95 / 25.0)) * 25)
     if used and used > 0:
         cap = used * 0.6
@@ -101,7 +121,10 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     title = re.sub(r"\s+", " ", r.get("title") or "it")[:70]
     msg = (f"Hi! Is the {title} still available? I can pay ${amt:,} and pick up or pay for shipping "
            f"right away. Thanks!")
-    return {"amount": amt, "why": why, "msg": msg, "walk": walk}
+    out = {"amount": amt, "why": why, "msg": msg, "walk": walk}
+    if open_to:
+        out["haggle"] = True
+    return out
 
 
 # ---------------------------------------------------------------- photo check
