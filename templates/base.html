@@ -45,6 +45,7 @@
         <a href="{{ url_for('steals') }}" class="{{ 'active' if request.endpoint == 'steals' else '' }}">🔥 Steals</a>
         <a href="{{ url_for('offers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('offers') else '' }}">Offers</a>
         <a href="{{ url_for('sellers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sellers') else '' }}">Sellers</a>
+        <a href="{{ url_for('flips_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('flips') else '' }}">Flips</a>
         <a href="{{ url_for('favorites') }}" class="nav-favorites {{ 'active' if request.endpoint == 'favorites' else '' }}">★ Favorites</a>
         <a href="{{ url_for('savings_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('savings') else '' }}">💰 Saved</a>
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Price Board</a>

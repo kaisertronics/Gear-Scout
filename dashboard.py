@@ -2415,6 +2415,48 @@ def offers_remove():
     return redirect(url_for("offers_page"))
 
 
+@app.route("/flips")
+def flips_page():
+    """Flip engine: suggestions only (buy cheap, resell for profit) plus the
+    tracker of what you bought and sold. Nothing here posts or contacts anyone."""
+    from scrapers import flips
+    try:
+        items = flips.find(load_config_raw())
+    except Exception:
+        app.logger.exception("flip suggestions")
+        items = []
+    owned = flips.bought_urls()
+    for r in items:
+        r["draft"] = flips.draft(r)
+        r["owned"] = r.get("url") in owned
+    return render_template("flips.html", items=items, t=flips.summary(), min_profit=flips.MIN_PROFIT,
+                           min_pct=flips.MIN_PROFIT_PCT, min_comps=flips.MIN_COMPS)
+
+
+@app.route("/flips/bought", methods=["POST"])
+def flips_bought():
+    """"I bought this" (only writes /data/flips.json)."""
+    from scrapers import flips
+    f = request.form
+    flips.bought(f.get("url"), f.get("title"), f.get("source"), f.get("paid"), f.get("expected"))
+    return redirect(url_for("flips_page") + "#tracker")
+
+
+@app.route("/flips/sold", methods=["POST"])
+def flips_sold():
+    """Sold price + shipping for a flip you bought (only writes /data/flips.json)."""
+    from scrapers import flips
+    flips.sold(request.form.get("id") or "", request.form.get("price"), request.form.get("ship"))
+    return redirect(url_for("flips_page") + "#tracker")
+
+
+@app.route("/flips/remove", methods=["POST"])
+def flips_remove():
+    from scrapers import flips
+    flips.remove(request.form.get("id") or "")
+    return redirect(url_for("flips_page") + "#tracker")
+
+
 def _seller_watched(source, seller) -> bool:
     from scrapers import seller_watch
     return seller_watch.is_watched(source, seller)
