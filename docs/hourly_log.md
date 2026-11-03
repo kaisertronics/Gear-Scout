@@ -27,3 +27,4 @@
 - Block: Nov 2 (late): Send offer on eBay (Best Offer via Trading API PlaceOffer, Connect eBay OAuth in Settings, scrapers/ebay_offer.py, /ebay/* routes, offers_ok from buyingOptions). Needs owner to create a RuName: docs/ebay_connect_steps.md. Dry-run + mocked unit tests only, no real offer sent. Deploy: both.
 
 - Hourly: Nov 2 (late): no Tracebacks. Marked Shipping-cost reality check built. Built Serial-number age check (scrapers/serial_check.py, U87 only) but held the card tag back: the 100000 pre-Ai cutoff is unverified, so no wrong claim shows on cards. Deploy: no.
+- Hourly: Nov 3 (early): no Tracebacks. Marked Hidden-brand memory built. Built Fold shop stock (scrapers/shop_fold.py, Reverb new/B-stock Lauten and Warm Audio copies fold into one line per model on /dashboard, 25%-under exception; unit test passes). Committed bde3256; deploy refused twice (owner on site), next run deploys. Proposal 24da4c07 to be marked built after deploy.
