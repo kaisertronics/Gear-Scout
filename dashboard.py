@@ -955,6 +955,13 @@ def _delivered(l) -> Optional[str]:
     return f"${total:,.0f}" if total >= 100 else f"${total:,.2f}"
 
 
+@app.template_filter("per_channel")
+def _per_channel(l):
+    """'$X per channel' info for multi-channel gear, or None (see scrapers/price_per_channel.py)."""
+    from scrapers import price_per_channel
+    return price_per_channel.per_channel(l.get("price"), l.get("title")) if hasattr(l, "get") else None
+
+
 @app.template_test("local_pickup")
 def _is_local_pickup(source_name: str) -> bool:
     """Sites where you pick the item up yourself (no shipping)."""

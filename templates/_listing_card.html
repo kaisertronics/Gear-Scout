@@ -32,6 +32,8 @@
           {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_left %} · <span class="gs-countdown{% if l.auction_left.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.auction_left.ts }}" {% if l.auction_ends %}title="ends {{ l.auction_ends }}"{% endif %}>{{ l.auction_left.label }}</span>{% elif l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
+        {% set ppc = l|per_channel %}
+        {% if ppc %}<div class="listing-each{{ ' ppc-low' if ppc.low else '' }}" title="{{ ppc.channels }} channels read from the title{{ '; a low price per channel' if ppc.low }}">{{ '🎚️ ' if ppc.low }}{{ ppc.text }} · {{ ppc.channels }} ch</div>{% endif %}
         {% if l.shipping is number %}
           <div class="listing-ship">{% if l.shipping == 0 %}free shipping{% else %}{{ l.price|usd }} + ${{ '{:,.0f}'.format(l.shipping) }} shipping{% endif %}</div>
         {% elif (l.source_name or '') is local_pickup %}

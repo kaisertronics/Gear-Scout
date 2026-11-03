@@ -3,6 +3,7 @@
     "date": "2026-11-03",
     "title": "Hourly improvements",
     "items": [
+      "Price per channel: multi-channel preamps and interfaces (like an 8-channel preamp) now show \"$X per channel\" on the card, in green when it's $75 or less per channel.",
       "Outboard page: lists current 1176, LA-2A, Fairchild, EQP-1A/Pultec, API/CAPI 500 module, Distressor, WA-412, Neve and Neumann/Telex preamps and compressors asking 20%+ under their used value, newest and biggest discount first (very big discounts are marked double-check).",
       "Price-range dimmer: mic cards priced far outside what you usually star appear dimmed (never hidden) on Home and Mics; starred ads and real deals are never dimmed.",
       "Home, Mics and the other lists now hide vinyl-record and non-gear ads that were stored before the junk guard existed (the Ronco Records album was still showing).",
