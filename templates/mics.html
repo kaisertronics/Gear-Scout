@@ -169,10 +169,14 @@
     <h2>💲 Asking price history <span class="muted">— middle used asking price per model, last 6 months</span></h2>
     <p class="muted">Per month (per week for models with plenty of ads); a point needs 3+ ads in that period and a model needs
       at least 3 such periods, so thinly listed models don't appear. The verdict compares the last 30 days of ads with the whole
-      window. Same ad filters as the market pulse.</p>
+      window. The badge compares the latest prices (last 4 weeks, or the latest month) with the model's usual level over the
+      window: Buy now when 3%+ under, Wait when 3%+ over, else Steady. No seasonal claims; six months can't show a season.
+      Same ad filters as the market pulse.</p>
     {% for key, h in history.items() %}
       <details class="price-history">
-        <summary>{{ h.label }} <span class="muted">— {{ h.verdict or ('middle price $' ~ '{:,}'.format(h.points[-1].median) ~ ' lately') }}</span></summary>
+        <summary>{{ h.label }}
+          {% set w = waits.get(key) if waits else None %}{% if w %}<span class="badge {{ {'buy': 'badge-ok', 'wait': 'badge-blocked'}.get(w.tone, 'badge-type') }}" title="{{ w.why }}">{{ w.label }}</span>{% endif %}
+          <span class="muted">— {{ h.verdict or ('middle price $' ~ '{:,}'.format(h.points[-1].median) ~ ' lately') }}</span></summary>
         <svg width="240" height="60" viewBox="0 0 240 60" role="img" aria-label="Middle asking price per {{ 'week' if h.weekly else 'month' }}, ${{ '{:,}'.format(h.lo) }} to ${{ '{:,}'.format(h.hi) }}">
           <polyline points="{{ h.line }}" fill="none" stroke="#9ece6a" stroke-width="2"/>
           {% for p in h.points %}<circle cx="{{ p.x }}" cy="{{ p.y }}" r="3" fill="#9ece6a"><title>{{ p.label }}: ${{ '{:,}'.format(p.median) }} ({{ p.n }} ads)</title></circle>{% endfor %}

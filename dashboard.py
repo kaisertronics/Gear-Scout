@@ -2373,6 +2373,8 @@ def mics_page():
     ctx["pulse"] = market_pulse.pulse(load_config_raw())  # weekly trend per mic (read-only, cached 30 min)
     from scrapers import price_history
     ctx["history"] = price_history.history(load_config_raw())  # asking-price history per model (cached 30 min)
+    from scrapers import wait_signal
+    ctx["waits"] = wait_signal.signals(ctx["history"])  # buy-now / wait / steady badge per model, from that same history
     from scrapers import regional_gap
     ctx["regional_gaps"] = regional_gap.regional_gaps(load_config_raw())  # same model far cheaper in another state (cached 30 min)
     try:
