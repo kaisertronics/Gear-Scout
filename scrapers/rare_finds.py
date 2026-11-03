@@ -70,7 +70,7 @@ _VINTAGE = re.compile(
     r"(?<![\w-])(?:vintage|original|orig|1960s?|1970s?|60s|70s|196\d|197\d|marconi|rupert|"
     r"original|oem|ex[\s-]?studio|bt[\s-]?\d+)(?![\w-])", re.I)
 _MODERN = re.compile(
-    r"^\s*new\b|(?<![\w-])(?:reissue|re-?issue|brand[\s-]new|new in box|20[0-2]\d|2000s|dpa|dpx|lunchbox|500[\s-]?series|1073lb|1073d|1073spx|"
+    r"^\s*new\b|(?<![\w-])(?:reissue|re-?issue|brand[\s-]new|new in box|20[0-2]\ds?|dpa|dpx|lunchbox|500[\s-]?series|1073lb|1073d|1073spx|"
     r"api[\s-]?550a|modern|mkii|mk2)(?![\w-])", re.I)
 
 # Common modern models named in the title mean it is not about the rare one.

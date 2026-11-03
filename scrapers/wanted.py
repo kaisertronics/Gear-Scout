@@ -319,9 +319,17 @@ def alert_new(cfg: dict) -> int:
     if push_enabled(cfg):
         # Rare finds radar: rare/vintage models ping you even when they're not on the Wanted list.
         try:
+            from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
             from scrapers.rare_finds import rare_find
             done = pushed | {r["url"] for r, _ in hits}
-            rare = [(r, rare_find(r.get("title"), r.get("brand"))) for r in rows if r["url"] not in done]
+            exclude = cfg.get("exclude_words") or []
+
+            def worth_push(r):  # the same guards as hits_in: not excluded / sold, and not an ad posted weeks ago
+                t = r.get("title") or ""
+                age = posted_age_days(r)
+                return not (exclude_match(t, exclude) or is_not_audio(t) or title_says_sold(t)
+                            or (age is not None and age > ALERT_MAX_AGE_DAYS))
+            rare = [(r, rare_find(r.get("title"), r.get("brand"))) for r in rows if r["url"] not in done and worth_push(r)]
             for r, label in [x for x in rare if x[1]][:3]:
                 if push_hit(cfg, r, [f"rare find, {label}"]):
                     logger.info("Rare find pushed: %s", r["title"][:60])

@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import sqlite3
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from html import escape
@@ -126,12 +127,26 @@ def hits(cfg: dict, targets: list[dict] | None = None, hours: int | None = None)
     return out
 
 
+_status_cache: dict = {"at": 0.0, "key": None, "out": None}
+STATUS_TTL = 420  # the scan reads every stored ad (~10 s); the cache warm-up refreshes it every 5 min
+
+
 def status(cfg: dict) -> list[dict]:
     """For the Mics page: each target with how many live listings match its
-    words (at any price) and the cheapest one."""
+    words (at any price) and the cheapest one. Cached a few minutes: it used to
+    rescan the whole table on every Mics page load."""
     targets = load()
     if not targets:
         return []
+    key = json.dumps(targets, sort_keys=True)
+    if _status_cache["key"] == key and time.time() - _status_cache["at"] < STATUS_TTL:
+        return _status_cache["out"]
+    out = _status(cfg, targets)
+    _status_cache.update(at=time.time(), key=key, out=out)
+    return out
+
+
+def _status(cfg: dict, targets: list[dict]) -> list[dict]:
     rows = _candidates(cfg)
     out = []
     for t in targets:

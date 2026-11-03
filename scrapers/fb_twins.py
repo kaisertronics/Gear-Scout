@@ -92,12 +92,19 @@ def hide_twins(listings: list) -> list:
         if len(fb) < 2:
             return listings
         newest_first = sorted(fb, key=lambda l: l.get("first_seen") or "", reverse=True)
-        kept, hidden = [], set()
+        # Twins' prices are within PRICE_TOLERANCE, so only the same and
+        # neighbouring $5 price buckets need comparing (the all-pairs loop took
+        # 90 s on 4,000 Facebook ads).
+        by_price: dict = {}
+        hidden = set()
         for l in newest_first:
-            if l.get("favorite") or not any(are_twins(l, k) for k in kept):
-                kept.append(l)
-            else:
+            p = _price(l)
+            bucket = int(p // PRICE_TOLERANCE) if p is not None else None
+            if (bucket is not None and not l.get("favorite")
+                    and any(are_twins(l, k) for b in (bucket - 1, bucket, bucket + 1) for k in by_price.get(b, ()))):
                 hidden.add(id(l))
+            elif bucket is not None:
+                by_price.setdefault(bucket, []).append(l)
         return [l for l in listings if id(l) not in hidden]
     except Exception:
         import logging

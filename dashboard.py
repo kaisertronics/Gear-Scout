@@ -2790,7 +2790,8 @@ def _mics_ctx() -> dict:
             g["n"] += 1
         models[k] = sorted(groups.values(), key=lambda g: shown(g["best"]))
         for g in models[k]:
-            g["price"] = shown(g["best"])            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
+            g["price"] = shown(g["best"])
+            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
             # tag and border the Price Board uses) — here and in "In your price range".
             if g["n"] > 1:
                 g["best"]["model_lowest"] = True
@@ -3513,7 +3514,7 @@ def _build_index_listings(cfg) -> dict:
         worth, shop_folds = fold_shop_stock(worth)
     except Exception:
         logging.exception("Shop-stock fold failed")
-    grouped =_group_by_source(worth[:300], decorated=True)
+    grouped = _group_by_source(worth[:300], decorated=True)
     from zoneinfo import ZoneInfo
     now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
     auctions = sorted((a for a in getattr(_apply_comp_rule, "auctions", []) if (a.get("auction_ends") or "9") >= now_s),
@@ -4459,6 +4460,16 @@ def _keep_caches_warm():
                 _MP.pulse(load_config_raw())
             except Exception:
                 logging.exception('Cache warm-up: market pulse failed')
+            # The Mics page's other panels each scan the listings table when their cache is
+            # cold (price targets ~10 s, history / best month / regional gap seconds each).
+            try:
+                from scrapers import best_month as _BM, flips as _FL, price_history as _PH, price_targets as _PT
+                from scrapers import regional_gap as _RG
+                _wcfg = load_config_raw()
+                for _fn in (_PT.status, _PH.history, _BM.best_months, _RG.regional_gaps, _FL.find):
+                    _fn(_wcfg)
+            except Exception:
+                logging.exception("Cache warm-up: Mics panels failed")
             from scrapers import mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
             _cfg = load_config_raw()
             for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find)):

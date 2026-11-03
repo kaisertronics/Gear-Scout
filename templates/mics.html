@@ -92,7 +92,7 @@
   </section>
 
   <section class="panel">
-    <h2>🎤 Mic Focus<span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
+    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
     <p class="muted">
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
@@ -205,7 +205,7 @@
   {% endif %}
 
   <section class="panel">
-    <h2>Mic deals<span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
+    <h2>Mic deals <span class="muted">— 50%+ under used (United and Dachman: in your price range and 20%+ under used), newest ad first</span></h2>
     {% if hits %}
       <div class="listing-grid">{% for l in hits[:48] %}{{ listing_card(l) }}{% endfor %}</div>
       {% if hits|length > 48 %}

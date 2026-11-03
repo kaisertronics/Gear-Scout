@@ -1092,7 +1092,8 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
 
     Local history (listings Gear Scout has seen) comes first, then the
     Reverb/eBay asking-price cache — asking prices run higher than sale
-    prices, so a deal against them needs 35%+ under instead of 25%.
+    prices, so a deal against them needs 40%+ under instead of 30% (25% against
+    what a model actually sold for).
     Multi-piece ads are compared per piece. Ads with no price still get
     the market value (just no comparison); parts are valued as parts."""
     value = parse_price(price)
@@ -1144,8 +1145,8 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
     ctx.update({
         "typical": format_price(typical),
         "rough": rough,
-        # A real deal: 30%+ under what this model goes for (40%+ under
-        # Reverb/eBay asking prices) — but more than 85% under is almost
+        # A real deal: 30%+ under what this model goes for locally (25%+ under
+        # what it sold for, 40%+ under Reverb/eBay asking prices) — but more than 85% under is almost
         # always a comparison with the wrong thing (a reissue vs. a vintage
         # original, a part vs. the whole unit), not a deal.
         "deal": (bool(unit) and not rough and not partial and unit >= 20

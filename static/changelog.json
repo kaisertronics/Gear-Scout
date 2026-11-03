@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-11-03",
+    "title": "Code review",
+    "items": [
+      "The Mics page was taking 10 seconds or more to open (and over a minute when two tabs loaded at once) because the Price targets panel re-read every stored ad on each visit. It now remembers its answer for a few minutes and is kept fresh in the background, along with the price history, best month, regional gap and Flips lists.",
+      "Hiding double-posted Facebook ads (Telex List, Home) was getting slower the more Facebook ads there were (90 seconds on 4,000 ads); it now takes well under a second and hides exactly the same ads.",
+      "Rare-find phone pushes no longer fire for ads that were posted weeks ago, that say sold, or that match your exclude words, and a modern \"2010s\" Neve no longer counts as a rare find.",
+      "The Mic Focus and Mic deals headings on the Mics page had lost the space before their counts."
+    ]
+  },
+  {
+    "date": "2026-11-03",
     "title": "Nightly check",
     "items": [
       "Shopping list items are now searched on their own: every /shopping item (Hosa STX-805F, DTP-802 and the rest) is a search term on eBay, Reverb and Craigslist at the same rate as the Telex List, matched on the title or the description, and the cheapest live one (price + shipping, per unit) feeds the running total. Hosa snake sibling models (STX-803F/805F/805M, DTP-803, CSS-802/803/807, XLR-803/805...) are searched too, without touching your Telex List. Cheap cables are no longer hidden by a high-priced look-alike family.",
