@@ -2380,6 +2380,30 @@ def mics_page():
     return render_template("mics.html", **ctx)
 
 
+@app.route("/offers")
+def offers_page():
+    """Offer log: what you offered, what sellers said, which discounts worked."""
+    from scrapers import offer_log
+    return render_template("offers.html", s=offer_log.summary(), labels=offer_log.LABELS)
+
+
+@app.route("/offers/add", methods=["POST"])
+def offers_add():
+    """Records one offer + reply (only writes /data/offers.json)."""
+    from scrapers import offer_log
+    f = request.form
+    o = offer_log.add(f.get("url"), f.get("title"), f.get("source"), f.get("seller"),
+                      f.get("asking"), f.get("offered"), f.get("reply"), f.get("counter"))
+    return jsonify(ok=bool(o), discount=offer_log.discount(o) if o else None), (200 if o else 400)
+
+
+@app.route("/offers/remove", methods=["POST"])
+def offers_remove():
+    from scrapers import offer_log
+    offer_log.remove(request.form.get("id") or "")
+    return redirect(url_for("offers_page"))
+
+
 @app.route("/price-targets/add", methods=["POST"])
 def price_targets_add():
     """Saves a model + the most you'd pay (only writes /data/price_targets.json)."""

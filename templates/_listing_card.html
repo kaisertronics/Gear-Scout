@@ -42,7 +42,19 @@
       {% if l.warn %}<div class="lowest-tag lowest-tag-model" title="Signs this ad may be a scam or a mix-up">⚠️ Check first: {{ l.warn|join(' · ') }}</div>{% endif %}
       {% if l.photo %}<div class="listing-each" title="The AI looked at the photo">📷 {% if l.photo.matches == 'yes' and not l.photo.stock %}Photo matches the title{% else %}{{ l.photo.note or 'Photo unclear' }}{% endif %}</div>{% endif %}
       {% if l.offer %}<div class="listing-each offer-help">💬 Offer ~${{ '{:,}'.format(l.offer.amount) }} ({{ l.offer.why }}){% if l.offer.walk %} · walk away above ${{ '{:,}'.format(l.offer.walk) }}{% endif %}
-        <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.offer.msg }}">Copy message</button></div>{% endif %}
+        <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.offer.msg }}">Copy message</button>{% if l.offer.hint %}<div class="muted">{{ l.offer.hint }}</div>{% endif %}</div>{% endif %}
+      {% if l.price and l.url %}<details class="listing-each offer-log"><summary>Log an offer</summary>
+        <form method="post" action="/offers/add" onsubmit="event.preventDefault(); var f=this; fetch(f.action,{method:'POST',body:new FormData(f)}).then(function(r){f.querySelector('.ol-msg').textContent=r.ok?'Saved':'Check the numbers'}).catch(function(){f.querySelector('.ol-msg').textContent='Not saved'})">
+          <input type="hidden" name="url" value="{{ l.url }}"><input type="hidden" name="title" value="{{ l.title }}">
+          <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller or '' }}">
+          <input type="hidden" name="asking" value="{{ l.price }}">
+          <input type="number" name="offered" min="1" step="any" placeholder="I offered $" required style="width:7em">
+          <select name="reply" onchange="this.form.counter.hidden = this.value != 'countered'">
+            <option value="accepted">Accepted</option><option value="countered">Countered</option>
+            <option value="declined">Declined</option><option value="no_reply">No reply</option></select>
+          <input type="number" name="counter" min="1" step="any" placeholder="their $" hidden style="width:6em">
+          <button type="submit" class="btn btn-sm">Save</button> <span class="ol-msg muted"></span>
+        </form></details>{% endif %}
       {% if l.steal_check %}<div class="lowest-tag lowest-tag-model" title="A steal on paper, but only one price to compare against — check it's the real thing and the price isn't a typo">🔎 Steal? double-check · {{ l.comp.pct }}% under</div>{% endif %}
       {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}

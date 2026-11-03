@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Offers · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .of-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .of-table th, .of-table td { text-align: left; padding: 5px 8px; border-top: 1px solid var(--border); }
+  .of-scroll { overflow-x: auto; }
+</style>
+
+<section class="panel">
+  <h2>💬 Offer log</h2>
+  <p class="muted">Tap "Log an offer" on any listing card to record what you offered and how the seller replied. Discount is how far under the asking price your offer was.</p>
+  {% if s.n %}
+  <p><strong>{{ s.n }}</strong> offer{{ 's' if s.n != 1 }} logged &middot; <strong>{{ s.accepted }}</strong> accepted{% if s.avg_accepted is not none %} (average <strong>{{ s.avg_accepted }}%</strong> under asking){% endif %} &middot; <strong>{{ s.countered }}</strong> countered{% if s.avg_counter is not none %} (their counters averaged {{ s.avg_counter }}% under){% endif %}.</p>
+  {% else %}
+  <p>No offers logged yet.</p>
+  {% endif %}
+</section>
+
+{% if s.n %}
+<section class="panel">
+  <h3>By discount</h3>
+  <div class="of-scroll"><table class="of-table">
+    <tr><th>Offer under asking</th><th>Offers</th><th>Accepted</th></tr>
+    {% for b in s.bands %}{% if b.n %}<tr><td>{{ b.label }}</td><td>{{ b.n }}</td><td>{{ b.accepted }}</td></tr>{% endif %}{% endfor %}
+  </table></div>
+</section>
+
+{% for title, rows in (('By source', s.sources), ('By seller', s.sellers)) %}{% if rows %}
+<section class="panel">
+  <h3>{{ title }}</h3>
+  <div class="of-scroll"><table class="of-table">
+    <tr><th>Name</th><th>Offers</th><th>Accepted</th><th>Avg accepted discount</th></tr>
+    {% for g in rows %}<tr><td>{{ g.name }}</td><td>{{ g.n }}</td><td>{{ g.accepted }}</td><td>{% if g.avg_accepted is not none %}{{ g.avg_accepted }}%{% else %}&ndash;{% endif %}</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}{% endfor %}
+
+<section class="panel">
+  <h3>All offers</h3>
+  <div class="of-scroll"><table class="of-table">
+    <tr><th>When</th><th>Listing</th><th>Asking</th><th>Offered</th><th>Reply</th><th></th></tr>
+    {% for o in s.recent %}
+    <tr>
+      <td>{{ o.at[:10] }}</td>
+      <td>{% if o.url %}<a href="{{ o.url }}" target="_blank" rel="noopener">{{ o.title or o.url }}</a>{% else %}{{ o.title }}{% endif %}<br><span class="muted">{{ o.source }}{% if o.seller %} &middot; {{ o.seller }}{% endif %}</span></td>
+      <td>${{ '{:,.0f}'.format(o.asking) }}</td>
+      <td>${{ '{:,.0f}'.format(o.offered) }} <span class="muted">({{ ((o.asking - o.offered) / o.asking * 100)|round(1) }}% under)</span></td>
+      <td>{{ labels[o.reply] }}{% if o.counter %} &middot; ${{ '{:,.0f}'.format(o.counter) }}{% endif %}</td>
+      <td><form method="post" action="{{ url_for('offers_remove') }}"><input type="hidden" name="id" value="{{ o.id }}"><button class="btn btn-sm" type="submit" onclick="return confirm('Remove this entry?')">Remove</button></form></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

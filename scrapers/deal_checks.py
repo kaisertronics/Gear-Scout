@@ -152,6 +152,12 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     out = {"amount": amt, "why": why, "msg": msg, "walk": walk}
     if open_to:
         out["haggle"] = True
+    try:  # optional: what your own logged offers got accepted at (scrapers/offer_log.py)
+        from scrapers.offer_log import hint
+        if hint():
+            out["hint"] = hint()
+    except Exception:
+        pass
     return out
 
 
