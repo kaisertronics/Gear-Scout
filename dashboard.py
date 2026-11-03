@@ -2782,6 +2782,34 @@ def _outboard_fresh_near(l: dict) -> bool:
     return True
 
 
+_finder_cache: dict = {}
+_finder_lock = threading.Lock()
+
+
+def _cached_find(name: str, fn, cfg, ttl: float = 300):
+    """Home's finders each scan the whole listings table; share one result
+    for `ttl` seconds (one build at a time, stale copy served meanwhile) so
+    page loads and retries can't pile up."""
+    ent = _finder_cache.get(name)
+    now = time.time()
+    if ent and now - ent[0] < ttl:
+        return list(ent[1])
+    if ent:
+        if not _finder_lock.acquire(blocking=False):
+            return list(ent[1])
+    else:
+        _finder_lock.acquire()
+    try:
+        ent = _finder_cache.get(name)
+        if ent and time.time() - ent[0] < ttl:
+            return list(ent[1])
+        res = fn(cfg)
+        _finder_cache[name] = (time.time(), res)
+        return list(res)
+    finally:
+        _finder_lock.release()
+
+
 def _home_page():
     """Home: new results, smokin' hot deals, outboard (Distressor), a compact
     Mics section, what's coming next, and the "Check these" list last."""
@@ -2834,7 +2862,7 @@ def _home_page():
     try:
         from scrapers import mic_focus, mislabeled as ML
         from scrapers.enrich import parse_price
-        mislabeled = _decorate(mic_focus.still_showing(ML.find(cfg)))
+        mislabeled = _decorate(mic_focus.still_showing(_cached_find("mislabeled", ML.find, cfg)))
         for l in mislabeled:
             l["comp"] = {"pct": round((1 - (parse_price(l.get("price")) or 0) / l["used_value"]) * 100),
                          "ref": f"${l['used_value']:,}", "est": False, "label": f"AI guess: {l['guess']}"}
@@ -2843,7 +2871,7 @@ def _home_page():
     quiet = []
     try:
         from scrapers import mic_focus, quiet_auctions
-        quiet = _decorate(mic_focus.still_showing(quiet_auctions.find(cfg)))
+        quiet = _decorate(mic_focus.still_showing(_cached_find("quiet", quiet_auctions.find, cfg)))
         for l in quiet:
             q = l["quiet"]
             l["comp"] = {"pct": q["pct"], "ref": f"${q['used']:,}", "est": False, "label": "Used market"}
@@ -2853,7 +2881,7 @@ def _home_page():
     motivated = []
     try:
         from scrapers import mic_focus, motivated as MOT
-        motivated = _decorate(mic_focus.still_showing(MOT.find(cfg)))
+        motivated = _decorate(mic_focus.still_showing(_cached_find("motivated", MOT.find, cfg)))
         for l in motivated:
             m = l["motivated_ad"]
             l["comp"] = {"pct": m["pct"], "ref": f"${m['used']:,}", "est": False, "label": "Used market"}
@@ -4300,6 +4328,13 @@ def _keep_caches_warm():
             load_market()
             from scrapers import market_value as _mvw
             _mvw.index(max_age=1200)  # refreshed here, before page loads find it stale
+            from scrapers import mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
+            _cfg = load_config_raw()
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find)):
+                try:
+                    _cached_find(_n, _f, _cfg, ttl=240)
+                except Exception:
+                    logging.exception("Cache warm-up: %s failed", _n)
             _feed_items(load_config_raw())  # the Feed (home page) first
             # The Dashboard's default view, ready before anyone asks.
             with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
