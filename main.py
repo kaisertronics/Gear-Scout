@@ -556,6 +556,12 @@ def run_watch_cycle():
             price_drops.alert(cfg)
         except Exception:
             logger.exception("Price-drop check failed")
+        # An older ad whose price cut makes it a mic deal under the usual rules: one push.
+        try:
+            from scrapers import price_cut_sniper
+            price_cut_sniper.alert(cfg)
+        except Exception:
+            logger.exception("Price-cut sniper failed")
         # Listings at/under the max price you set for a model (Price targets on Mics): push + email.
         try:
             from scrapers import price_targets

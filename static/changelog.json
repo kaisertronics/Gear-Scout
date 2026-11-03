@@ -25,6 +25,9 @@
     "date": "2026-11-03",
     "title": "Hourly improvements",
     "items": [
+      "Starred-ad sold tracker: a new card on the Mics page shows how many days your starred ads usually last before they sell (about 8 days so far, faster on Facebook, slower on Craigslist) and lists the starred ads at risk of selling today.",
+      "Price-cut sniper: when an older ad is cut to a price that now meets your mic deal rules, you get a \"Price cut\" push with the Offer button (up to 3 per run). Nothing in your price rules changed.",
+      "New ideas waiting in Coming next: Estate-sale and studio-closeout finder, Sold-while-you-watched price memory, Shopping-list bundle shipping saver.",
       "One-tap instant offer: every mic/outboard deal push now has an \"Offer $X\" button and the deal emails an Offer link. It opens a phone-friendly /offer page with the ask, used value, a suggested offer (about 15% under, never under 70% of the ask, rounded to $5, shipped to Seattle), an editable amount, and one Send button (Reverb/eBay offers, with the usual confirm, logged in the offer log) or a Copy message button for other sites. Home cards with a suggested offer show the same \"Offer $X\" link.",
       "Rare find chip: listings of rare/vintage models (Neumann U47, AKG C12, Telefunken ELA M 251, Pultec, Fairchild and similar) get a purple \"Rare find\" tag on the card, whatever the price.",
       "Price per channel: multi-channel preamps and interfaces (like an 8-channel preamp) now show \"$X per channel\" on the card, in green when it's $75 or less per channel.",
