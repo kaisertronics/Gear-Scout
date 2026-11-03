@@ -962,6 +962,13 @@ def _per_channel(l):
     return price_per_channel.per_channel(l.get("price"), l.get("title")) if hasattr(l, "get") else None
 
 
+@app.template_filter("rare_find")
+def _rare_find(l):
+    """'Rare find' label for rare/vintage models, or None (see scrapers/rare_finds.py)."""
+    from scrapers import rare_finds
+    return rare_finds.rare_find(l.get("title"), l.get("brand")) if hasattr(l, "get") else None
+
+
 @app.template_test("local_pickup")
 def _is_local_pickup(source_name: str) -> bool:
     """Sites where you pick the item up yourself (no shipping)."""
@@ -4449,6 +4456,38 @@ def _keep_caches_warm():
         except Exception:
             logging.exception("Cache warm-up failed")
         time.sleep(300)
+
+
+def _singleflight_builders():
+    """Page builders keep a 30-minute cache but not a lock, so a cold cache
+    (every restart) let every open page rebuild at once and stall the site.
+    Wrap them so concurrent callers queue behind one build, then hit its cache."""
+    import functools
+    import importlib
+    targets = (("best_month", "best_months"), ("price_history", "history"), ("regional_gap", "regional_gaps"),
+               ("market_pulse", "pulse"), ("flips", "find"), ("price_targets", "status"), ("price_targets", "hits"),
+               ("wait_signal", "signals"), ("seller_watch", "watched"), ("offer_log", "summary"))
+    for mod_name, fn_name in targets:
+        try:
+            mod = importlib.import_module(f"scrapers.{mod_name}")
+            fn = getattr(mod, fn_name, None)
+            if fn is None or getattr(fn, "_singleflight", False):
+                continue
+            lock = threading.RLock()
+
+            def make(fn=fn, lock=lock):
+                @functools.wraps(fn)
+                def wrapper(*a, **k):
+                    with lock:
+                        return fn(*a, **k)
+                wrapper._singleflight = True
+                return wrapper
+            setattr(mod, fn_name, make())
+        except Exception:
+            logging.exception("single-flight wrap failed for %s.%s", mod_name, fn_name)
+
+
+_singleflight_builders()
 
 
 if __name__ == "__main__":
