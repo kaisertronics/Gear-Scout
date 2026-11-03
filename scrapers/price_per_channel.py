@@ -18,6 +18,27 @@ _JUNK = re.compile(r"\b(?:mics?(?!\s*-?pre)|microphones?|cables?|cords?|snakes?|
                    r"boots?|covers?|trays?|caps?|kit)\b", re.I)
 
 
+MIN_PLAUSIBLE_PER_CH = 8.0  # below this the parsed count is almost surely wrong
+
+# Well-known models with a certain channel count (conservative on purpose).
+_KNOWN = [
+    (re.compile(r"\basp[\s-]?800\b", re.I), 8),
+    (re.compile(r"\basp[\s-]?880\b", re.I), 8),
+    (re.compile(r"\bisa[\s-]?428\b", re.I), 4),
+    (re.compile(r"\bisa[\s-]?828\b", re.I), 8),
+    (re.compile(r"\b1073[\s-]?dpa\b", re.I), 2),
+    (re.compile(r"\bdigimax[\s-]?d8\b", re.I), 8),
+    (re.compile(r"\boctopre\b", re.I), 8),
+    (re.compile(r"\bada[\s-]?8200\b", re.I), 8),
+]
+
+
+def known_channels(title: Optional[str]) -> Optional[int]:
+    """Real channel count if the title names exactly one well-known model."""
+    hits = {n for rx, n in _KNOWN if title and rx.search(title)}
+    return hits.pop() if len(hits) == 1 else None
+
+
 def parse_channels(title: Optional[str]) -> Optional[int]:
     """Channel count from a title, or None if unclear / out of range / junk."""
     if not title or _JUNK.search(title):
@@ -45,6 +66,13 @@ def per_channel(price, title: Optional[str]) -> Optional[dict]:
         return None
     if value <= 0:
         return None
+    known = known_channels(title)
+    if known and known != n:  # title count contradicts the model's real count
+        return {"channels": n, "each": None, "text": "check channel count", "low": False,
+                "warning": f"title says {n} ch but this model has {known}"}
     each = value / n
+    if each < MIN_PLAUSIBLE_PER_CH:  # count likely mis-parsed
+        return {"channels": n, "each": None, "text": "check channel count", "low": False,
+                "warning": f"${each:,.2f} per channel looks too low"}
     text = f"${each:,.0f}" if each >= 10 else f"${each:,.2f}"
     return {"channels": n, "each": each, "text": f"{text} per channel", "low": each <= LOW_PER_CH}

@@ -33,7 +33,8 @@
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
         {% set ppc = l|per_channel %}
-        {% if ppc %}<div class="listing-each{{ ' ppc-low' if ppc.low else '' }}" title="{{ ppc.channels }} channels read from the title{{ '; a low price per channel' if ppc.low }}">{{ '🎚️ ' if ppc.low }}{{ ppc.text }} · {{ ppc.channels }} ch</div>{% endif %}
+        {% if ppc and ppc.warning %}<div class="listing-each muted" title="{{ ppc.warning }}">⚠️ {{ ppc.text }}</div>
+        {% elif ppc %}<div class="listing-each{{ ' ppc-low' if ppc.low else '' }}" title="{{ ppc.channels }} channels read from the title{{ '; a low price per channel' if ppc.low }}">{{ '🎚️ ' if ppc.low }}{{ ppc.text }} · {{ ppc.channels }} ch</div>{% endif %}
         {% if l.shipping is number %}
           <div class="listing-ship">{% if l.shipping == 0 %}free shipping{% else %}{{ l.price|usd }} + ${{ '{:,.0f}'.format(l.shipping) }} shipping{% endif %}</div>
         {% elif (l.source_name or '') is local_pickup %}
