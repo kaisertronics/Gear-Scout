@@ -143,8 +143,9 @@ def run_refresh_cycle(cfg: dict):
     scheduled runs. New finds go into the next digest email."""
     from scrapers.learning import keywords_with_learned, skip_on_light_runs
     keywords = keywords_with_learned(cfg)
+    from scrapers.liquidation import with_defaults
     sources = [
-        {**s, "_light": True} for s in cfg.get("sources", [])
+        {**s, "_light": True} for s in with_defaults(cfg.get("sources", []))
         if s.get("enabled", True) and s.get("type") != "facebook_posts"
     ]
     sources, skipped = skip_on_light_runs(sources)
@@ -283,7 +284,8 @@ def _run_scrape_cycle():
     except Exception:
         logger.exception("Couldn't update learned search terms")
     keywords = keywords_with_learned(cfg)
-    sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    from scrapers.liquidation import with_defaults
+    sources = [s for s in with_defaults(cfg.get("sources", [])) if s.get("enabled", True)]
     from scrapers.fb_posts_background import settings as fb_bg_settings
     if fb_bg_settings(cfg)["enabled"]:
         # Facebook post search runs all day in the background instead, with

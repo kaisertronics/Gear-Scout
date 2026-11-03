@@ -38,7 +38,8 @@ def run_manual_scrape(
     # each region's feed without the extra broad searches, and the slow
     # Facebook post search (which runs all day in the background) is left out
     # — a full scheduled-style pass takes 15–20 minutes.
-    sources = [{**s, "_light": True} for s in cfg.get("sources", [])
+    from scrapers.liquidation import with_defaults
+    sources = [{**s, "_light": True} for s in with_defaults(cfg.get("sources", []))
                if s.get("enabled", True) and s.get("type") != "facebook_posts"]
     from scrapers.fb_posts_background import facebook_paused
     if facebook_paused():  # Facebook asked the account to slow down

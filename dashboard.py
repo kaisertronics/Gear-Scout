@@ -248,7 +248,7 @@ yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
-                "shopgoodwill", "kijiji", "offerup", "shopify", "long_mcquade", "facebook_posts", "reddit"]
+                "shopgoodwill", "hibid", "kijiji", "offerup", "shopify", "long_mcquade", "facebook_posts", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
@@ -881,7 +881,7 @@ _SOURCE_TAGS = [
     ("FB Posts", "FB post", "fb"), ("FB Marketplace", "Facebook", "fb"), ("FB —", "FB group", "fb"),
     ("eBay", "eBay", "ebay"), ("Reverb", "Reverb", "reverb"), ("Craigslist", "Craigslist", "cl"),
     ("OfferUp", "OfferUp", "offerup"), ("Kijiji", "Kijiji", "kijiji"), ("ShopGoodwill", "ShopGoodwill", "sgw"),
-    ("Vintage King", "Vintage King", "store"), ("Long & McQuade", "L&M", "store"), ("Alto Music", "Alto", "store"),
+    ("HiBid", "HiBid", "sgw"), ("Vintage King", "Vintage King", "store"), ("Long & McQuade", "L&M", "store"), ("Alto Music", "Alto", "store"),
     ("Rudy", "Rudy's", "store"), ("GroupDIY", "GroupDIY", "forum"), ("The Gear Page", "Gear Page", "forum"),
     ("AudioKarma", "AudioKarma", "forum"), ("Gearspace", "Gearspace", "forum"),
 ]
