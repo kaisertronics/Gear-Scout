@@ -655,6 +655,8 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if not l.get("sold"):
             from scrapers.accessory_check import check as accessory_check
             l["no_acc"] = accessory_check(l.get("title"), l.get("description"))
+        from scrapers.condition_grade import grade as condition_grade
+        l["cond_grade"] = condition_grade(l.get("title"), l.get("description"))
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
         # Listings with no known distance (shipped-item sites, older rows)
         # stay visible — the radius only filters what can be measured.
@@ -2406,6 +2408,21 @@ def offers_add():
     o = offer_log.add(f.get("url"), f.get("title"), f.get("source"), f.get("seller"),
                       f.get("asking"), f.get("offered"), f.get("reply"), f.get("counter"))
     return jsonify(ok=bool(o), discount=offer_log.discount(o) if o else None), (200 if o else 400)
+
+
+@app.route("/reverb/offer", methods=["POST"])
+def reverb_offer():
+    """Sends a real, binding Make-an-Offer on Reverb. Only when the form says
+    confirm=1 (the card's second tap); dry_run=1 builds everything but sends
+    nothing. (Same open access as the other POST routes; the login gate is off.)"""
+    from scrapers import reverb_offer as ro
+    f = request.form
+    if f.get("confirm") != "1":
+        return jsonify(ok=False, message="Confirmation required"), 400
+    res = ro.send_offer(f.get("url"), f.get("amount"), dry_run=f.get("dry_run") == "1",
+                        title=f.get("title") or "", source="Reverb", seller=f.get("seller") or "",
+                        asking=f.get("asking"))
+    return jsonify(res)
 
 
 @app.route("/offers/remove", methods=["POST"])
