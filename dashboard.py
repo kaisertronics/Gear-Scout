@@ -559,6 +559,12 @@ def _collision_ok(title, description=None) -> bool:
         return True
 
 
+def _cable_wanted(l: dict) -> bool:
+    """Matches a cable / connector term on the Telex List: a cable is what was asked for, not an accessory."""
+    from scrapers.wanted import is_cable_term
+    return any(is_cable_term(t) for t in l.get("wanted") or [])
+
+
 def _decorate(listings: list[dict]) -> list[dict]:
     """Drops listings matching the user's exclude words and adds display
     flags: needs_repair, typical price / deal, and 'was' price after a drop."""
@@ -613,7 +619,7 @@ def _decorate(listings: list[dict]) -> list[dict]:
     out = []
     for l in listings:
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
-                or (hide_acc and is_accessory_only(l.get("title")))
+                or (hide_acc and is_accessory_only(l.get("title")) and not _cable_wanted(l))
                 or (hide_pedals and item_form(l.get("title")) == "pedal")
                 or not _collision_ok(l.get("title"), l.get("description"))):
             continue

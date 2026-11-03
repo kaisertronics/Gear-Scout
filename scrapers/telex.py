@@ -164,6 +164,7 @@ def search_query(term: str) -> str:
 def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     """Searches one term on the given site groups and stores what it finds."""
     from scrapers.enrich import drop_excluded
+    from scrapers.wanted import is_cable_term
     from scrapers.runner import run_sources
     from scrapers.fb_posts_background import facebook_paused, pause_facebook
     if "fb" in sites and facebook_paused():
@@ -192,7 +193,7 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
     counts = {s: [0, 0] for s in sites}
     for r in results:
         c = counts.setdefault(site_of.get(r.source_name, "fast"), [0, 0])
-        for l in drop_excluded(r.listings, cfg):
+        for l in drop_excluded(r.listings, cfg, keep_accessories=is_cable_term(term)):
             c[0] += 1
             if mark_seen(l) == "new":
                 c[1] += 1
@@ -343,8 +344,10 @@ def _term_matcher(term: str):
         i = low.index("audio", 1)
         if low[i - 1].isalpha():
             brand = re.compile(r"(?<![a-z0-9])" + re.escape(low[i - 1]) + r"[\s-]*audio\b")
-    return lambda t: (plain is None or plain in t) and (brand is None or bool(brand.search(t))) and (
-        bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))
+    from scrapers.cable_family import family, title_matches
+    kind = family(term) is not None  # "Hosa DTP-802": a title naming Hosa + DB25 + TRS counts too
+    return lambda t: ((plain is None or plain in t) and (brand is None or bool(brand.search(t))) and (
+        bool(exact and exact.search(t)) or all(_word_matches(w, t) for w in words))) or (kind and title_matches(term, t))
 
 
 def model_matcher(term: str):

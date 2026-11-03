@@ -184,7 +184,9 @@ def scrape_reverb_api(source: dict, keywords: list[str]) -> ScrapeResult:
         seen.add(lid)
         title = item.get("title") or ""
         from scrapers.store import is_overseas
-        if title and keyword_match(title, keywords) and not is_overseas(country_of(item)):
+        from scrapers.cable_family import in_description
+        if title and (keyword_match(title, keywords) or (len(keywords) == 1 and in_description(
+                keywords[0], item.get("description")))) and not is_overseas(country_of(item)):
             listing = _to_listing(item, name)
             if listing.listing_id in known:
                 listing.listing_id = known[listing.listing_id]

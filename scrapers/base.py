@@ -213,6 +213,9 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
             words = words[:-1]  # only for a brand search; "47 microphone" / "c12 microphone" stay strict
         if words and all(_word_matches(w, text_lower) for w in words):
             return True
+        from scrapers.cable_family import title_matches  # "Hosa DTP-802" also finds "HOSA 6 ft DB25 to 8 TRS cables"
+        if title_matches(keywords[0], text):
+            return True
     return False
 
 

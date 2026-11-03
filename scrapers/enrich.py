@@ -503,13 +503,14 @@ def wants_pedals(cfg: dict) -> bool:
     return any("pedal" in str(t).lower() for t in terms)
 
 
-def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> list:
+def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None, keep_accessories: bool = False) -> list:
     """Drops non-audio items, accessory-only listings (setting), exclude
     words — and, when the run's search terms are given (scheduled/hourly/
     manual scrapes, not a live search), listings found only through a broad
-    word that don't look like studio gear (see is_relevant)."""
+    word that don't look like studio gear (see is_relevant). keep_accessories:
+    the search was for a cable / connector, so cables are what's wanted."""
     words = cfg.get("exclude_words") or []
-    hide_acc = cfg.get("hide_accessories", True)
+    hide_acc = cfg.get("hide_accessories", True) and not keep_accessories
     term_key = tuple(terms) if terms and len(terms) > 1 and cfg.get("relevance_check", True) else None
     hide_pedals = not wants_pedals(cfg)
     from scrapers.collision_guard import collision_ok

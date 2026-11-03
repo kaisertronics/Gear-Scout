@@ -28,6 +28,8 @@ YEAR_DAYS = 365
 DEAL_PCT = 50          # a deal is at least this far under the used value
 TOO_GOOD_PCT = 75      # past this it's usually a scam or a mix-up: "check these"
 MIN_DEAL_PRICE = 100   # 50% off a $60 item isn't worth a slot
+CHEAP_DEAL_PCT = 20    # ...but a Telex List item under MIN_DEAL_PRICE (cables, small gear) counts at this much off
+CHEAP_MIN_PRICE = 20
 LANDING_DAYS = 150
 
 _SKIP = re.compile(
@@ -244,7 +246,8 @@ def landing_deals(cfg: dict) -> list[dict]:
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
         value_ = parse_price(r.get("price"))
-        if not value_ or value_ < MIN_DEAL_PRICE:
+        cheap = bool(value_) and CHEAP_MIN_PRICE <= value_ < MIN_DEAL_PRICE
+        if not value_ or (value_ < MIN_DEAL_PRICE and not cheap):
             continue
         if not wanted.match(title, r.get("price"), terms, r.get("source_name")):
             continue
@@ -253,6 +256,8 @@ def landing_deals(cfg: dict) -> list[dict]:
         ship = r.get("shipping") if isinstance(r.get("shipping"), (int, float)) else 0
         delivered = round(unit + (ship or 0) / max(int(qty or 1), 1), 2)
         j = judge(title, delivered, r.get("description"))
+        if cheap and j["pct"] is not None and CHEAP_DEAL_PCT <= j["pct"] <= TOO_GOOD_PCT:
+            j = dict(j, kind="deal")  # a cheap Telex item isn't held to the 50% rule
         if j["kind"] != "deal":
             continue
         ad = (title.lower().strip(), round(value_))

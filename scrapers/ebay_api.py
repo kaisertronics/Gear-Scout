@@ -18,6 +18,7 @@ from typing import Optional
 import requests
 
 from .base import Listing, ScrapeResult, keyword_match, truncate
+from .cable_family import in_description
 
 logger = logging.getLogger(__name__)
 
@@ -176,11 +177,24 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
         )
     try:
         token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
+        if is_live_search:
+            params["fieldgroups"] = "EXTENDED"  # adds each listing's short description
         resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
         items = resp.json().get("itemSummaries", []) or []
+        if is_live_search:
+            # A part number ("Hosa DTP-802") is often in neither title nor description
+            # ("HOSA 6 ft DB25 to 8 TRS cables"): also search by brand + connectors.
+            from scrapers.cable_family import alt_query
+            alt = alt_query(keywords[0])
+            if alt:
+                resp2 = requests.get(SEARCH_URL, params={**params, "q": alt, "category_ids": PRO_AUDIO_CATEGORY},
+                                     headers=_headers(token), timeout=30)
+                if resp2.status_code == 200:
+                    have = {i.get("itemId") for i in items}
+                    items += [i for i in resp2.json().get("itemSummaries", []) or [] if i.get("itemId") not in have]
     except PermissionError as e:
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, error=str(e),
@@ -199,7 +213,9 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
     for item in items:
         title = item.get("title") or ""
         from scrapers.store import is_overseas
-        if not title or not (newest or keyword_match(title, keywords)) or is_overseas(country_of(item)):
+        if not title or not (newest or keyword_match(title, keywords)
+                             or (is_live_search and in_description(keywords[0], item.get("shortDescription")))) \
+                or is_overseas(country_of(item)):
             continue  # overseas sellers are left out
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         posted_at = None
