@@ -300,5 +300,16 @@ def alert_new(cfg: dict) -> int:
                          url=dash, tags=["new"]):
                 sent = len(hits)
         logger.info("Wanted: %d new matches, %d pushed", len(hits), sent)
+    if push_enabled(cfg):
+        # Rare finds radar: rare/vintage models ping you even when they're not on the Wanted list.
+        try:
+            from scrapers.rare_finds import rare_find
+            done = pushed | {r["url"] for r, _ in hits}
+            rare = [(r, rare_find(r.get("title"), r.get("brand"))) for r in rows if r["url"] not in done]
+            for r, label in [x for x in rare if x[1]][:3]:
+                if push_hit(cfg, r, [f"rare find, {label}"]):
+                    logger.info("Rare find pushed: %s", r["title"][:60])
+        except Exception as e:
+            logger.warning("Rare find push failed: %s", e)
     ALERT_STATE.write_text(json.dumps({"since": newest}))
     return sent

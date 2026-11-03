@@ -29,6 +29,8 @@ the comparison price (comp) right, and is it still for sale?
 | 2026-10-31 (after fixes) | same | — | — | — | reverb_api.reverb_get: on a Cloudflare 403, retry with curl; used by the Reverb scrape, mic deep read, sold check, price lookups, shipping backfill. Tested in the container: search, single listing and sold check all 200. |
 | 2026-11-02 Feed (before fixes) | top 40 of the Feed | 97.5% (39/40; 2 Calrec consoles with "SSL modules" still left for the owner's SSL-style decision) | — | 100% of 25 checked (Reverb API, eBay; 15 Facebook ads not opened) · new ads: half within 2.2 h, 7/16 within 1 h, 10 within 6 h | Junk: MB Quart amp + "SSL Force" car subwoofer matching "ssl". Wanted terms searched 5–18 min ago on fast sites, eBay 1 h; Facebook rotation catching up after Mic Focus went off (many terms 10–11 d, others 0–12 h). |
 | 2026-11-02 (after fixes) | same | 100% (car-audio ad filtered) | — | — | enrich.py: "MB Quart" and "SSL Force" off-topic. |
+| 2026-11-03 Feed (before fixes) | top 40 of the Feed | 97.5% (39/40; 2 Calrec consoles still left per owner) | — | not opened tonight (Health: 199 of top 200 re-checked in 6 h; no errors in 24 h logs) · new ads: half within 0.6 h, 12/14 within 1 h, all within 6 h | Junk: Harmar "SSL-SL300" stair lift matching "ssl". All Wanted terms searched 21–51 min ago on fast sites, eBay ≤2 h; Facebook 1–15 h (connector part numbers every 3 days). AudioKarma still 403. |
+| 2026-11-03 (after fixes) | same | 100% | — | — | enrich.py: stair lifts / Harmar off-topic. |
 
 Next to watch: whether Reverb ads keep getting through (log shows "Mic deep read failed" if not); Feed sample not done Oct 31.
 

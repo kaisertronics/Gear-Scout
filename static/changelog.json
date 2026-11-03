@@ -1,6 +1,16 @@
 [
   {
     "date": "2026-11-03",
+    "title": "Nightly check",
+    "items": [
+      "Checked everything: no errors in the logs, every Wanted term searched within the hour on the quick sites, and new ads reach you in about 0.6 hours (12 of 14 within an hour).",
+      "A stair lift (\"Harmar SSL-SL300\") was showing up under your \"ssl\" term. Stair lifts are now filtered out.",
+      "Rare finds radar: rare or vintage models (U47, C12, Pultec, Fairchild and similar) now also send a phone push when they're not on your Wanted list, up to 3 per half hour. Tell me if it's too chatty.",
+      "New idea on the Home page: Wrong-model title check."
+    ]
+  },
+  {
+    "date": "2026-11-03",
     "title": "Hourly improvements",
     "items": [
       "One-tap instant offer: every mic/outboard deal push now has an \"Offer $X\" button and the deal emails an Offer link. It opens a phone-friendly /offer page with the ask, used value, a suggested offer (about 15% under, never under 70% of the ask, rounded to $5, shipped to Seattle), an editable amount, and one Send button (Reverb/eBay offers, with the usual confirm, logged in the offer log) or a Copy message button for other sites. Home cards with a suggested offer show the same \"Offer $X\" link.",
