@@ -24,6 +24,25 @@ _SCAM_TEXT = [
      "asks for Zelle / Cash App / wire"),
     (re.compile(r"[\w.+-]+@[\w-]+\.\w{2,}|\btext me\b|\bcontact me (?:at|on)\b|\bwhats ?app\b", re.I),
      "wants contact off the site"),
+    (re.compile(r"\b(?:out of town|out of the country|overseas|deployed|moving (?:abroad|overseas))\b.{0,80}\b(?:agent|shipper|courier|movers?)\b|"
+                r"\b(?:my|an?) (?:agent|shipper|courier) (?:will|to) (?:deliver|pick|come|handle|ship)", re.I),
+     "seller is 'away' and sends an agent / shipper"),
+    (re.compile(r"\bpay (?:first|upfront|up front) (?:then|and) (?:i|we)(?:'ll| will)? ship\b|"
+                r"\bshipping (?:company|agent) (?:will )?(?:pick ?s? ?up|collect)\b|\bpayment first\b", re.I),
+     "wants payment before shipping via a 'shipping company'"),
+    (re.compile(r"\b(?:ebay|paypal) (?:buyer )?protection\b.{0,60}\b(?:sold|sale|sell|pay)|"
+                r"\b(?:sold|sell|pay)\w*\b.{0,40}\b(?:ebay|paypal) (?:buyer )?protection\b|"
+                r"\bpaypal\b.{0,30}\bfriends (?:and|&|n) family\b|\bfriends (?:and|&|n) family\b.{0,30}\bpaypal\b|"
+                r"\bpaypal\s*(?:ff|f&f|f/f)\b", re.I),
+     "wants PayPal Friends & Family / fake 'protection' (no buyer recourse)"),
+    (re.compile(r"\b(?:verification|verify|security|confirmation) code\b|\bgoogle voice\b.{0,40}\bcode\b|"
+                r"\bcode (?:sent|texted) to (?:you|your)\b", re.I),
+     "asks for a verification / Google Voice code"),
+    (re.compile(r"\b(?:deposit|down ?payment)\b.{0,20}\bto (?:hold|reserve|secure)\b|\bsend (?:a )?deposit\b", re.I),
+     "wants a deposit just to hold it"),
+    (re.compile(r"\b(?:over ?pay(?:ment)?|over ?paid|send(?:ing)? (?:extra|more))\b.{0,60}\b(?:refund|difference|back)\b|"
+                r"\brefund (?:you )?the (?:difference|extra|balance)\b", re.I),
+     "overpay-and-refund trick"),
 ]
 
 
