@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_listing_card.html" import listing_card %}
+{% block title %}Gear Scout — Outboard{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>🎛️ Outboard <span class="muted">— {{ rows|length }} listing{{ '' if rows|length == 1 else 's' }} {{ min_pct }}%+ under used value</span></h2>
+    <p class="muted">
+      Compressors, preamps and EQs from your buy list (1176, LA-2A, Fairchild, EQP-1A / Pultec, API 500 modules, CAPI,
+      Distressor, Warm Audio, Neve, Neumann / Telex and similar), posted in the last {{ days }} days and asking less than
+      what the same model usually goes for used. Newest first, biggest discount first within a day. Models with fewer than 3
+      comparable listings have no used value, so they don't appear. Over 75% off is more often a mix-up or a scam than a bargain.
+    </p>
+  </section>
+  <section class="panel">
+    {% if rows %}
+      <div class="listing-grid">
+        {% for l in rows %}
+          <div>
+            <div class="muted" style="margin-bottom:4px;">
+              <strong>{{ l.outboard }}</strong> · {{ l.deal.pct }}% under ~${{ '{:,.0f}'.format(l.deal.used) }} used
+              ({{ l.deal.basis }}){% if l.deal.kind == 'too_good' %} · <strong>double-check</strong>{% endif %}
+            </div>
+            {{ listing_card(l) }}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No outboard from your buy list is asking {{ min_pct }}%+ under its used value right now.</p>
+    {% endif %}
+  </section>
+{% endblock %}

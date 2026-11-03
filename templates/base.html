@@ -43,6 +43,7 @@
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}" title="Everything Gear Scout has collected, not just your Wanted list">Browse all</a>
         <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>
         <a href="{{ url_for('steals') }}" class="{{ 'active' if request.endpoint == 'steals' else '' }}">🔥 Steals</a>
+        <a href="{{ url_for('outboard_page') }}" class="{{ 'active' if request.endpoint == 'outboard_page' else '' }}">🎛️ Outboard</a>
         <a href="{{ url_for('offers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('offers') else '' }}">Offers</a>
         <a href="{{ url_for('sellers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sellers') else '' }}">Sellers</a>
         <a href="{{ url_for('flips_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('flips') else '' }}">Flips</a>

@@ -1441,6 +1441,24 @@ def steals():
                            min_pct=min_pct, levels=STEAL_LEVELS)
 
 
+@app.route("/outboard")
+def outboard_page():
+    """Outboard: classic comps / pres / EQs from the owner's buy list asking under used value."""
+    from scrapers import outboard
+    rows = []
+    try:
+        found = {r["url"]: r for r in _cached_find("outboard", outboard.find, load_config_raw())}
+        for l in _decorate(list(found.values())):
+            src = found.get(l.get("url")) or {}
+            l["outboard"], l["deal"] = src.get("outboard"), src.get("deal")
+            l["_when"] = src.get("_when", "")
+            rows.append(l)
+        rows.sort(key=lambda r: (str(r["_when"])[:10], (r.get("deal") or {}).get("pct") or 0), reverse=True)
+    except Exception:
+        app.logger.exception("outboard page")
+    return render_template("outboard.html", rows=rows, min_pct=outboard.MIN_PCT, days=outboard.DAYS)
+
+
 _group_cache: dict = {"key": None, "at": 0.0, "data": None, "running": False}
 
 
