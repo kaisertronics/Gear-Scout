@@ -20,6 +20,8 @@
       {% if l.lowest_for %}<div class="lowest-tag" title="The cheapest working one for sale anywhere Gear Scout searches (Price Board)">💲 Lowest: {{ l.lowest_for|join(', ') }}{% if l.model_lowest_label %} · {{ l.model_lowest_label }}{% endif %}</div>
       {% elif l.model_lowest %}<div class="lowest-tag lowest-tag-model" title="The cheapest working one of this model for sale anywhere Gear Scout searches">💲 Lowest {{ l.model_lowest_label }}</div>{% endif %}
       {% if l.repost_count and l.repost_count >= 2 %}<span class="age-tag" title="The seller re-listed this same ad (same title and price) {{ l.repost_count }} times; showing one card">reposted {{ l.repost_count }}×</span>{% endif %}
+      {% set rare = l|rare_find %}
+      {% if rare %}<div class="listing-each rare-find" title="A rare / vintage model that almost never shows up: {{ rare }}">💎 Rare find · {{ rare }}</div>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">

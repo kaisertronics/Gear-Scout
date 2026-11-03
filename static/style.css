@@ -787,6 +787,7 @@ code {
 }
 .listing-each { font-size: 11px; color: #b45309; font-weight: 600; margin-top: 2px; }
 .listing-each.ppc-low { color: #15803d; }
+.listing-each.rare-find { color: #6d28d9; }
 .lowest-price .listing-each { display: block; text-align: right; font-weight: 600; }
 
 .gs-progress { height: 10px; margin: 8px 0 6px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
