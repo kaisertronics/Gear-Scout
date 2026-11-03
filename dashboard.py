@@ -651,6 +651,17 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if l["price_ctx"] and l["price_ctx"].get("deal"):
             from scrapers.resale_profit import estimate as resale_estimate
             l["resale"] = resale_estimate(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["ship_warn"] = None
+        try:
+            if not (l.get("sold") or l["is_auction"]):
+                from scrapers.shipping_check import check as ship_check, label as ship_label
+                _sp, _ss = parse_price(l.get("price")), l.get("shipping")
+                if _sp and isinstance(_ss, (int, float)) and _ss > 0:
+                    from scrapers import market_value as _mv
+                    _uv = _mv.value(l.get("title"), l.get("description"))[0]
+                    l["ship_warn"] = ship_label(ship_check(_sp, _ss, _uv))
+        except Exception:
+            l["ship_warn"] = None
         l["no_acc"] = None
         if not l.get("sold"):
             from scrapers.accessory_check import check as accessory_check
