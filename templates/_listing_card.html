@@ -60,13 +60,14 @@
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}
-      {% if l.bundle or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or (l.seller_other and l.seller_other >= 2) %}
+      {% if l.bundle or l.resale or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or (l.seller_other and l.seller_other >= 2) %}
         <div class="listing-flags">
           {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
           {% if l.seller_other and l.seller_other >= 2 %}<span class="flag flag-stale" title="This seller has {{ l.seller_other }} other ads Gear Scout has seen — likely a dealer or flipper, often open to bundle deals">🏪 {{ l.seller_other }} other ads</span>{% endif %}
           {% if l.stale %}<span class="flag flag-stale" title="Listed {{ l.stale.days }} days ago — sellers often take an offer after a few weeks">Listed {{ l.stale.days }}d · try {{ l.stale.offer }}</span>{% endif %}
           {% if l.haggle %}<span class="flag" title="The ad says it's open to offers">Room to haggle</span>{% endif %}
           {% if l.bundle %}<span class="flag flag-deal" title="Used value of the pieces: {% for i in l.bundle['items'] %}{{ i['name'] }} ~${{ '{:,}'.format(i['value']) }}{{ '; ' if not loop.last }}{% endfor %} ({{ l.bundle['pct_under'] }}% under)">Bundle: ${{ '{:,}'.format(l.bundle['ask']) }} vs ~${{ '{:,}'.format(l.bundle['total']) }} of parts</span>{% endif %}
+          {% if l.resale %}<span class="flag flag-deal" title="Used value ~${{ '{:,}'.format(l.resale['value']) }} ({{ l.resale['n'] }} comps) x 0.92 after Reverb and payment fees, minus ~${{ l.resale['ship'] }} shipping = ~${{ '{:,}'.format(l.resale['net']) }} net, minus the asking price">Resell ~${{ '{:,}'.format(l.resale['profit']) }} profit</span>{% endif %}
           {% if l.cuts and l.cuts >= 2 %}<span class="flag" title="Price cut {{ l.cuts }} times — a motivated seller">Cut {{ l.cuts }}x — motivated</span>{% endif %}
           {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>
           {% elif l.pending %}<span class="flag flag-pending" title="The seller marked this Pending — a sale is in progress. Gear Scout re-checks it every few hours.">⏳ Pending</span>{% endif %}
