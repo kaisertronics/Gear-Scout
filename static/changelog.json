@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-11-03",
+    "title": "Hourly improvements",
+    "items": [
+      "Starred-ad nudge: if an ad you starred is still for sale a day later, you get one gentle push (\"Still thinking about this one? It's still up at $X\"), at most twice a day and only in daytime.",
+      "Shopping-list deals: a brand-new listing for something on your studio shopping list that is 25%+ under its usual price now sends a push (items with your own price target keep using that target).",
+      "Vinyl records, CDs and cassettes whose titles happen to hold a mic model number (like the Ronco Records \"RE-1000\" album) no longer show up as gear."
+    ]
+  },
+  {
     "date": "2026-11-02",
     "title": "Code review",
     "items": [
