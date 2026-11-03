@@ -91,6 +91,28 @@
     </form>
   </section>
 
+  {% if star_tracker %}
+  <section class="panel" id="star-tracker">
+    <h2>⭐ Starred ads: how fast they sell</h2>
+    {% if not star_tracker.enough %}
+      <p class="muted">{{ star_tracker.note }}</p>
+    {% else %}
+      <p class="muted">Your starred ads that sold or went away usually lasted about <strong>{{ star_tracker.typical }}</strong> ({{ star_tracker.n_sold }} so far){% if star_tracker.by_site %}. By site: {% for s in star_tracker.by_site %}{{ s.site }} {{ s.days }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.</p>
+      {% if star_tracker.at_risk %}
+        <p><strong>At risk today</strong> <span class="muted">— starred, still up, and listed a while</span></p>
+        <ul class="proposal-list">
+        {% for a in star_tracker.at_risk[:10] %}
+          <li><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a> — {{ a.price or 'no price' }}
+            <span class="muted">· {{ a.site }} · {{ a.why }}</span></li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">None of your starred ads look at risk today.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}

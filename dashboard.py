@@ -2473,6 +2473,12 @@ def mics_page():
     except Exception:
         app.logger.exception("price targets panel")
         ctx["price_targets"] = []
+    try:
+        from scrapers import star_sold_tracker
+        ctx["star_tracker"] = star_sold_tracker.tracker()  # cached 5 min, read-only
+    except Exception:
+        app.logger.exception("starred sold tracker panel")
+        ctx["star_tracker"] = None
     try:  # compact pickup-route panel: only from deals already built (never triggers a rebuild)
         pp = _pickup_plan(_deals_cache["data"]) if _deals_cache["data"] is not None else None
         ctx["pickup"] = {"count": pp["count"], "areas": len(pp["clusters"]), "miles": pp["total_miles"]} if pp else None
@@ -4468,6 +4474,8 @@ def _keep_caches_warm():
                 _wcfg = load_config_raw()
                 for _fn in (_PT.status, _PH.history, _BM.best_months, _RG.regional_gaps, _FL.find):
                     _fn(_wcfg)
+                from scrapers import star_sold_tracker as _SST
+                _SST.tracker()
             except Exception:
                 logging.exception("Cache warm-up: Mics panels failed")
             from scrapers import mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
