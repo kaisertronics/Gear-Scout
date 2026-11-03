@@ -31,9 +31,30 @@ _MODELS = re.compile(
     r"fet47|pre[\s-]?73|1073|1084|c12|251|m49|km[\s-]?\d{2,3}\w*)(?![\w-])", re.I)
 
 
+# Vinyl / media-record ads ("RONCO RECORDS ... Stereo RE-1000 - VG/G+" is not
+# an RE1000 mic). Dropped only when the title has record words and neither
+# title nor description has a real studio-gear word.
+_RECORD = re.compile(
+    r"(?<![\w-])(?:lps?|vinyl|records?|cds?|cassettes?|sleeves?|45\s?rpm|33\s?rpm|78\s?rpm)(?![\w-])", re.I)
+_STUDIO_STRICT = re.compile(
+    r"(?<![\w-])(?:mics?|microphones?|preamps?|pre-?amps?|compressors?|limiters?|xlr|ribbons?|condensers?|"
+    r"channel[\s-]?strips?|outboard|500[\s-]?series|lunchbox|equali[sz]ers?|di[\s-]?box|diaphragm|"
+    r"ldc|sdc|interface|converter|summing|phantom|rackmount|rack[\s-]mount)(?![\w-])", re.I)
+
+
+def record_ok(title: Optional[str], description: Optional[str] = None) -> bool:
+    """False for vinyl/CD/cassette ads with no studio-gear word."""
+    t = title or ""
+    if not _RECORD.search(t) or _MODELS.search(t):
+        return True
+    return bool(_STUDIO_STRICT.search(f"{t} {description or ''}"))
+
+
 def collision_ok(title: Optional[str], description: Optional[str] = None) -> bool:
     """False when the ad matched only an ambiguous brand word and shows no
-    sign of being studio gear."""
+    sign of being studio gear, or is a vinyl/CD record ad."""
+    if not record_ok(title, description):
+        return False
     t = title or ""
     base = _SSL.sub(" ", t)
     if not _AMBIGUOUS.search(base):
