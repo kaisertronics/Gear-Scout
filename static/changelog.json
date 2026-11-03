@@ -10,6 +10,7 @@
     "date": "2026-11-02",
     "title": "Hourly improvements",
     "items": [
+      "Send offer on eBay: on eBay Buy It Now cards that take Best Offer, a button sends your suggested offer from your own eBay account (asks to confirm first, shows eBay's real reason if it fails). Connect your eBay account once under Settings > eBay; the click-by-click steps are in docs/ebay_connect_steps.md.",
       "Offer log: tap \"Log an offer\" on any card to record what you offered and the reply; the new Offers page shows which discounts and sellers actually work.",
       "Price history: /mics now charts each model's asking price over time, with a Buy now / Wait / Steady badge.",
       "Seller watchlist: tap \"Watch seller\" on a card and you get a push whenever that seller posts something new; see them on the Sellers page.",

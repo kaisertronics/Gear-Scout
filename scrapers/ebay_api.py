@@ -231,12 +231,22 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
             shipping=shipping_of(item),
             country=country_of(item),
             seller=(item.get("seller") or {}).get("username"),
+            offers_ok=best_offer_of(item),
         ))
 
     return ScrapeResult(
         source_name=name, source_url=manual_url, success=True,
         listings=listings, duration_seconds=time.time() - start,
     )
+
+
+def best_offer_of(item) -> Optional[bool]:
+    """True if the eBay item takes Best Offer, False if it lists buying
+    options without it, None if eBay didn't say."""
+    bo = item.get("buyingOptions")
+    if not bo:
+        return None
+    return "BEST_OFFER" in bo
 
 
 def ebay_manual_lowest_url(query: str) -> str:
@@ -279,5 +289,6 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
             image_url=(item.get("image") or {}).get("imageUrl"), listing_id=item_id,
             location=location, shipping=shipping_of(item), country=country_of(item),
             seller=(item.get("seller") or {}).get("username"),
+            offers_ok=best_offer_of(item),
         ))
     return out

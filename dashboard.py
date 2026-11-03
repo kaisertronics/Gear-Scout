@@ -2425,6 +2425,107 @@ def reverb_offer():
     return jsonify(res)
 
 
+@app.route("/ebay/offer", methods=["POST"])
+def ebay_offer():
+    """Sends a real, binding Best Offer on an eBay Buy It Now listing. Same
+    rules as /reverb/offer: confirm=1 required, dry_run=1 sends nothing."""
+    from scrapers import ebay_offer as eo
+    f = request.form
+    if f.get("confirm") != "1":
+        return jsonify(ok=False, message="Confirmation required"), 400
+    res = eo.send_offer(f.get("url"), f.get("amount"), dry_run=f.get("dry_run") == "1",
+                        title=f.get("title") or "", source="eBay", seller=f.get("seller") or "",
+                        asking=f.get("asking"))
+    return jsonify(res)
+
+
+EBAY_STATE_PATH = "/data/ebay_oauth_state.txt"
+
+
+def _ebay_save_user_token(refresh_token):
+    """Targeted write of ebay_api.user_refresh_token only (None/"" clears it).
+    Backs config.yaml up once, next to it, before the first write."""
+    bak = CONFIG_PATH + ".bak-ebay"
+    try:
+        if not os.path.exists(bak):
+            shutil.copy2(CONFIG_PATH, bak)
+    except OSError:
+        app.logger.warning("ebay: could not make a config backup (continuing)")
+    cfg = load_config_for_edit()
+    ebay_cfg = cfg.setdefault("ebay_api", {})
+    ebay_cfg["user_refresh_token"] = refresh_token or ""
+    save_config_raw(cfg)
+
+
+@app.route("/ebay/connect")
+def ebay_connect():
+    from scrapers import ebay_offer as eo
+    try:
+        state = secrets.token_urlsafe(24)
+        url = eo.consent_url(state)
+    except Exception:
+        url = None
+    if not url:
+        return redirect(url_for("settings", saved="ebay-needs-runame"))
+    try:
+        with open(EBAY_STATE_PATH, "w") as f:
+            f.write("%s %d" % (state, int(time.time())))
+    except OSError:
+        return redirect(url_for("settings", saved="ebay-error"))
+    return redirect(url)
+
+
+@app.route("/ebay/callback")
+def ebay_callback():
+    from scrapers import ebay_offer as eo
+    code = request.args.get("code")
+    state = request.args.get("state") or ""
+    try:
+        with open(EBAY_STATE_PATH) as f:
+            saved_state, ts = f.read().split()
+        os.remove(EBAY_STATE_PATH)
+    except (OSError, ValueError):
+        saved_state, ts = "", "0"
+    if (not code or not saved_state or not secrets.compare_digest(saved_state, state)
+            or time.time() - int(ts) > 900):
+        app.logger.warning("ebay callback: missing code or bad/expired state")
+        return redirect(url_for("settings", saved="ebay-error"))
+    try:
+        tok = eo.exchange_code(code)
+        _ebay_save_user_token(tok["refresh_token"])
+    except Exception as e:
+        app.logger.warning("ebay callback failed: %s", type(e).__name__ + ": " + str(e)[:200])
+        return redirect(url_for("settings", saved="ebay-error"))
+    return redirect(url_for("settings", saved="ebay-connected"))
+
+
+@app.route("/ebay/disconnect", methods=["POST"])
+def ebay_disconnect():
+    from scrapers import ebay_offer as eo
+    _ebay_save_user_token("")
+    eo.clear_cache()
+    return redirect(url_for("settings", saved="ebay"))
+
+
+@app.route("/settings/ebay-runame", methods=["POST"])
+def settings_ebay_runame():
+    cfg = load_config_for_edit()
+    cfg.setdefault("ebay_api", {})["runame"] = request.form.get("runame", "").strip()
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="ebay"))
+
+
+@app.context_processor
+def _inject_ebay_connected():
+    try:
+        e = load_config_raw().get("ebay_api") or {}
+        return {"ebay_connected": bool(str(e.get("user_refresh_token") or "").strip()
+                                       and str(e.get("client_id") or "").strip()
+                                       and str(e.get("client_secret") or "").strip())}
+    except Exception:
+        return {"ebay_connected": False}
+
+
 @app.route("/offers/remove", methods=["POST"])
 def offers_remove():
     from scrapers import offer_log
@@ -3869,6 +3970,7 @@ def settings():
         hidden_count=count_hidden(),
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
         ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
+        ebay_runame_set=bool(str((cfg.get("ebay_api") or {}).get("runame") or "").strip()),
         saved=request.args.get("saved"),
     )
 

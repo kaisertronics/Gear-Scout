@@ -36,6 +36,12 @@
       <div class="settings-saved">✓ Unhid {{ saved.split(':')[1] }} listing(s).</div>
     {% elif saved == 'ebay' %}
       <div class="settings-saved">✓ eBay settings saved — takes effect on the next scrape or live search.</div>
+    {% elif saved == 'ebay-connected' %}
+      <div class="settings-saved">✓ eBay account connected. Send offer on eBay buttons now appear on Best Offer listings.</div>
+    {% elif saved == 'ebay-error' %}
+      <div class="settings-saved">eBay sign-in did not finish. Try Connect eBay again (check the RuName and that the accepted URL ends in /ebay/callback).</div>
+    {% elif saved == 'ebay-needs-runame' %}
+      <div class="settings-saved">Save your eBay keys and RuName below first, then press Connect eBay.</div>
     {% elif saved == 'keywords' %}
       <div class="settings-saved">✓ Search terms saved — {{ keyword_count }} keyword{{ 's' if keyword_count != 1 else '' }}.</div>
     {% elif saved and saved.startswith('cleanup:') %}
@@ -359,6 +365,43 @@
                   onclick="return confirm('Remove the saved eBay keys?');">Remove keys</button>
         {% endif %}
       </form>
+
+      <h3 style="margin-top:1.5em;">Send offers from your eBay account</h3>
+      <p>
+        {% if ebay_connected %}
+          <span class="badge badge-ok">Connected</span> Listings that take Best Offer show a
+          "Send offer on eBay" button (it always asks you to confirm first). Your eBay account needs a payment method on file.
+        {% else %}
+          <span class="badge badge-blocked">Not connected</span> Connect your eBay account to send Best Offers from a card.
+        {% endif %}
+      </p>
+      <form method="post" action="{{ url_for('settings_ebay_runame') }}" class="settings-form">
+        <div class="form-row">
+          <label class="grow">RuName (from developer.ebay.com, looks like Name-AppName-PRD-xxxx-xxxx)
+            <input type="text" name="runame" value="" autocomplete="off" spellcheck="false"
+                   placeholder="{{ 'Saved. Paste a new one to replace it' if ebay_runame_set else '' }}">
+          </label>
+        </div>
+        <button type="submit" class="btn">Save RuName</button>
+      </form>
+      <p class="muted">
+        Setup steps: in your eBay developer account open Application Keys, Production, User Tokens,
+        add an eBay redirect URL. Set the accepted URL to your dashboard's public https address plus
+        <code>/ebay/callback</code> and the declined URL to the same address plus <code>/settings</code>,
+        then paste the RuName above. Full steps are in docs/ebay_connect_steps.md.
+      </p>
+      {% if ebay_runame_set and ebay_client_id and ebay_has_secret %}
+        <a class="btn btn-primary" href="{{ url_for('ebay_connect') }}">{{ 'Reconnect eBay' if ebay_connected else 'Connect eBay' }}</a>
+      {% else %}
+        <button type="button" class="btn btn-primary" disabled
+                title="Save your App ID, Cert ID and RuName first">Connect eBay</button>
+        <span class="muted">Save your keys and the RuName first.</span>
+      {% endif %}
+      {% if ebay_connected %}
+        <form method="post" action="{{ url_for('ebay_disconnect') }}" style="display:inline;">
+          <button type="submit" class="btn btn-danger" onclick="return confirm('Disconnect your eBay account?');">Disconnect</button>
+        </form>
+      {% endif %}
     </div>
   </section>
 
@@ -385,7 +428,7 @@
     if (location.hash === '#ebay') document.querySelector('.settings-tab[data-tab="ebay"]').click();
     if (location.hash === '#ai') document.querySelector('.settings-tab[data-tab="ai"]').click();
     {% if saved == 'ai' %}document.querySelector('.settings-tab[data-tab="ai"]').click();{% endif %}
-    {% if saved == 'ebay' %}
+    {% if saved == 'ebay' or (saved and saved.startswith('ebay-')) %}
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% elif saved in ('notifications', 'push_ok', 'push_fail') %}
       document.querySelector('.settings-tab[data-tab="notify"]').click();
