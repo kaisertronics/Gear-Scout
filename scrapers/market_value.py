@@ -16,6 +16,7 @@ import logging
 import re
 import sqlite3
 import statistics
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -35,6 +36,7 @@ _SKIP = re.compile(
     r"&|\bwith .*\band\b", re.I)
 
 _cache: dict = {"at": 0.0, "idx": None, "sold": None, "tiers": None}
+_build_lock = threading.Lock()
 
 _MINT = re.compile(r"\bmint\b|\blike[- ]new\b|\bexcellent condition\b|\bpristine\b|\bbarely used\b|\bopen[- ]box\b", re.I)
 _ROUGH = re.compile(r"\bas[- ]is\b|\bcosmetic (?:wear|damage)\b|\bheavy wear\b|\bscratched\b|\bdents?\b|\bwell used\b|"
@@ -97,6 +99,22 @@ def index(max_age: float = 1800) -> dict:
     """{model key: (value, n)} — rebuilt at most every 30 minutes."""
     if _cache["idx"] is not None and time.time() - _cache["at"] < max_age:
         return _cache["idx"]
+    # One thread rebuilds; the rest serve the old index (or wait on first build)
+    # instead of all rebuilding at once and stalling the dashboard.
+    if _cache["idx"] is not None:
+        if not _build_lock.acquire(blocking=False):
+            return _cache["idx"]
+    else:
+        _build_lock.acquire()
+    try:
+        if _cache["idx"] is not None and time.time() - _cache["at"] < max_age:
+            return _cache["idx"]
+        return _build_index()
+    finally:
+        _build_lock.release()
+
+
+def _build_index() -> dict:
     from scrapers.enrich import is_accessory_only, is_partial, needs_repair, parse_price
     from scrapers.store import _conn
     cut = (datetime.now(timezone.utc) - timedelta(days=YEAR_DAYS)).isoformat()

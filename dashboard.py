@@ -4298,6 +4298,8 @@ def _keep_caches_warm():
             sale_stats()
             from scrapers.market import load_market
             load_market()
+            from scrapers import market_value as _mvw
+            _mvw.index(max_age=1200)  # refreshed here, before page loads find it stale
             _feed_items(load_config_raw())  # the Feed (home page) first
             # The Dashboard's default view, ready before anyone asks.
             with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):

@@ -19,6 +19,7 @@ cache period.
 import logging
 import re
 import statistics
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -302,8 +303,24 @@ def market_typical(query: str, ebay_cfg: Optional[dict] = None,
     return best
 
 
+_market_cache: dict = {"at": 0.0, "m": None}
+_market_lock = threading.Lock()
+
+
 def load_market() -> MarketIndex:
-    """{value_key: typical asking price} for fresh, usable cache entries."""
+    """{value_key: typical asking price} for fresh, usable cache entries.
+    Cached 60 s: concurrent page loads share one build."""
+    if _market_cache["m"] is not None and time.time() - _market_cache["at"] < 60:
+        return _market_cache["m"]
+    with _market_lock:
+        if _market_cache["m"] is not None and time.time() - _market_cache["at"] < 60:
+            return _market_cache["m"]
+        m = _load_market_uncached()
+        _market_cache.update(at=time.time(), m=m)
+        return m
+
+
+def _load_market_uncached() -> MarketIndex:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=CACHE_DAYS)).isoformat()
     with _conn() as conn:
         _ensure_table(conn)
