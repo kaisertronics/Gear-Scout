@@ -56,10 +56,10 @@ def reply_stats(items, source, seller) -> Optional[dict]:
         replied = [o for o in mine if o.get("reply") in ("accepted", "countered", "declined")]
         hrs = sorted(h for h in (_hours(o) for o in replied) if h is not None)
         med = None
-        if hrs:
+        if len(hrs) >= 2:
             m = len(hrs) // 2
             med = hrs[m] if len(hrs) % 2 else (hrs[m - 1] + hrs[m]) / 2
-        return {"n": len(mine), "replied": len(replied), "hours": med}
+        return {"n": len(mine), "replied": len(replied), "hours": med, "timed": len(hrs)}
     except Exception:
         return None
 
@@ -75,9 +75,11 @@ def chip(stats) -> Optional[dict]:
         if r == 0:
             return {"text": f"No reply to {n} offers", "good": False,
                     "title": f"You sent this seller {n} offers and none got a reply"}
-        text = f"Replied to {r} of {n} offer{'s' if n != 1 else ''}"
         if h is not None:
-            text += f" · usually {_label(h)}"
+            k = stats.get("timed") or r
+            text = f"Replies in {_label(h)}, {k} offer{'s' if k != 1 else ''}"
+        else:
+            text = f"Replied to {r} of {n} offer{'s' if n != 1 else ''}"
         return {"text": text, "good": True,
                 "title": "From your offer log: how often this seller answered your offers"
                          + (" and how long it took" if h is not None else "")}

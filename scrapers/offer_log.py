@@ -48,7 +48,10 @@ def add(url, title, source, seller, asking, offered, reply, counter=None) -> Opt
         return None
     if reply == "countered" and not counter:
         return None
-    o = {"id": uuid.uuid4().hex[:8], "at": datetime.now(timezone.utc).isoformat(),
+    now = datetime.now(timezone.utc).isoformat()
+    o = {"id": uuid.uuid4().hex[:8], "at": now,
+         # when the reply was logged (additive; old entries lack it): feeds reply-speed chip
+         "replied_at": None if reply == "no_reply" else now,
          "url": str(url or "")[:500], "title": re.sub(r"\s+", " ", str(title or "")).strip()[:120],
          "source": str(source or "").split(" — ")[0][:60], "seller": str(seller or "")[:60],
          "asking": asking, "offered": offered, "reply": reply,
