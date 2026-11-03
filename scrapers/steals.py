@@ -183,6 +183,11 @@ def alert_new(cfg: dict) -> int:
         alert = {"title": r["title"], "price": r["price"], "url": r["url"], "image_url": r.get("image_url"),
                  "source_name": r.get("source_name") or "", "location": (r.get("location") or "").split(" @")[0]}
         try:
+            from scrapers.deal_checks import offers_note
+            alert["offers"] = offers_note(r, s["unit"], s["ref"])
+        except Exception:
+            pass
+        try:
             check = " (double-check)" if r.get("_check") else ""
             notify_new_lowest(cfg, f"Steal{check} — {s['pct']}% under {s['label']} ~${s['ref']:,.0f}", alert, None,
                               from_telex=True)

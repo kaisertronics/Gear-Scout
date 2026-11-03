@@ -76,6 +76,7 @@ def _conn() -> sqlite3.Connection:
         ("shipping", "REAL"),  # US shipping in USD (0 = free); NULL = not known / local pickup
         ("country", "TEXT"),   # where it's sold from; NULL = not known (US/Canada sources)
         ("seller", "TEXT"),    # seller / shop name (Reverb, eBay); NULL = not known
+        ("offers_ok", "INTEGER"),  # 1 = the listing accepts offers (Reverb); 0 = no; NULL = not known
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -294,6 +295,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 conn.execute("UPDATE seen SET seller = ? WHERE global_id = ?", (listing.seller, listing.global_id))
             if getattr(listing, "shipping", None) is not None:
                 conn.execute("UPDATE seen SET shipping = ? WHERE global_id = ?", (listing.shipping, listing.global_id))
+            if getattr(listing, "offers_ok", None) is not None:
+                conn.execute("UPDATE seen SET offers_ok = ? WHERE global_id = ?", (int(listing.offers_ok), listing.global_id))
             old_value, new_value = parse_price(existing[0]), parse_price(listing.price)
             if old_value and new_value and new_value < old_value * 0.99:
                 conn.execute(
@@ -332,8 +335,8 @@ def mark_seen(listing, live_only: bool = False) -> str:
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location, last_seen, shipping, country, hidden, seller)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen, shipping, country, hidden, seller, offers_ok)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -353,6 +356,7 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 getattr(listing, "country", None),
                 1 if hidden else 0,
                 getattr(listing, "seller", None),
+                None if getattr(listing, "offers_ok", None) is None else int(listing.offers_ok),
             ),
         )
         _record_price(conn, listing.global_id, listing.price, now)

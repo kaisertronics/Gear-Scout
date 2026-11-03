@@ -220,25 +220,11 @@ ALERT_MAX_AGE_DAYS = 7    # an ad the seller posted weeks ago isn't "new" news
 ALERT_MAX_SINGLE = 6      # more than this in one go → one summary push
 
 
-def alert_new(cfg: dict) -> int:
-    """Pushes each listing found since the last check that matches the
-    Wanted list. The first run only sets the starting point."""
+def hits_in(cfg: dict, rows: list[dict]) -> list:
+    """[(row, matching terms)] for stored rows that are Wanted matches worth a
+    push: not excluded / sold-in-title, posted within ALERT_MAX_AGE_DAYS, one
+    per ad."""
     from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
-    from scrapers.notify import push_enabled, send_push
-    now = datetime.now(timezone.utc).isoformat()
-    try:
-        since = json.loads(ALERT_STATE.read_text())["since"]
-    except Exception:
-        ALERT_STATE.write_text(json.dumps({"since": now}))
-        return 0
-    with _conn() as conn:
-        conn.row_factory = sqlite3.Row
-        rows = [dict(r) for r in conn.execute(
-            """SELECT * FROM seen WHERE first_seen > ? AND url IS NOT NULL AND COALESCE(hidden, 0) = 0
-               AND COALESCE(duplicate, 0) = 0 AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0
-               AND (country IS NULL OR country IN ('US', 'CA'))
-               ORDER BY first_seen""", (since,)).fetchall()]
-    newest = max([r["first_seen"] for r in rows], default=since)
     ms = matchers(cfg)
     exclude = cfg.get("exclude_words") or []
     hits, seen_ads = [], set()
@@ -254,14 +240,56 @@ def alert_new(cfg: dict) -> int:
         if found and ad not in seen_ads:
             seen_ads.add(ad)
             hits.append((r, found))
+    return hits
+
+
+def push_hit(cfg: dict, r: dict, found: list[str]):
+    """The single "New: ..." push for one Wanted match (Reverb ads that take
+    offers also say so, with the usual opening offer)."""
+    from scrapers import deal_checks as D
+    from scrapers.enrich import parse_price
+    from scrapers.notify import send_push
+    where = (r.get("location") or "").split(" @")[0] or r.get("source_name") or ""
+    try:
+        offers = D.offers_note(r, parse_price(r.get("price")) or 0)
+    except Exception:
+        offers = ""
+    return send_push(cfg, f"New: {r['title'][:80]}",
+                     f"{r.get('price') or 'no price'} · {where}\nWanted: {found[0]}" + (f"\n{offers}" if offers else ""),
+                     url=r["url"], tags=["new"], image=r.get("image_url"))
+
+
+def _ensure_fast(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS wanted_fast (url TEXT PRIMARY KEY, at TEXT)")
+
+
+def alert_new(cfg: dict) -> int:
+    """Pushes each listing found since the last check that matches the
+    Wanted list. The first run only sets the starting point."""
+    from scrapers.notify import push_enabled, send_push
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        since = json.loads(ALERT_STATE.read_text())["since"]
+    except Exception:
+        ALERT_STATE.write_text(json.dumps({"since": now}))
+        return 0
+    with _conn() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            """SELECT * FROM seen WHERE first_seen > ? AND url IS NOT NULL AND COALESCE(hidden, 0) = 0
+               AND COALESCE(duplicate, 0) = 0 AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0
+               AND (country IS NULL OR country IN ('US', 'CA'))
+               ORDER BY first_seen""", (since,)).fetchall()]
+    newest = max([r["first_seen"] for r in rows], default=since)
+    with _conn() as conn:
+        _ensure_fast(conn)
+        pushed = {u for (u,) in conn.execute("SELECT url FROM wanted_fast")}  # the fast lane already pushed these
+    hits = hits_in(cfg, [r for r in rows if r["url"] not in pushed])
     sent = 0
     if hits and push_enabled(cfg):
         if len(hits) <= ALERT_MAX_SINGLE:
             for r, found in hits:
-                where = (r.get("location") or "").split(" @")[0] or r.get("source_name") or ""
-                if send_push(cfg, f"New: {r['title'][:80]}",
-                             f"{r.get('price') or 'no price'} · {where}\nWanted: {found[0]}",
-                             url=r["url"], tags=["new"], image=r.get("image_url")):
+                if push_hit(cfg, r, found):
                     sent += 1
         else:
             lines = [f"• {r['title'][:60]} — {r.get('price') or '?'}" for r, _ in hits[:12]]

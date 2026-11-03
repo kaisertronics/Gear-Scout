@@ -51,6 +51,7 @@ class Listing:
     shipping: Optional[float] = None  # US shipping in USD (0 = free); None = not known / local pickup
     seller: Optional[str] = None      # seller / shop name where the site gives one (Reverb, eBay)
     country: Optional[str] = None     # where it's sold from ("US", "CA", "GB", "JPY"…); None = not known
+    offers_ok: Optional[bool] = None  # the listing accepts offers (Reverb's offers_enabled); None = not known
 
     def __post_init__(self):
         if not self.listing_id:

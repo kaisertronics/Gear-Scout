@@ -556,7 +556,7 @@ def build(cfg: dict) -> dict:
     """Recomputes the list and saves it for the page."""
     rows = still_showing(find(cfg))
     keep = ("title", "price", "url", "image_url", "source_name", "location", "shipping", "first_seen", "last_seen",
-            "posted_at", "global_id", "description", "previous_price")
+            "posted_at", "global_id", "description", "previous_price", "offers_ok")
     try:
         auc = auctions(cfg)
     except Exception:
@@ -699,6 +699,18 @@ def _line(r: dict) -> str:
            (f" · {clock}" if clock else "")
 
 
+def offers_text(r: dict) -> str:
+    """"\nOffers OK · offer ~$X" for a Reverb ad that accepts offers (the usual
+    opening offer, deal_checks.offer), else nothing."""
+    from scrapers import deal_checks as D
+    m = r["mic"]
+    try:
+        note = D.offers_note(r, m.get("delivered") or 0, m.get("used"))
+    except Exception:
+        return ""
+    return f"\n{note}" if note else ""
+
+
 def alert(cfg: dict) -> int:
     """Rebuilds the list, then pushes each new hit once per price. The very
     first run sends one summary push instead of the whole backlog."""
@@ -729,7 +741,7 @@ def alert(cfg: dict) -> int:
                 head = (f"pair ${m['total']:,.0f}" if (m.get("qty") or 1) > 1 else f"${m['delivered']:,.0f}") + \
                     (f" ({m['pct']}% off {m['ref_kind']})" if m["pct"] and m["pct"] > 0 else "")
                 chk = " (double-check)" if m["check"] else ""
-                send_push(cfg, f"🎤 {m['name']}: {head}{chk}", f"{r['title'][:100]}\n{_line(r)}",
+                send_push(cfg, f"🎤 {m['name']}: {head}{chk}", f"{r['title'][:100]}\n{_line(r)}" + offers_text(r),
                           url=r["url"], tags=["microphone"], image=r.get("image_url"))
                 sent += 1
     now = datetime.now(timezone.utc).isoformat()

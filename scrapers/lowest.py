@@ -312,7 +312,8 @@ def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optio
     if push_enabled(cfg):
         send_push(
             cfg, f"New lowest price: {query}",
-            f"{alert['title'][:90]}{repair}\n{alert['price']} (was lowest {was}) · {alert['source_name']}",
+            f"{alert['title'][:90]}{repair}\n{alert['price']} (was lowest {was}) · {alert['source_name']}"
+            + (f"\n{alert['offers']}" if alert.get("offers") else ""),
             url=alert["url"], tags=["moneybag"],
         )
     email_cfg = cfg.get("email") or {}

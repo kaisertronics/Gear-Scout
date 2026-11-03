@@ -161,6 +161,15 @@ def offer(r: dict, unit: float, used: Optional[float]) -> Optional[dict]:
     return out
 
 
+def offers_note(r: dict, unit: float, used: Optional[float] = None) -> str:
+    """For a push about a Reverb ad that accepts offers: "Offers OK · offer
+    ~$850" (the usual opening offer from offer()); empty for anything else."""
+    if not r.get("offers_ok"):
+        return ""
+    o = offer(r, unit, used)
+    return "Offers OK" + (f" · offer ~${o['amount']:,}" if o else "")
+
+
 # ---------------------------------------------------------------- photo check
 PHOTO_PROMPT = """You're checking a used pro-audio listing photo for a buyer.
 Listing title: {title}
