@@ -59,6 +59,14 @@
     {% if proposals.built %}<p class="muted">Recently shipped: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   </section>
 
+  {% if pickup and pickup.count %}
+  <section class="panel" id="pickup-panel">
+    <h2>🚗 Weekend pickup route</h2>
+    <p>{{ pickup.count }} local deal{{ 's' if pickup.count != 1 }} in {{ pickup.areas }} area{{ 's' if pickup.areas != 1 }}{% if pickup.miles %}, about {{ pickup.miles }} mi of driving{% endif %}.
+      <a href="{{ url_for('pickup_route_page') }}">See the route &rarr;</a></p>
+  </section>
+  {% endif %}
+
   <section class="panel" id="price-targets">
     <h2>💲 Price targets <span class="muted">— the most you'd pay for a model</span></h2>
     <p class="muted">Type a model (like "Neumann U87") and the most you'd pay, delivered. Gear Scout pushes and emails you when any new listing of that model is at or under your price, even if it isn't a big discount.</p>

@@ -2355,6 +2355,12 @@ def mics_page():
     except Exception:
         app.logger.exception("price targets panel")
         ctx["price_targets"] = []
+    try:  # compact pickup-route panel: only from deals already built (never triggers a rebuild)
+        pp = _pickup_plan(_deals_cache["data"]) if _deals_cache["data"] is not None else None
+        ctx["pickup"] = {"count": pp["count"], "areas": len(pp["clusters"]), "miles": pp["total_miles"]} if pp else None
+    except Exception:
+        app.logger.exception("pickup route panel")
+        ctx["pickup"] = None
     return render_template("mics.html", **ctx)
 
 
@@ -2600,6 +2606,24 @@ def shopping():
     """Studio shopping list: cheapest live listings per item, running total."""
     from scrapers import shopping_list
     return render_template("shopping.html", s=shopping_list.summary())
+
+
+def _pickup_plan(deals: Optional[dict]) -> dict:
+    """Weekend pickup route from the (already built) deals data."""
+    from scrapers import pickup_route
+    from scrapers.geo import miles_between, place_coords, zip_coords
+    home_zip = str(load_config_raw().get("home_zip") or "")
+    home = zip_coords(home_zip) if home_zip else None
+    listings = list((deals or {}).get("trusted", [])) + list((deals or {}).get("rough", []))
+    plan = pickup_route.build(listings, home, place_coords, miles_between)
+    plan["home_set"] = bool(home)
+    return plan
+
+
+@app.route("/pickup-route")
+def pickup_route_page():
+    """Weekend pickup route: live local deals grouped by area with a stop order."""
+    return render_template("pickup_route.html", p=_pickup_plan(_all_deals()))
 
 
 @app.route("/shopping/state", methods=["POST"])
