@@ -20,7 +20,7 @@ for l in ps.splitlines():
         running.append(dict(job=m[1], elapsed=l.split()[0]))
 # a job counts as running once; a job's wrapper shows twice
 plan = []
-done = {r["job"] for r in runs if r["code"] == 0 and r["at"][:10] == datetime.now().strftime("%Y-%m-%d")}
+done = {r["job"] for r in runs if r["code"] == 0 and r["secs"] >= 60 and r["at"][:10] == datetime.now().strftime("%Y-%m-%d")}
 cur = {r["job"] for r in running}
 try:
     for line in open(f"{LOG}/queue_plan.txt"):
