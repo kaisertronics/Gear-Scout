@@ -669,6 +669,10 @@ def _attach_sparklines(listings: list[dict]) -> None:
         pts = history.get(l.get("global_id")) or []
         if len(pts) < 2:
             continue
+        # Stubborn seller: price cut 2+ times (consecutive drops > $0.50).
+        cuts = sum(1 for (_, a), (_, b) in zip(pts, pts[1:]) if a - b > 0.5)
+        if cuts >= 2:
+            l["cuts"] = cuts
         pts = pts[-12:]
         vals = [v for _, v in pts]
         lo, hi = min(vals), max(vals)

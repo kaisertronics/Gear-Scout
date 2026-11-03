@@ -10,6 +10,7 @@
     "date": "2026-11-02",
     "title": "Hourly improvements",
     "items": [
+      "Stubborn-seller flag: ads whose price has been cut 2 or more times get a \"Cut 2x — motivated\" tag, a good sign to lowball.",
       "Room to haggle: ads that say OBO, \"make offer\" or \"must sell\" get a tag, and the offer helper opens about 20% lower on them.",
       "Sunday buyer's report: every Sunday at 8:30 AM you get one email with the week's new mics, price drops, what sold and a market headline.",
       "Price history: ads whose price has changed now show a tiny line chart next to the price (green = cheaper, red = pricier). Hover or long-press to see each price.",
