@@ -55,7 +55,8 @@ def collapse_reposts(listings):
             # A copy: callers pass dicts from the shared Feed cache, and the
             # count must not stick to them on pages that don't fold the ad.
             out.append(dict(best, repost_count=len(urls)))
-        return out
+        from scrapers.fb_twins import hide_twins  # Facebook ad-twins: newest only
+        return hide_twins(out)
     except Exception:
         logging.exception("repost grouping failed; showing ungrouped list")
         return listings

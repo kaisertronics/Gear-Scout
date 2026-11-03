@@ -1633,7 +1633,8 @@ def telex():
     sort = "cheap" if request.args.get("sort") == "cheap" else "new"
     age = lambda r: r.get("age_days") if r.get("age_days") is not None else 999
     unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
-    items = _feed_items(cfg)
+    from scrapers.fb_twins import hide_twins
+    items = hide_twins(_feed_items(cfg))  # Facebook ad-twins: newest only (display only)
     _mark_lowest(items)
     view, new_all, feed_counts = [], {}, {}
     for entry in terms:
@@ -3049,7 +3050,8 @@ def feed():
         # The front page: an inbox of what needs your attention. Every
         # listing for a term lives on the Telex List (and ?all=1).
         since = _feed_visit()
-        sections = _inbox(items, since)
+        from scrapers.fb_twins import hide_twins
+        sections = _inbox(hide_twins(items), since)
         sweep = None
         try:
             info = json.loads(Path("/data/last_sweep.json").read_text())
