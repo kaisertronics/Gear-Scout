@@ -68,6 +68,10 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
     <ul>{% for i in d.best_buys %}<li><b>{{ i.item }}</b>: {{ i.vs_market_pct }}% under used (${{ '{:,.0f}'.format(i.vs_market) }})</li>{% else %}<li>None yet</li>{% endfor %}</ul>
     {% if d.best %}<small>Biggest save vs new: <b>{{ d.best.item }}</b>, ${{ '{:,.0f}'.format(d.best.saved) }}.
     Average save per piece vs new: ${{ '{:,.0f}'.format(d.total_saved / d.count) }}.</small>{% endif %}</div>
+  {% if calib %}<div class="sv-card"><h3>Deal calibration</h3>
+    <b>{{ calib.text }}</b>
+    <ul>{% for r in calib.rows %}<li><b>{{ r.item }}</b>: paid ${{ '{:,.0f}'.format(r.paid) }}{% if r.lead_h is not none %}, seen {{ r.lead_h }} h before you bought{% else %}, not seen first{% endif %}{% if r.discount_pct is not none %}, {{ r.discount_pct }}% {{ 'under' if r.discount_pct >= 0 else 'over' }} used value{% endif %}</li>{% endfor %}</ul>
+    <small>Matched on model words in the title, asking price within 15% of what you paid, first seen before the purchase date.</small></div>{% endif %}
   {% if d.rough or d.unpriced %}<div class="sv-card"><h3>Check these prices</h3>
     {% if d.rough %}Only one listing to go on (rough):<ul>{% for i in d.rough %}<li>{{ i.item }}</li>{% endfor %}</ul>{% endif %}
     {% if d.unpriced %}No price found:<ul>{% for i in d.unpriced %}<li>{{ i.item }}</li>{% endfor %}</ul>{% endif %}

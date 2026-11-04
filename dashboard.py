@@ -3880,7 +3880,12 @@ def savings_page():
     from scrapers import savings_slides
     url, d = _savings_data()
     slides = savings_slides.slides(d) if d and d.get("count") else []
-    return render_template("savings.html", sheet_url=url, d=d, slides=slides,
+    try:
+        from scrapers import deal_calibration
+        calib = deal_calibration.report(d.get("items") or []) if d else None
+    except Exception:
+        calib = None
+    return render_template("savings.html", sheet_url=url, d=d, slides=slides, calib=calib,
                            version=int(_savings_cache.get("at") or 0))
 
 
@@ -4609,6 +4614,11 @@ def _keep_caches_warm():
                 _SL.build()  # the /shopping page's 10-minute cache (and its bundle offers)
             except Exception:
                 logging.exception("Cache warm-up: shopping list failed")
+            try:
+                from scrapers import deal_calibration as _DC
+                _DC.report((_savings_data()[1] or {}).get("items") or [])  # the Saved page's Deal calibration card
+            except Exception:
+                logging.exception("Cache warm-up: deal calibration failed")
             try:
                 from scrapers import price_windows as _PW
                 _cached_find("windows", _PW.find, _cfg, ttl=1500)  # reads ~75 days of ads: its own slower refresh
