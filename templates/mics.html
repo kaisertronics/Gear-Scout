@@ -125,6 +125,18 @@
   </section>
   {% endif %}
 
+  {% if hold_models %}
+  <section class="panel" id="hold-value">
+    <h2>📈 Hold-value mics</h2>
+    <p class="muted">Starred models whose used asking price has been flat or rising over the past year (newer listings vs older ones).</p>
+    <ul class="proposal-list">
+    {% for m in hold_models %}
+      <li>{{ m.label }} <span class="muted">· ~${{ m.value }} used · {{ m.text }} · {{ m.n }} listings</span></li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2>🎤 Mic Focus<span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
