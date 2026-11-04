@@ -4605,6 +4605,11 @@ def _keep_caches_warm():
                 except Exception:
                     logging.exception("Cache warm-up: %s failed", _n)
             try:
+                from scrapers import shopping_list as _SL
+                _SL.build()  # the /shopping page's 10-minute cache (and its bundle offers)
+            except Exception:
+                logging.exception("Cache warm-up: shopping list failed")
+            try:
                 from scrapers import price_windows as _PW
                 _cached_find("windows", _PW.find, _cfg, ttl=1500)  # reads ~75 days of ads: its own slower refresh
             except Exception:

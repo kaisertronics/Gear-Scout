@@ -16,6 +16,7 @@ DB = "/data/seen_listings.db"
 STATE_PATH = "/data/shopping_state.json"
 TAX = 0.107  # WA sales tax
 CAD = 0.72  # USD per Canadian dollar (approx.)
+USED_OF_NEW = 0.75  # a used piece is worth about this share of new when there is no price history
 
 # --------------------------------------------------------------- helpers
 FT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:-|\s)?(?:ft\b|feet\b|foot\b|'|’|ft\.)", re.I)
@@ -241,7 +242,7 @@ def _build():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute("""SELECT title, price, url, source_name, location, shipping, last_seen,
+        rows = conn.execute("""SELECT title, price, url, source_name, seller, location, shipping, last_seen,
                                       sold, pending, hidden, duplicate, description, country
                                FROM seen WHERE title IS NOT NULL AND (country IS NULL OR country IN ('US','CA'))""").fetchall()
     finally:
@@ -264,7 +265,7 @@ def _build():
             ship = r["shipping"] if isinstance(r["shipping"], (int, float)) else 0
             ship_unit = ship / qty
             live.append({"title": t, "source": r["source_name"], "url": r["url"], "unit": round(unit, 2),
-                         "ship": round(ship_unit, 2), "auction": auction,
+                         "ship": round(ship_unit, 2), "auction": auction, "seller": r["seller"], "pieces": qty,
                          "delivered": round((unit + ship_unit) * (1 + TAX), 2)})
         uniq, seen_urls = [], set()
         for rec in sorted(live, key=lambda x: x["delivered"]):
@@ -278,8 +279,10 @@ def _build():
             uniq = [x for x in uniq if x["unit"] >= min(med, it["new"]) * 0.25]
         if it["key"] not in ("nys", "p16", "dtp", "penn"):
             uniq = [x for x in uniq if x["unit"] <= it["new"] * 4]
+        used_unit = min(med, it["new"]) if med else it["new"] * USED_OF_NEW
         out.append({k: v for k, v in it.items() if k != "match"} | {
-            "new_taxed": round(it["new"] * (1 + TAX), 2), "matches": uniq[:3], "total_matches": len(uniq)})
+            "new_taxed": round(it["new"] * (1 + TAX), 2), "matches": uniq[:3], "total_matches": len(uniq),
+            "used_unit": round(used_unit, 2), "by_seller": [x for x in uniq if x.get("seller") and not x["auction"]]})
     return {"built": now.isoformat(), "items": out}
 
 
@@ -311,6 +314,58 @@ def save_state(s):
     os.replace(tmp, STATE_PATH)
 
 
+BUNDLE_MIN_ITEMS = 3     # different shopping-list items from one seller
+BUNDLE_UNDER = 0.15      # the offer is this far under the combined used value
+BUNDLE_FLOOR = 0.70      # never offer under this share of the combined ask
+BUNDLE_LIMIT = 5
+
+
+def _r5(x):
+    return int(round(x / 5.0) * 5)
+
+
+def find_bundles(items, bought):
+    """Pure. One seller listing BUNDLE_MIN_ITEMS+ different items still needed -> one lot offer.
+    items = _build()["items"]; bought = {key: pieces already bought}. Per seller (same site), the cheapest
+    listing of each needed item; ask = their prices + shipping; value = pieces x the item's used price;
+    offer = BUNDLE_UNDER under the value (and under the ask), never below BUNDLE_FLOOR of the ask."""
+    groups: dict = {}
+    for it in items:
+        left = it["qty"] - min(max(int(bought.get(it["key"], 0) or 0), 0), it["qty"])
+        if left <= 0:
+            continue
+        best: dict = {}
+        for m in it.get("by_seller") or []:
+            g = (m["source"], str(m["seller"]).strip().lower())
+            if g not in best or m["delivered"] < best[g]["delivered"]:
+                best[g] = m
+        for g, m in best.items():
+            groups.setdefault(g, []).append((it, m, left))
+    out = []
+    for (source, _sel), rows in groups.items():
+        if len(rows) < BUNDLE_MIN_ITEMS:
+            continue
+        lines, ask, value = [], 0.0, 0.0
+        for it, m, left in rows:
+            pcs = max(1, min(int(m.get("pieces") or 1), left))
+            cost = (m["unit"] + m["ship"]) * pcs
+            ask += cost
+            value += it["used_unit"] * pcs
+            lines.append({"name": it["name"], "title": m["title"], "url": m["url"], "pieces": pcs, "cost": round(cost, 2)})
+        if ask <= 0 or value <= 0:
+            continue
+        offer = max(_r5(min(value * (1 - BUNDLE_UNDER), ask * 0.9)), _r5(ask * BUNDLE_FLOOR))
+        offer = min(offer, int(ask))
+        who = rows[0][1]["seller"]
+        listing = "; ".join(f"{l['pieces']} x {l['title'][:60]}" for l in lines[:6]) + (f"; and {len(lines) - 6} more" if len(lines) > 6 else "")
+        out.append({"seller": who, "source": source, "lines": lines, "ask": round(ask, 2), "value": round(value, 2),
+                    "offer": offer, "pct_under_value": round((1 - offer / value) * 100), "pct_under_ask": round((1 - offer / ask) * 100),
+                    "message": (f"Hi! I see you have several things I'm looking for: {listing}. Would you take ${offer:,} for all of them, "
+                                f"shipped to Seattle? I can pay right away. Thanks!")})
+    out.sort(key=lambda b: -(b["value"] - b["offer"]))
+    return out[:BUNDLE_LIMIT]
+
+
 def summary():
     """Items with how many are still needed, plus the running total."""
     st = load_state()
@@ -328,4 +383,5 @@ def summary():
     budget = st["budget"]
     return {"items": items, "total": total, "budget": budget,
             "diff": round(abs(budget - total), 2) if budget is not None else None,
-            "over": budget is not None and total > budget, "built": build()["built"]}
+            "over": budget is not None and total > budget, "built": build()["built"],
+            "bundles": find_bundles(build()["items"], st["bought"])}
