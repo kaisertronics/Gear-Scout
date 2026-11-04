@@ -1,13 +1,6 @@
 [
   {
     "date": "2026-11-03",
-    "title": "Distressors bought: tracking stopped",
-    "items": [
-      "The Distressor section is switched off (no searches, pushes or emails for them), and 'Distressor' is off your Telex List so it stops filling Best deals. Tick it again on Home if you ever want another."
-    ]
-  },
-  {
-    "date": "2026-11-03",
     "title": "Code review",
     "items": [
       "Shopping page has a new \"This week's plan\" card: which still-needed items to buy now (a live ad is at or under your target, or 25%+ under used value), which to wait on, and how much budget is left.",
