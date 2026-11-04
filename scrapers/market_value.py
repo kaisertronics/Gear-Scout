@@ -268,3 +268,37 @@ def landing_deals(cfg: dict) -> list[dict]:
         out.append(r)
     out.sort(key=lambda r: -r["deal"]["pct"])
     return out
+
+
+def star_offer_notes(favs: list) -> list[dict]:
+    """For each SOLD starred listing that has other live stars of the same model:
+    {"sold_title", "sold_price", "median", "n", "ask", "others"}. Reuses sold prices
+    (confirmed sale, else the last asking price) and the confirmed-sale median; no new data."""
+    from scrapers.enrich import parse_price
+    from scrapers.store import _conn
+    index()  # make sure the confirmed-sale medians are loaded
+    med = _cache.get("sold") or {}
+    live: dict = {}
+    for l in favs:
+        if not l.get("sold") and l.get("title"):
+            k = _key(l["title"])
+            if k:
+                live.setdefault(k, []).append(l["title"])
+    out = []
+    for l in favs:
+        if not l.get("sold") or not l.get("title") or skip_listing(l["title"]):
+            continue
+        k = _key(l["title"])
+        if not k or k not in live:
+            continue
+        with _conn() as conn:
+            _ensure_sales(conn)
+            r = conn.execute("SELECT price FROM confirmed_sales WHERE url = ?", (l.get("url"),)).fetchone()
+        sp = r[0] if r and r[0] else parse_price(l.get("price"))
+        if not sp:
+            continue
+        m, n = med.get(k, (None, 0))
+        has_m = bool(m and n >= MIN_N)
+        out.append({"sold_title": l["title"], "sold_price": round(sp), "median": m if has_m else None,
+                    "n": n if has_m else 0, "ask": round(m if has_m else sp), "others": live[k][:3]})
+    return out

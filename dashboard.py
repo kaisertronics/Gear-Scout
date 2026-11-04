@@ -3763,8 +3763,15 @@ def jobs_active():
 def favorites():
     listings = favorite_listings(limit=300)
     grouped_listings = _group_by_source(listings)
+    try:
+        from scrapers import market_value as _MV
+        star_offers = _MV.star_offer_notes(listings)
+    except Exception:
+        app.logger.exception("star offer notes")
+        star_offers = []
     return render_template(
         "favorites.html",
+        star_offers=star_offers,
         deals=_deals_from(grouped_listings),
         grouped_listings=grouped_listings,
         result_count=len(listings),
