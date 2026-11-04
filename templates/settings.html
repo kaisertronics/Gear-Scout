@@ -325,6 +325,17 @@
 
     <div class="settings-panel" id="tab-ebay" style="display:none;">
       <h3>eBay results</h3>
+      {% if ebay_budget %}
+      <p>
+        <strong>eBay searches today: {{ "{:,}".format(ebay_budget.left) }} left</strong>
+        of {{ "{:,}".format(ebay_budget.limit) }} ({{ "{:,}".format(ebay_budget.used) }} used; resets at midnight Pacific).
+        {% if ebay_budget.paused_until %}<span class="badge badge-blocked">Paused: eBay's limit was reached</span>{% endif %}
+      </p>
+      {% if ebay_budget.jobs %}
+      <p class="muted">Where they went: {% for label, n in ebay_budget.jobs %}{{ label }} {{ "{:,}".format(n) }}{{ ", " if not loop.last }}{% endfor %}.
+        The newest-listings check is always kept enough for the rest of the day; other searches are spread across the day.</p>
+      {% endif %}
+      {% endif %}
       <p>
         {% if ebay_client_id and ebay_has_secret %}
           <span class="badge badge-ok">Connected</span> eBay listings (used, open box, seller

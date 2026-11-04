@@ -312,9 +312,10 @@ def _ebay_new(query: str) -> list[float]:
     if ebay_paused_until() or not (api.get("client_id") and api.get("client_secret")):
         return []
     token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
-    r = requests.get(SEARCH_URL, params={"q": query, "limit": 50,
-                                         "filter": "conditionIds:{1000},buyingOptions:{FIXED_PRICE},priceCurrency:USD"},
-                     headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
+    from scrapers.ebay_api import ebay_get
+    r = ebay_get(SEARCH_URL, job="lookups", params={"q": query, "limit": 50,
+                                                    "filter": "conditionIds:{1000},buyingOptions:{FIXED_PRICE},priceCurrency:USD"},
+                 headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
     _check_response(r)
     r.raise_for_status()
     out, seen = [], set()

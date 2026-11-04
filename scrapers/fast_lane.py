@@ -95,7 +95,10 @@ def _fetch_ebay(cfg: dict) -> list:
     api_cfg = cfg.get("ebay_api") or {}
     if not (api_cfg.get("client_id") and api_cfg.get("client_secret")):
         return []
-    from scrapers.ebay_api import scrape_ebay_api
+    from scrapers.ebay_api import _pt_now, scrape_ebay_api
+    # 1am-6am Pacific: every third tick only (nothing much is listed; saves ~100 of the day's eBay calls)
+    if 1 <= _pt_now().hour < 6 and int(time.time() // 120) % 3:
+        return []
     res = scrape_ebay_api({"name": "eBay — Pro Audio"}, [], api_cfg, newest=EBAY_NEWEST)
     return res.listings if res.success else []
 

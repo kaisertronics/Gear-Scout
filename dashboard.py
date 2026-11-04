@@ -4182,8 +4182,23 @@ def settings():
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
         ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
         ebay_runame_set=bool(str((cfg.get("ebay_api") or {}).get("runame") or "").strip()),
+        ebay_budget=_ebay_budget(),
         saved=request.args.get("saved"),
     )
+
+
+def _ebay_budget() -> dict:
+    """Today's eBay calls used / left (a tiny file in /data, written by every eBay call)."""
+    try:
+        from scrapers.ebay_api import budget_status
+        return budget_status()
+    except Exception:
+        return {}
+
+
+@app.route("/ebay/budget")
+def ebay_budget_json():
+    return jsonify(_ebay_budget())
 
 
 @app.route("/settings/ebay", methods=["POST"])

@@ -810,7 +810,8 @@ def fetch_auctions(cfg: dict) -> int:
         params = {"q": q, "sort": "endingSoonest", "limit": "100",
                   "filter": f"{CONDITION_FILTER},buyingOptions:{{AUCTION}},priceCurrency:USD,itemLocationCountry:US"}
         try:
-            resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
+            from scrapers.ebay_api import ebay_get
+            resp = ebay_get(SEARCH_URL, job="mic_auctions", params=params, headers=_headers(token), timeout=30)
             _check_response(resp)
         except Exception as e:
             logger.warning("Mic auction search failed for %r: %s", q, e)
@@ -905,8 +906,9 @@ def _current_bid(url: str, cfg: dict) -> Optional[tuple]:
     try:
         token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
         base = SEARCH_URL.rsplit("/item_summary", 1)[0]
-        resp = requests.get(f"{base}/item/get_item_by_legacy_id", params={"legacy_item_id": m.group(1)},
-                            headers=_headers(token), timeout=20)
+        from scrapers.ebay_api import ebay_get
+        resp = ebay_get(f"{base}/item/get_item_by_legacy_id", job="auction_recheck",
+                        params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
         _check_response(resp)
         if resp.status_code == 404:
             return (None, None, True)

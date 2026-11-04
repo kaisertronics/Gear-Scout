@@ -84,7 +84,8 @@ def fetch_ebay_ending(cfg: dict) -> int:
         _TERM_SEARCH_MARK.write_text(datetime.now(timezone.utc).isoformat())
     for params in searches:
         from scrapers.ebay_api import _headers
-        resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
+        from scrapers.ebay_api import ebay_get
+        resp = ebay_get(SEARCH_URL, job="ending_auctions", params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             logger.warning("eBay ending-soon auctions failed: HTTP %s", resp.status_code)
@@ -109,7 +110,7 @@ def fetch_ebay_ending(cfg: dict) -> int:
 
 
 _TERM_SEARCH_MARK = __import__("pathlib").Path("/data/auction_term_search.txt")
-TERM_SEARCH_EVERY_HOURS = 2
+TERM_SEARCH_EVERY_HOURS = 6  # was 2: 72 terms x 12 a day was ~860 of eBay's ~5,000 daily calls
 
 
 def _term_search_due() -> bool:

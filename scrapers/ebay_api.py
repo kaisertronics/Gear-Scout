@@ -61,6 +61,128 @@ def _note_rate_limit() -> None:
     logger.warning("eBay daily request limit reached — pausing eBay until %s", reset.strftime("%b %d %I:%M %p PT"))
 
 
+# ---------------------------------------------------------------------------
+# Daily budget (Nov 3). Every Browse API call goes through ebay_get(), which
+# counts it per job in /data/ebay_calls.json (Pacific day) and refuses a job
+# that is running ahead of its share of the day. The limit ran out at ~3:43pm
+# PT and eBay then sat dark until midnight; the owner's Hosa deals were missed.
+# The fast lane (newest listings) is never held back by the other jobs: their
+# calls stop when only the fast lane's remaining need is left.
+# ---------------------------------------------------------------------------
+_CALLS_FILE = "/data/ebay_calls.json"
+DAILY_LIMIT = 4800          # eBay's allowance is about 5,000; keep a margin
+FAST_LANE_EVERY_S = 120
+# Share of the day's allowance each job may use (paced across the day, with
+# 10% available up front). Jobs not listed get OTHER_SHARE.
+JOB_SHARE = {
+    "priority_sweep": 0.30,   # the Telex List and shopping-list terms (owner's own)
+    "mic_sweep": 0.15,        # Mic Focus model terms
+    "sibling_sweep": 0.04,    # guessed sibling models
+    "mic_auctions": 0.08,
+    "ending_auctions": 0.04,
+    "lookups": 0.08,          # price lookups (market value, savings, lowest)
+    "sold_check": 0.05,
+    "backfill": 0.02,
+}
+OTHER_SHARE = 0.03
+NO_PACING = {"fast_lane", "live_search", "auction_recheck"}  # only the daily total limits these
+JOB_LABELS = {
+    "fast_lane": "Fast lane (newest listings)", "priority_sweep": "Your Telex List + shopping list",
+    "mic_sweep": "Mic model searches", "sibling_sweep": "Guessed sibling models",
+    "mic_auctions": "Mic auctions", "ending_auctions": "Auctions ending soon",
+    "lookups": "Price lookups", "sold_check": "Sold / gone checks", "backfill": "Shipping backfill",
+    "live_search": "Searches you ran", "auction_recheck": "Auction re-checks", "other": "Other",
+}
+# search term -> job, set by the Wanted sweep before it searches a term
+TERM_JOBS: dict[str, str] = {}
+
+
+class EbayBudgetError(RuntimeError):
+    """A job asked for more than its share of today's eBay allowance."""
+
+
+def _pt_now() -> datetime:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Los_Angeles"))
+
+
+def _load_calls(day: str) -> dict:
+    import json
+    try:
+        d = json.load(open(_CALLS_FILE))
+        if d.get("day") == day:
+            return d
+    except Exception:
+        pass
+    return {"day": day, "total": 0, "jobs": {}}
+
+
+def _count_call(job: str, n: int = 1) -> None:
+    """Adds n calls to the job's count (file lock: the scraper and the dashboard both call)."""
+    import fcntl
+    import json
+    day = _pt_now().strftime("%Y-%m-%d")
+    try:
+        with open(_CALLS_FILE + ".lock", "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            d = _load_calls(day)
+            d["total"] += n
+            d["jobs"][job] = d["jobs"].get(job, 0) + n
+            tmp = _CALLS_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(d, f)
+            import os
+            os.replace(tmp, _CALLS_FILE)
+    except Exception as e:
+        logger.debug("eBay call count not saved: %s", e)
+
+
+def budget_status(limit: int = DAILY_LIMIT) -> dict:
+    """What the Settings page shows: calls used and left today, per job."""
+    now = _pt_now()
+    d = _load_calls(now.strftime("%Y-%m-%d"))
+    paused = ebay_paused_until()
+    used = d["total"]
+    if paused:
+        used = max(used, limit)
+    return {
+        "limit": limit, "used": used, "left": max(0, limit - used),
+        "paused_until": paused.isoformat() if paused else None,
+        "jobs": sorted(((JOB_LABELS.get(j, j), n) for j, n in d["jobs"].items()), key=lambda x: -x[1]),
+    }
+
+
+def budget_allows(job: str, limit: int = DAILY_LIMIT) -> bool:
+    now = _pt_now()
+    d = _load_calls(now.strftime("%Y-%m-%d"))
+    frac = (now.hour * 3600 + now.minute * 60 + now.second) / 86400
+    if job != "fast_lane":
+        fast_left = int((1 - frac) * 86400 / FAST_LANE_EVERY_S)
+        if d["total"] + fast_left >= limit:
+            return False
+    elif d["total"] >= limit:
+        return False
+    if job in NO_PACING:
+        return True
+    cap = JOB_SHARE.get(job, OTHER_SHARE) * limit
+    return d["jobs"].get(job, 0) < cap * (0.10 + 0.90 * frac)
+
+
+def job_for_term(term: str, default: str = "live_search") -> str:
+    return TERM_JOBS.get((term or "").strip(), default)
+
+
+def ebay_get(url: str, *, job: str, **kwargs):
+    """requests.get for an eBay Browse API call: refused while paused or when
+    the job is ahead of its share of today's allowance; otherwise counted."""
+    if ebay_paused_until():
+        raise EbayBudgetError("eBay's daily request limit is used up — eBay resumes after midnight (Pacific).")
+    if not budget_allows(job):
+        raise EbayBudgetError(f"eBay budget for “{JOB_LABELS.get(job, job)}” is used for now — saved for fresher searches.")
+    _count_call(job)
+    return requests.get(url, **kwargs)
+
+
 def _check_response(resp) -> None:
     if resp.status_code == 429:
         _note_rate_limit()
@@ -179,7 +301,8 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
         token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
         if is_live_search:
             params["fieldgroups"] = "EXTENDED"  # adds each listing's short description
-        resp = requests.get(SEARCH_URL, params=params, headers=_headers(token), timeout=30)
+        job = "fast_lane" if newest else job_for_term(keywords[0] if is_live_search else "")
+        resp = ebay_get(SEARCH_URL, job=job, params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
@@ -190,11 +313,16 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
             from scrapers.cable_family import alt_query
             alt = alt_query(keywords[0])
             if alt:
-                resp2 = requests.get(SEARCH_URL, params={**params, "q": alt, "category_ids": PRO_AUDIO_CATEGORY},
-                                     headers=_headers(token), timeout=30)
+                resp2 = ebay_get(SEARCH_URL, job=job, params={**params, "q": alt, "category_ids": PRO_AUDIO_CATEGORY},
+                                 headers=_headers(token), timeout=30)
                 if resp2.status_code == 200:
                     have = {i.get("itemId") for i in items}
                     items += [i for i in resp2.json().get("itemSummaries", []) or [] if i.get("itemId") not in have]
+    except EbayBudgetError as e:
+        return ScrapeResult(
+            source_name=name, source_url=manual_url, success=False, blocked=True, error=str(e),
+            fix_hint="Resumes on its own; nothing to fix.", duration_seconds=time.time() - start,
+        )
     except PermissionError as e:
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, error=str(e),
@@ -283,8 +411,8 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
     if ebay_paused_until():
         return []
     token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-    resp = requests.get(
-        SEARCH_URL,
+    resp = ebay_get(
+        SEARCH_URL, job="lookups",
         params={"q": query.strip(), "sort": "price", "limit": "200",
                 "filter": f"{CONDITION_FILTER},buyingOptions:{{FIXED_PRICE}},priceCurrency:USD"},
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},

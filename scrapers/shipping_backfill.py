@@ -68,8 +68,9 @@ def main() -> None:
             if not m:
                 continue
             try:
-                r = requests.get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"),
-                                 params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
+                from scrapers.ebay_api import ebay_get
+                r = ebay_get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"), job="backfill",
+                             params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
                 _check_response(r)
                 if r.ok:
                     ship = ebay_ship(r.json())

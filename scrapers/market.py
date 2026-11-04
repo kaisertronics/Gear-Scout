@@ -180,8 +180,9 @@ def _ebay_prices(query: str, api_cfg: dict) -> list[float]:
     """Used / open-box / refurbished asking prices on eBay (Browse API)."""
     from scrapers.ebay_api import CONDITION_FILTER, SEARCH_URL, _get_token
     token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-    resp = requests.get(
-        SEARCH_URL,
+    from scrapers.ebay_api import ebay_get
+    resp = ebay_get(
+        SEARCH_URL, job="lookups",
         params={"q": query, "limit": 50, "filter": f"{CONDITION_FILTER},buyingOptions:{{FIXED_PRICE}}"},
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
         timeout=20,

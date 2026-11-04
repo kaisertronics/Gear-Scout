@@ -544,7 +544,7 @@ def run_watch_cycle():
             try:
                 auctions.fetch_ebay_ending(cfg)
             except RuntimeError as e:
-                if "daily request limit" not in str(e):
+                if "daily request limit" not in str(e) and "eBay budget" not in str(e):
                     raise
                 logger.info("eBay ending-auctions fetch skipped: %s", e)
             auctions.check(cfg)

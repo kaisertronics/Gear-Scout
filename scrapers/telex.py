@@ -106,6 +106,7 @@ def search_links(term: str) -> list[tuple[str, str]]:
 
 FAST_EVERY_MIN = 30      # Reverb, Craigslist, Kijiji, ShopGoodwill, Long & McQuade, OfferUp
 EBAY_EVERY_MIN = 120     # eBay's API has a daily allowance (sold checks use it too)
+EBAY_MIC_EVERY_MIN = 240  # Mic Focus model terms (the fast lane already reads every new mic listing)
 TYPO_EVERY_MIN = 360
 FB_CABLE_EVERY_MIN = 72 * 60  # cable/connector terms on Facebook (see run_wanted_sweep)
 FB_TERMS_PER_CYCLE = 2  # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
@@ -257,6 +258,13 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     # allowance: eBay's daily limit ran out by ~4pm PT with every derived term on the full rate.
     from scrapers.shopping_list import search_terms as _shop_terms
     sibling_only = set(derived) - set(_shop_terms())
+    # Each term's eBay calls are counted against a job (scrapers.ebay_api budget): the owner's Telex List
+    # and shopping-list terms first, mic model terms next, guessed siblings last.
+    from scrapers.ebay_api import TERM_JOBS
+    owner_terms = set(wanted_terms(cfg)) | set(_shop_terms()) | (set(mic_terms) if focus else set())
+    for t in ts:
+        TERM_JOBS[search_query(t)] = ("priority_sweep" if t in owner_terms
+                                      else "sibling_sweep" if t in sibling_only else "mic_sweep")
 
     def due(term, site, minutes):
         last = (st.get((term, site)) or {}).get("searched_at")
@@ -285,6 +293,8 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
         if time.time() - start > budget:
             return None
         e_every = ebay_every * 3 if term in sibling_only else ebay_every
+        if not focus and term not in owner_terms and term not in sibling_only:
+            e_every = max(e_every, EBAY_MIC_EVERY_MIN)
         sites = {s for s, m in (("fast", fast_every), ("ebay", e_every)) if due(term, s, m)}
         return run(term, sites, "+".join(sorted(sites))) if sites else None
 

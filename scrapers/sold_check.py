@@ -70,8 +70,9 @@ def _ebay_gone(url: str) -> Optional[bool]:
         return None
     token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
     from scrapers.ebay_api import _headers, shipping_of
-    r = requests.get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"),
-                     params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
+    from scrapers.ebay_api import ebay_get
+    r = ebay_get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"), job="sold_check",
+                 params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
     _check_response(r)
     if r.status_code in (404, 410):
         return True
@@ -99,7 +100,10 @@ def _ebay_gone(url: str) -> Optional[bool]:
 def check_url(url: str) -> Optional[bool]:
     """True = sold/gone, False = still listed, None = couldn't tell."""
     if "ebay.com/itm" in url:
-        return _ebay_gone(url)
+        try:
+            return _ebay_gone(url)
+        except RuntimeError:  # eBay budget / daily limit: can't tell now
+            return None
     if "reverb.com/item/" in url:
         m = re.search(r"/item/(\d+)", url)
         if not m:
