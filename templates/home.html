@@ -74,6 +74,13 @@
   </section>
   {% endif %}
 
+  {% if wanted_ads %}
+  <section class="panel" id="wanted-sniper">
+    <h2>🎯 Wanted-ad sniper <span class="muted">— {{ wanted_ads|length }} Facebook / Craigslist / OfferUp / Kijiji ad{{ '' if wanted_ads|length == 1 else 's' }} with no price (or a $1 stand-in), buy-list gear first · ask the price with the message on each card</span></h2>
+    <div class="listing-grid">{% for l in wanted_ads %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
