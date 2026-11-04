@@ -3050,8 +3050,14 @@ def _home_page():
         pairs = [dict(p, a=ok[p["a"]["url"]], b=ok[p["b"]["url"]]) for p in found if p["a"]["url"] in ok and p["b"]["url"] in ok]
     except Exception:
         logging.exception("Home: pair-up finder failed")
+    lots = []
+    try:  # multi-item ads priced under the sum of their parts
+        from scrapers import lot_hunter
+        lots = _finder_cards("lots", lot_hunter.find, cfg)
+    except Exception:
+        logging.exception("Home: lot hunter failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
-               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs)
+               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs, lots=lots)
     return render_template("home.html", **ctx)
 
 
@@ -4555,14 +4561,14 @@ def _keep_caches_warm():
             except Exception:
                 logging.exception("Cache warm-up: Mics panels failed")
             from scrapers import clone_makers as _CM, mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
-            from scrapers import pair_up as _PU
+            from scrapers import lot_hunter as _LH, pair_up as _PU
             _cfg = load_config_raw()
             try:
                 from scrapers import hold_tracker as _HT
                 _HT.stats()  # the Mics page's Hold-value card (own 30-min cache)
             except Exception:
                 logging.exception("Cache warm-up: hold tracker failed")
-            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find)):
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find), ("lots", _LH.find)):
                 try:
                     _cached_find(_n, _f, _cfg, ttl=240)
                 except Exception:

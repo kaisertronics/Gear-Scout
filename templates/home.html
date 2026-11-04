@@ -67,6 +67,13 @@
   </section>
   {% endif %}
 
+  {% if lots %}
+  <section class="panel" id="lot-hunter">
+    <h2>📦 Lot hunter <span class="muted">— {{ lots|length }} lot{{ '' if lots|length == 1 else 's' }} asking 25%+ under the used value of the parts (a lot, bundle or "8x" of one model) · biggest dollar saving first · unrecognised extras not counted</span></h2>
+    <div class="listing-grid">{% for l in lots[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
