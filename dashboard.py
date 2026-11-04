@@ -982,6 +982,13 @@ def _unnamed_mic(l):
     return unnamed_mic.identify(l.get("title"), l.get("description")) if hasattr(l, "get") else None
 
 
+@app.template_filter("offer_odds")
+def _offer_odds(l):
+    """How often ~15% under-ask offers got accepted, or None (see scrapers/offer_odds.py)."""
+    from scrapers import offer_odds
+    return offer_odds.odds_chip(l.get("source_name")) if hasattr(l, "get") else None
+
+
 @app.template_filter("seller_reply")
 def _seller_reply(l):
     """How often this seller answered your offers, or None (see scrapers/seller_reply.py)."""

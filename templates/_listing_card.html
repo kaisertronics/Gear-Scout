@@ -26,6 +26,8 @@
       {% if unm %}<div class="listing-each muted" title="Unnamed mic; a guess from clues in the ad ({{ unm.reason }})">🔎 Might be: {{ unm.guesses|join(' · ') }}</div>{% endif %}
       {% set srep = l|seller_reply %}
       {% if srep %}<div class="listing-each{{ '' if srep.good else ' muted' }}" title="{{ srep.title }}">⏱️ {{ srep.text }}</div>{% endif %}
+      {% set oodds = l|offer_odds %}
+      {% if oodds and l.price %}<div class="listing-each{{ '' if oodds.good else ' muted' }}" title="{{ oodds.title }}">🤝 {{ oodds.text }}</div>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
       {% if l.price %}
         <div class="listing-price-row">
