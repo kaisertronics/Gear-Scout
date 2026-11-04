@@ -109,6 +109,8 @@ EBAY_EVERY_MIN = 120     # eBay's API has a daily allowance (sold checks use it 
 EBAY_MIC_EVERY_MIN = 240  # Mic Focus model terms (the fast lane already reads every new mic listing)
 TYPO_EVERY_MIN = 360
 FB_CABLE_EVERY_MIN = 72 * 60  # cable/connector terms on Facebook (see run_wanted_sweep)
+MAKER_FB_SLOTS = 1  # extra Facebook searches per cycle for the clone makers (wanted.fb_maker_lane: false turns it off)
+MAKER_FB_EVERY_MIN = 60
 FB_TERMS_PER_CYCLE = 2  # Marketplace (8 regions) + your groups: ~2 min a term (gentler on the account)
 TYPOS_PER_CYCLE = 2
 FAST_BUDGET_SECONDS = 600
@@ -235,6 +237,14 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     derived = derived_terms(cfg)
     ts = list(dict.fromkeys(ts + derived))
     fast_every, ebay_every = (15, 45) if focus else (FAST_EVERY_MIN, EBAY_EVERY_MIN)
+    # Posting-time boost: in the hours when ads for the owner's gear usually go up, check the fast sites every cycle.
+    try:
+        from scrapers import posting_times
+        if (cfg.get("wanted") or {}).get("posting_boost") is not False and posting_times.hot_now():
+            fast_every = min(fast_every, 15)
+            logger.info("Wanted sweep: busy posting hour, fast sites checked every cycle")
+    except Exception:
+        logger.exception("Posting-time boost failed")
     if not ts:
         return []
     try:
@@ -250,7 +260,7 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
         # the 15-minute interval, or the next one is skipped. What the refresh already used comes
         # off this sweep's time; terms not reached go first next cycle (least recently searched).
         from scrapers.fb_posts_background import marketplace_quiet_hours as _quiet
-        fb_reserve = 0 if _quiet(cfg) else fb_per_cycle * FB_SECONDS_PER_TERM
+        fb_reserve = 0 if _quiet(cfg) else (fb_per_cycle + MAKER_FB_SLOTS) * FB_SECONDS_PER_TERM
         budget = int(min(FAST_BUDGET_SECONDS, max(0, CYCLE_TARGET_SECONDS - (time.time() - cycle_start) - fb_reserve)))
     st = sweep_state()
     now = datetime.now(timezone.utc)
@@ -318,9 +328,20 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     else:  # the Telex List plus one broad search per mic brand, all in the same rotation
         fb_due = list(dict.fromkeys([t for t in ts if t not in mic_terms and t not in derived and (not _cable_part_number(t) or due(t, "fb", FB_CABLE_EVERY_MIN))]
                                     + mic_focus.fb_terms(cfg)))
-    for term in sorted(fb_due, key=lambda t: (st.get((t, "fb")) or {}).get("searched_at") or "")[:max(0, fb_per_cycle)]:
+    stale_first = lambda t: (st.get((t, "fb")) or {}).get("searched_at") or ""
+    # Facebook maker lane: the clone makers the owner stars (Vanguard, sE, Peluso, AudioScape, Advanced Audio,
+    # United, Serrano) get one extra Marketplace slot a cycle and first claim on one regular slot, so each maker's
+    # newest ads are searched about every 1-2 hours instead of waiting a full rotation. Quiet hours / pauses still apply.
+    makers_now = []
+    if fb_per_cycle > 0 and (cfg.get("wanted") or {}).get("fb_maker_lane") is not False:
+        from scrapers.clone_makers import fb_terms as _maker_fb
+        makers_now = sorted([t for t in _maker_fb() if due(t, "fb", MAKER_FB_EVERY_MIN)], key=stale_first)[:1 + MAKER_FB_SLOTS]
+    regular = [t for t in sorted(fb_due, key=stale_first) if t not in makers_now]
+    for term in fb_pick(makers_now, regular, fb_per_cycle):
         out.append(run(term, {"fb"}, "fb"))
-    typos = list(dict.fromkeys(q for t in ts if t not in derived for q in misspellings(t)))
+    from scrapers.clone_makers import sibling_terms as _clone_sibs
+    clone_sibs = set(_clone_sibs())  # misspelled versions of the clone makers' models too (Vangaurd V4)
+    typos = list(dict.fromkeys(q for t in ts if t not in derived or t in clone_sibs for q in misspellings(t)))
     for q in sorted(typos, key=lambda q: (st.get((q, "fast")) or {}).get("searched_at") or "")[:TYPOS_PER_CYCLE]:
         if due(q, "fast", TYPO_EVERY_MIN):
             out.append(run(q, {"fast"}, "misspelling"))
@@ -330,6 +351,13 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     except OSError:
         pass
     return [r for r in out if r]
+
+
+def fb_pick(makers_due: list, regular: list, fb_per_cycle: int) -> list:
+    """Facebook terms for this cycle: the clone makers use the extra slot first,
+    then take over regular slots (at most one), so the rest of the rotation keeps moving."""
+    taken = max(0, len(makers_due) - MAKER_FB_SLOTS)
+    return list(makers_due) + list(regular)[:max(0, fb_per_cycle - taken)]
 
 
 def term_matcher(term: str):

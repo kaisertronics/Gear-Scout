@@ -3028,8 +3028,15 @@ def _home_page():
         motivated = collapse_reposts(sorted(motivated, key=lambda l: -l["motivated_ad"]["pct"]))
     except Exception:
         logging.exception("Home: motivated sellers failed")
+    clones, posting = [], {}
+    try:  # the clone makers' newest ads, every source (cached + pre-warmed like the other finders)
+        from scrapers import clone_makers, mic_focus, posting_times
+        clones = _decorate(mic_focus.still_showing(_cached_find("clones", clone_makers.find, cfg)))
+        posting = posting_times.summary()  # reads one small saved file
+    except Exception:
+        logging.exception("Home: clone-maker feed failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
-               quiet=quiet, motivated=motivated)
+               quiet=quiet, motivated=motivated, clones=clones, posting=posting)
     return render_template("home.html", **ctx)
 
 
@@ -4532,9 +4539,14 @@ def _keep_caches_warm():
                 _SST.tracker()
             except Exception:
                 logging.exception("Cache warm-up: Mics panels failed")
-            from scrapers import mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
+            from scrapers import clone_makers as _CM, mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
             _cfg = load_config_raw()
-            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find)):
+            try:
+                from scrapers import hold_tracker as _HT
+                _HT.stats()  # the Mics page's Hold-value card (own 30-min cache)
+            except Exception:
+                logging.exception("Cache warm-up: hold tracker failed")
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find)):
                 try:
                     _cached_find(_n, _f, _cfg, ttl=240)
                 except Exception:
@@ -4568,7 +4580,8 @@ def _singleflight_builders():
     import importlib
     targets = (("best_month", "best_months"), ("price_history", "history"), ("regional_gap", "regional_gaps"),
                ("market_pulse", "pulse"), ("flips", "find"), ("price_targets", "status"), ("price_targets", "hits"),
-               ("wait_signal", "signals"), ("seller_watch", "watched"), ("offer_log", "summary"))
+               ("wait_signal", "signals"), ("seller_watch", "watched"), ("offer_log", "summary"),
+               ("hold_tracker", "stats"))
     for mod_name, fn_name in targets:
         try:
             mod = importlib.import_module(f"scrapers.{mod_name}")

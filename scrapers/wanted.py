@@ -47,10 +47,12 @@ def derived_terms(cfg: dict) -> list[str]:
     if (cfg.get("wanted") or {}).get("derived_terms") is False:
         return []
     from scrapers.cable_family import siblings
+    from scrapers.clone_makers import sibling_terms
     from scrapers.shopping_list import search_terms
     own = terms(cfg)
     have = {t.lower() for t in own}
-    return [t for t in dict.fromkeys(siblings(own) + search_terms()) if t.lower() not in have]
+    # + the starred clone makers' other models (Vanguard V13 -> V4, V44S ...): sellers underprice what they don't know
+    return [t for t in dict.fromkeys(siblings(own) + search_terms() + sibling_terms()) if t.lower() not in have]
 
 
 def matchers(cfg: dict) -> list[tuple[str, Callable[[str], bool], Optional[str], bool]]:

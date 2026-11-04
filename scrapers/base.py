@@ -146,6 +146,9 @@ _BRAND_FIXES = [(re.compile(p), r) for p, r in (
     (r"\b(?:empractical|emperical|empiracal|imperical) labs?\b", "empirical labs"),
     (r"\b(?:akg's|a\.k\.g\.?)(?=\s)", "akg"),
     (r"\bu\.r\.e\.i\.?", "urei"),
+    (r"\b(?:vangaurd|vangard|vanguad|vangurd)\b", "vanguard"),
+    (r"\b(?:pelluso|peluzo|peleuso|pelusso)\b", "peluso"),
+    (r"\baudio scape\b", "audioscape"),
 )]
 
 
