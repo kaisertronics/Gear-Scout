@@ -666,6 +666,10 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if not (l.get("sold") or l["is_auction"]):
             from scrapers.bundle_breakdown import breakdown
             l["bundle"] = breakdown(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["lot"] = None
+        if not (l.get("sold") or l["is_auction"] or l["bundle"]):
+            from scrapers.lot_splitter import lot_chip
+            l["lot"] = lot_chip(l.get("title"), l.get("description"), parse_price(l.get("price")))
         l["resale"] = None
         if l["price_ctx"] and l["price_ctx"].get("deal"):
             from scrapers.resale_profit import estimate as resale_estimate
