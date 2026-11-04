@@ -57,6 +57,16 @@
   </section>
   {% endif %}
 
+  {% if pairs %}
+  <section class="panel" id="pair-ups">
+    <h2>👯 Pair-ups <span class="muted">— {{ pairs|length }} model{{ '' if pairs|length == 1 else 's' }} where two separate single ads together cost 12%+ under a used pair · biggest saving first · each card has a message for its seller</span></h2>
+    {% for p in pairs %}
+    <h3 style="margin:.6em 0 .2em">${{ '{:,}'.format(p.total) }} for the two <span class="muted">vs ~${{ '{:,}'.format(p.used_pair) }} used pair · {{ p.pct }}% under{% if p.same_seller %} · same seller (one shipment){% endif %}</span></h3>
+    <div class="listing-grid">{{ listing_card(p.a) }}{{ listing_card(p.b) }}</div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>

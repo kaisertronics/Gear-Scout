@@ -29,6 +29,8 @@
       {% set oodds = l|offer_odds %}
       {% if oodds and l.price %}<div class="listing-each{{ '' if oodds.good else ' muted' }}" title="{{ oodds.title }}">🤝 {{ oodds.text }}</div>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
+      {% if l.finder_note %}<div class="listing-each" title="Found by a Home finder (pair-up, lot hunter, wanted-ad sniper or fixer-upper)">{{ l.finder_note }}</div>{% endif %}
+      {% if l.finder_msg %}<div class="listing-each"><button type="button" class="btn btn-sm" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.finder_msg }}">Copy message to seller</button></div>{% endif %}
       {% if l.price %}
         <div class="listing-price-row">
           {% set dl = l|delivered %}

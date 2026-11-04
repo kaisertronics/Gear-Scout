@@ -13,7 +13,8 @@
       "Gear Scout now also searches the other models of the clone makers you star (Vanguard V1/V4/V44S, sE VR1, Advanced Audio CM49/CM269, UT47/UT67 and so on) and catches common misspellings like \"Vangaurd\" and \"Pelluso\", since sellers underprice models they don't know.",
       "Facebook Marketplace gets a maker lane: each cycle one extra Facebook search goes to the clone makers (Vanguard, sE, Peluso, AudioScape, Advanced Audio, United, Serrano), so their newest local ads are checked about every 1-2 hours instead of waiting a full rotation. Still quiet overnight and still pauses if Facebook asks it to slow down.",
       "Posting-time boost: Gear Scout learns which hours of the weekday and weekend your kind of gear gets posted and, in those busy hours, checks the fast sites every 15 minutes instead of 30.",
-      "The Hold-value card on the Mics page is now kept warm in the background so it can't slow the page down."
+      "The Hold-value card on the Mics page is now kept warm in the background so it can't slow the page down.",
+      "New Pair-ups section on Home: when two separate single ads of the same model (a 1176, EQP-1A, BT-50, Advent, Peluso, U87 and similar), even from different sellers or sites, together cost 12%+ under what a used pair is worth, Gear Scout shows both side by side with the saving and a Copy message button for each seller (nothing is sent for you)."
     ]
   },
   {

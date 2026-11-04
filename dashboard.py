@@ -2950,6 +2950,12 @@ def _cached_find(name: str, fn, cfg, ttl: float = 300):
         _finder_lock.release()
 
 
+def _finder_cards(name: str, fn, cfg) -> list:
+    """A cached Home finder's ads, minus what you hid / what sold since, decorated for cards."""
+    from scrapers import mic_focus
+    return _decorate(mic_focus.still_showing(_cached_find(name, fn, cfg)))
+
+
 def _home_page():
     """Home: new results, smokin' hot deals, outboard (Distressor), a compact
     Mics section, what's coming next, and the "Check these" list last."""
@@ -3035,8 +3041,17 @@ def _home_page():
         posting = posting_times.summary()  # reads one small saved file
     except Exception:
         logging.exception("Home: clone-maker feed failed")
+    pairs = []
+    try:  # two single ads of the same model that together beat a pair's used value
+        from scrapers import mic_focus, pair_up
+        found = _cached_find("pairs", pair_up.find, cfg)
+        flat = [x for p in found for x in (p["a"], p["b"])]
+        ok = {l["url"]: l for l in _decorate(mic_focus.still_showing(flat))}
+        pairs = [dict(p, a=ok[p["a"]["url"]], b=ok[p["b"]["url"]]) for p in found if p["a"]["url"] in ok and p["b"]["url"] in ok]
+    except Exception:
+        logging.exception("Home: pair-up finder failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
-               quiet=quiet, motivated=motivated, clones=clones, posting=posting)
+               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs)
     return render_template("home.html", **ctx)
 
 
@@ -4540,13 +4555,14 @@ def _keep_caches_warm():
             except Exception:
                 logging.exception("Cache warm-up: Mics panels failed")
             from scrapers import clone_makers as _CM, mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
+            from scrapers import pair_up as _PU
             _cfg = load_config_raw()
             try:
                 from scrapers import hold_tracker as _HT
                 _HT.stats()  # the Mics page's Hold-value card (own 30-min cache)
             except Exception:
                 logging.exception("Cache warm-up: hold tracker failed")
-            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find)):
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find)):
                 try:
                     _cached_find(_n, _f, _cfg, ttl=240)
                 except Exception:
