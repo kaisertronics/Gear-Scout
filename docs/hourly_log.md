@@ -55,3 +55,4 @@
 - Hourly: Nov 4 (6pm): no Tracebacks. Nothing new built; pawn radar commit still undeployed, deploy refused 3 times (sweep running, owner on site). Next run deploys.
 - Hourly: Nov 4 (7pm): no Tracebacks. Nothing new built; pawn radar commit still undeployed, deploy refused (sweep running). Next run deploys.
 - Block: Nov 4 (8pm): no Tracebacks. Built Resale listing drafter (scrapers/resale_drafter.py, collapsed "Draft a resale listing" on /saved; unit tests pass, 7 pages 200 in test copy). Added 3 proposals (Shop restock watcher BIG, Fair-price range, Trade-in value check). Outreach/poster/estate not built. owner_patterns.md not refreshed. Deploy refused (owner on site), committed for next run.
+- Hourly: Nov 4 (9pm): no Tracebacks. Deploy-only run: deployed pending commits (pawn radar hook + resale drafter) with safe_deploy both; login 200, no Tracebacks after. Nothing new built.
