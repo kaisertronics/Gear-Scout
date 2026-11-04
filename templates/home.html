@@ -95,6 +95,13 @@
   </section>
   {% endif %}
 
+  {% if parts_radar %}
+  <section class="panel" id="parts-radar">
+    <h2>🔧 Parts radar <span class="muted">— {{ parts_radar|length }} LA-2A / clone part{{ '' if parts_radar|length == 1 else 's' }} (UTC, Sowter and similar transformers, T4B cells, NOS tubes) 25%+ under that part's usual asking price · biggest saving first</span></h2>
+    <div class="listing-grid">{% for l in parts_radar[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
