@@ -102,6 +102,13 @@
   </section>
   {% endif %}
 
+  {% if windows %}
+  <section class="panel" id="price-windows">
+    <h2>📉 Buying windows <span class="muted">— {{ windows|length }} model{{ '' if windows|length == 1 else 's' }} whose asking prices fell 10%+ across several sellers in the last 14 days · each card is the cheapest live ad · biggest drop first</span></h2>
+    <div class="listing-grid">{% for l in windows[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>

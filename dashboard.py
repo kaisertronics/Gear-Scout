@@ -2950,10 +2950,10 @@ def _cached_find(name: str, fn, cfg, ttl: float = 300):
         _finder_lock.release()
 
 
-def _finder_cards(name: str, fn, cfg) -> list:
+def _finder_cards(name: str, fn, cfg, ttl: float = 300) -> list:
     """A cached Home finder's ads, minus what you hid / what sold since, decorated for cards."""
     from scrapers import mic_focus
-    return _decorate(mic_focus.still_showing(_cached_find(name, fn, cfg)))
+    return _decorate(mic_focus.still_showing(_cached_find(name, fn, cfg, ttl)))
 
 
 def _home_page():
@@ -3080,9 +3080,15 @@ def _home_page():
         parts_radar = _finder_cards("parts_radar", _PR.find, cfg)
     except Exception:
         logging.exception("Home: parts radar failed")
+    windows = []
+    try:  # models whose asking prices are falling across several sellers (30-min cache: it reads ~75 days of ads)
+        from scrapers import price_windows as _PW
+        windows = _finder_cards("windows", _PW.find, cfg, ttl=1800)
+    except Exception:
+        logging.exception("Home: price windows failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
                quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs, lots=lots, wanted_ads=wanted_ads, fixers=fixers,
-               mods=mods, parts_radar=parts_radar)
+               mods=mods, parts_radar=parts_radar, windows=windows)
     return render_template("home.html", **ctx)
 
 
@@ -4598,6 +4604,11 @@ def _keep_caches_warm():
                     _cached_find(_n, _f, _cfg, ttl=240)
                 except Exception:
                     logging.exception("Cache warm-up: %s failed", _n)
+            try:
+                from scrapers import price_windows as _PW
+                _cached_find("windows", _PW.find, _cfg, ttl=1500)  # reads ~75 days of ads: its own slower refresh
+            except Exception:
+                logging.exception("Cache warm-up: windows failed")
             _feed_items(load_config_raw())  # the Feed (home page) first
             # The Dashboard's default view, ready before anyone asks.
             with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
