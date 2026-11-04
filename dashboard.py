@@ -659,6 +659,15 @@ def _decorate(listings: list[dict]) -> list[dict]:
         # A current auction bid isn't a sale price, so it's never a "deal".
         l["is_auction"] = (l.get("description") or "").startswith("Auction")
         l["auction_left"] = auction_countdown(l.get("description")) if l["is_auction"] else None
+        # Auction from a followed seller ending within a day: badge on the card.
+        l["watched_auction"] = None
+        _al = l["auction_left"]
+        if _al and _al["label"] != "ended" and _al["ts"] - time.time() < 24 * 3600:
+            try:
+                if l.get("seller") and l.get("source_name") and _seller_watched(l["source_name"], l["seller"]):
+                    l["watched_auction"] = _al
+            except Exception:
+                pass
         if (l.get("sold") or l.get("pending") or l["is_auction"]) and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
             l["price_ctx"]["worth"] = False  # a current bid isn't a price
