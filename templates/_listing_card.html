@@ -73,6 +73,9 @@
           <button type="button" class="btn btn-sm" onclick="event.preventDefault(); event.stopPropagation(); var p=this.closest('.eo-confirm'); p.hidden=true; p.parentNode.querySelector('.ebay-offer-btn').hidden=false">Cancel</button>
         </div>
         {% endif %}{% if l.offer.hint %}<div class="muted">{{ l.offer.hint }}</div>{% endif %}</div>{% endif %}
+      {% set pbq = l|prebuy_questions %}
+      {% if pbq %}<details class="listing-each" onclick="event.stopPropagation()"><summary>Questions to ask</summary>
+        <div class="muted" style="white-space:pre-line; user-select:text;">{% for q in pbq %}{{ loop.index }}. {{ q }}{{ '\n' if not loop.last }}{% endfor %}</div></details>{% endif %}
       {% if l.price and l.url %}<details class="listing-each offer-log"><summary>Log an offer</summary>
         <form method="post" action="/offers/add" onsubmit="event.preventDefault(); var f=this; fetch(f.action,{method:'POST',body:new FormData(f)}).then(function(r){f.querySelector('.ol-msg').textContent=r.ok?'Saved':'Check the numbers'}).catch(function(){f.querySelector('.ol-msg').textContent='Not saved'})">
           <input type="hidden" name="url" value="{{ l.url }}"><input type="hidden" name="title" value="{{ l.title }}">

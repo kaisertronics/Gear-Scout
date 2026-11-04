@@ -1010,6 +1010,18 @@ def _offer_odds(l):
     return offer_odds.odds_chip(l.get("source_name")) if hasattr(l, "get") else None
 
 
+@app.template_filter("prebuy_questions")
+def _prebuy_questions(l):
+    """2-4 questions to ask the seller before buying, or [] (see scrapers/prebuy_questions.py)."""
+    from scrapers import prebuy_questions
+    if not hasattr(l, "get"):
+        return []
+    local = _is_local_pickup(l.get("source_name") or "")
+    return prebuy_questions.prebuy_questions(
+        l.get("title"), l.get("description"), l.get("category"),
+        has_shipping=not local, is_local=local)
+
+
 @app.template_filter("seller_reply")
 def _seller_reply(l):
     """How often this seller answered your offers, or None (see scrapers/seller_reply.py)."""
