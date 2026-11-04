@@ -2486,6 +2486,12 @@ def mics_page():
     except Exception:
         app.logger.exception("starred sold tracker panel")
         ctx["star_tracker"] = None
+    try:
+        from scrapers import deal_vanish
+        ctx["deal_vanish"] = deal_vanish.stats()  # cached 5 min, read-only; no sites = card hidden
+    except Exception:
+        app.logger.exception("deal vanish panel")
+        ctx["deal_vanish"] = None
     try:  # compact pickup-route panel: only from deals already built (never triggers a rebuild)
         pp = _pickup_plan(_deals_cache["data"]) if _deals_cache["data"] is not None else None
         ctx["pickup"] = {"count": pp["count"], "areas": len(pp["clusters"]), "miles": pp["total_miles"]} if pp else None

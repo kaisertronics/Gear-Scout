@@ -113,8 +113,20 @@
   </section>
   {% endif %}
 
+  {% if deal_vanish and deal_vanish.sites %}
+  <section class="panel" id="deal-vanish">
+    <h2>⏱ How fast mic deals vanish</h2>
+    <p class="muted">From {{ deal_vanish.n }} past mic deals that sold or disappeared (counted from when Gear Scout flagged them).</p>
+    <ul class="proposal-list">
+    {% for s in deal_vanish.sites %}
+      <li>{{ s.text }} <span class="muted">· {{ s.n }} deals</span></li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section class="panel">
-    <h2>🎤 Mic Focus <span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
+    <h2>🎤 Mic Focus<span class="muted">— {{ hits|length }} mic deal{{ '' if hits|length == 1 else 's' }}</span></h2>
     {% if saved %}<p class="notice">Saved. The next sweep (within 15 minutes) uses the new settings.</p>{% endif %}
     <p class="muted">
       {% if st.enabled %}<strong>On.</strong> Every 15 minutes Gear Scout searches only these mics (Reverb, Craigslist,
