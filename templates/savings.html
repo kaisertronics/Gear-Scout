@@ -26,6 +26,9 @@
 .sv-card ul{margin:8px 0 0;padding-left:18px;line-height:1.55;font-size:.92rem}
 .sv-pos{color:#1f7a4a}.sv-neg{color:#b3261e}
 .sv-table tr.over td{background:#fdf0ee}
+.sv-resale{margin:6px 0 22px}
+.sv-resale summary{cursor:pointer;font-weight:700}
+.sv-resale textarea{width:100%;max-width:70ch;margin-top:8px;font:inherit;padding:8px 10px}
 .sv-err{background:#fdecea;border-left:4px solid #b8322a;padding:8px 12px;border-radius:0 6px 6px 0}
 </style>
 <h1>💰 Saved</h1>
@@ -88,6 +91,24 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
   {% endfor %}
 </div>
 
+{% if resale %}
+<details class="sv-resale">
+  <summary>Draft a resale listing</summary>
+  <p class="sv-help">Pick a piece you bought. You get a title and description built from the original ad's condition and extras, with a suggested price. Read it over and fix anything in [brackets] before you post.</p>
+  <select id="rs-pick" aria-label="Piece to sell">
+    {% for name, r in resale.items() %}<option value="{{ loop.index0 }}">{{ name }}</option>{% endfor %}
+  </select>
+  {% for name, r in resale.items() %}
+  <div class="rs-draft" data-i="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}>
+    <textarea readonly rows="12" aria-label="Draft for {{ name }}">{{ r.text }}</textarea>
+    <p class="sv-help">{% if r.ask %}Suggested ask <b>${{ '{:,.0f}'.format(r.ask) }}</b> ({{ r.basis }}){% if r.floor %}; break-even after fees about ${{ '{:,.0f}'.format(r.floor) }}{% endif %}.{% endif %}
+      {% if not r.found_ad %}Gear Scout never saw the original ad, so condition and extras are left for you to fill in.{% endif %}</p>
+    <button type="button" class="rs-copy">Copy listing</button>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+
 <h2>Every item</h2>
 <div style="overflow-x:auto">
 <table class="sv-table">
@@ -132,6 +153,18 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
   }
   document.querySelectorAll('.sv-slide button').forEach(function (b) {
     b.addEventListener('click', function () { save(b.dataset.n); });
+  });
+  var pick = document.getElementById('rs-pick');
+  if (pick) pick.addEventListener('change', function () {
+    document.querySelectorAll('.rs-draft').forEach(function (d) { d.hidden = d.dataset.i !== pick.value; });
+  });
+  document.querySelectorAll('.rs-copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var ta = b.parentNode.querySelector('textarea');
+      ta.select();
+      var ok = navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.resolve(document.execCommand('copy'));
+      Promise.resolve(ok).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy listing'; }, 1500); });
+    });
   });
   var all = document.getElementById('sv-all');
   if (all) all.addEventListener('click', async function () {

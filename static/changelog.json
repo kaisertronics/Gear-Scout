@@ -3,6 +3,7 @@
     "date": "2026-11-04",
     "title": "Hourly improvements",
     "items": [
+      "Saved page: new collapsed \"Draft a resale listing\" helper. Pick something you bought and it writes a ready-to-copy title and description with a suggested asking price (never below your cost plus fees) and a Copy button.",
       "Starred page: when a starred ad sells and you still have another star of the same model, a note shows what it sold for and what you could safely offer on the other one."
     ]
   },

@@ -3933,7 +3933,12 @@ def savings_page():
         calib = deal_calibration.report(d.get("items") or []) if d else None
     except Exception:
         calib = None
-    return render_template("savings.html", sheet_url=url, d=d, slides=slides, calib=calib,
+    try:
+        from scrapers import resale_drafter
+        resale = resale_drafter.drafts(d.get("items") or []) if d else {}
+    except Exception:
+        resale = {}
+    return render_template("savings.html", sheet_url=url, d=d, slides=slides, calib=calib, resale=resale,
                            version=int(_savings_cache.get("at") or 0))
 
 
