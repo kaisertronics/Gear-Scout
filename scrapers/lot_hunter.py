@@ -15,7 +15,7 @@ from typing import Callable, Optional
 
 DAYS = 21
 MIN_UNDER_PCT = 25     # ask at least this far under the sum of the parts
-MAX_UNDER_PCT = 70     # further under is usually "only some of it is real" / a scam
+MAX_UNDER_PCT = 55     # further under is usually "only some of it is real", a scam, or a model name (Apollo x8)
 MIN_ASK = 150
 MIN_SAVED = 150        # dollars under the parts total
 LIMIT = 6
@@ -38,6 +38,22 @@ def _lead_qty(piece: str) -> str:
     return piece
 
 
+def _one_per_model(items: list) -> list:
+    """The same model named twice in one title ("EV RE15, EV RE 15 MICROPHONE") counts once."""
+    try:
+        from scrapers import market_value as mv
+        seen, out = set(), []
+        for i in items:
+            k = mv._key(i["name"])
+            if k and k in seen:
+                continue
+            seen.add(k)
+            out.append(i)
+        return out
+    except Exception:
+        return items
+
+
 def assess(title: Optional[str], description: Optional[str], ask, valuer: Optional[Callable] = None) -> Optional[dict]:
     """Value the recognisable pieces of a multi-item ad against its ask. The
     quantity of a single model counts ("8x VC528"). Never raises."""
@@ -50,6 +66,7 @@ def assess(title: Optional[str], description: Optional[str], ask, valuer: Option
         items = LS.value_parts(pieces, valuer)
         if not items and description:
             items = LS.value_parts(LS.split_lot((description or "")[:300]), valuer)
+        items = _one_per_model(items)
         units = sum(i["qty"] for i in items)
         if units < 2:
             return None

@@ -3062,8 +3062,14 @@ def _home_page():
         wanted_ads = [l for l in _finder_cards("wanted_ads", WA.find, cfg) if _outboard_fresh_near(l)][:WA.LIMIT]
     except Exception:
         logging.exception("Home: wanted-ad sniper failed")
+    fixers = []
+    try:  # for-parts / needs-tubes ads on valuable gear, with profit-if-fixed
+        from scrapers import fixer_upper
+        fixers = _finder_cards("fixers", fixer_upper.find, cfg)
+    except Exception:
+        logging.exception("Home: fixer-upper finder failed")
     ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
-               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs, lots=lots, wanted_ads=wanted_ads)
+               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs, lots=lots, wanted_ads=wanted_ads, fixers=fixers)
     return render_template("home.html", **ctx)
 
 
@@ -4567,14 +4573,14 @@ def _keep_caches_warm():
             except Exception:
                 logging.exception("Cache warm-up: Mics panels failed")
             from scrapers import clone_makers as _CM, mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
-            from scrapers import lot_hunter as _LH, pair_up as _PU, wanted_ads as _WA
+            from scrapers import lot_hunter as _LH, fixer_upper as _FU, pair_up as _PU, wanted_ads as _WA
             _cfg = load_config_raw()
             try:
                 from scrapers import hold_tracker as _HT
                 _HT.stats()  # the Mics page's Hold-value card (own 30-min cache)
             except Exception:
                 logging.exception("Cache warm-up: hold tracker failed")
-            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find), ("lots", _LH.find), ("wanted_ads", _WA.find)):
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find), ("lots", _LH.find), ("wanted_ads", _WA.find), ("fixers", _FU.find)):
                 try:
                     _cached_find(_n, _f, _cfg, ttl=240)
                 except Exception:

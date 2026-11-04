@@ -38,6 +38,13 @@ def test_too_good_auction_foreign_and_unpriced_dropped():
     assert H.pick(rows, val) == []
 
 
+def test_model_name_that_looks_like_quantity_is_too_good():
+    # "Apollo X8" is a product, not 8 units: the implied 64% discount is rejected
+    V["apollo"] = 600
+    rows = [row("Apollo X8 Interface", 1700, "a")]
+    assert H.pick(rows, val) == []
+
+
 def test_single_item_is_not_a_lot():
     assert H.assess("Neumann U87", None, 500, val) is None
     assert H.assess("", None, 500, val) is None

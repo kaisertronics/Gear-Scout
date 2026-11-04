@@ -81,6 +81,13 @@
   </section>
   {% endif %}
 
+  {% if fixers %}
+  <section class="panel" id="fixer-uppers">
+    <h2>🔧 Fixer-uppers <span class="muted">— {{ fixers|length }} for-parts / not-working / needs-tubes ad{{ '' if fixers|length == 1 else 's' }} on gear worth $400+ working · profit if fixed = working value − ask − a typical repair cost (an estimate) · biggest profit first</span></h2>
+    <div class="listing-grid">{% for l in fixers[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
   {% if motivated %}
   <section class="panel" id="motivated-sellers">
     <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
