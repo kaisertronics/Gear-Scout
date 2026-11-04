@@ -30,6 +30,15 @@
   <p class="muted">Ticked items are left out of the total. Prices are per piece and include shipping and 10.7% tax. Listings refresh every 10 minutes.</p>
 </section>
 
+<section class="panel" id="week-plan">
+  <h2>This week's plan <span class="muted">&mdash; budget remaining ~${{ '{:,.0f}'.format(plan.budget_left) }} (your price targets, else used value, for items not yet bought)</span></h2>
+  {% for r in plan['items'] if r.status != 'Watching' %}
+  <div class="shop-row"><strong>{{ r.status }}</strong>
+    <span style="flex:1 1 240px">{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %} &times; {{ r.left }}<br><span class="muted">{{ r.why }}</span></span></div>
+  {% endfor %}
+  <p class="muted">Watching: {{ plan.counts.get('Watching', 0) }} item{{ '' if plan.counts.get('Watching', 0) == 1 else 's' }} with no deal or price signal yet.</p>
+</section>
+
 {% if s.bundles %}
 <section class="panel" id="bundle-offers">
   <h2>🧺 Bundle offers <span class="muted">— one seller has 3+ things you still need; one lot offer 15% under their combined used value (nothing is sent for you)</span></h2>

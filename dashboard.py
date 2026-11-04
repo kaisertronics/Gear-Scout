@@ -3148,7 +3148,8 @@ def mics_built():
 def shopping():
     """Studio shopping list: cheapest live listings per item, running total."""
     from scrapers import shopping_list
-    return render_template("shopping.html", s=shopping_list.summary())
+    from scrapers import build_planner
+    return render_template("shopping.html", s=shopping_list.summary(), plan=build_planner.plan(load_config_raw()))
 
 
 def _pickup_plan(deals: Optional[dict]) -> dict:
