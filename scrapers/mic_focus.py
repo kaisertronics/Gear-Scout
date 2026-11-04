@@ -194,7 +194,8 @@ TARGETS = [
          queries=["jz microphones", "jz black hole microphone", "jz v12"],
          model=r"\b(bh[\s-]?\d\w*|black hole\s?\w*|v[\s-]?\d{2}\w*|vintage\s?\d{2}|amethyst\s?\w*)\b", brand="JZ Microphones"),
     # Owner (Oct 29): a Distressor deal is a single at $1,300 or less, a pair at $2,400 or less (delivered).
-    dict(key="distressor", name="Empirical Labs Distressor", note="single ≤ $1,300 · pair ≤ $2,400",
+    dict(key="distressor", name="Empirical Labs Distressor (bought Nov 2026: off)", off_by_default=True,
+         note="single ≤ $1,300 · pair ≤ $2,400",
          min_pct=60, max_price=2400, min_price=700, outboard=True, caps={1: 1300, 2: 2400},
          match=r"\bdistressor\b|\bel8[\s-]?(?:x|xs|s|mx|sx|d)?\b(?=.*(?:compressor|limiter|empirical))",
          require=None,
@@ -274,7 +275,7 @@ def settings(cfg: dict) -> dict:
             t["max_price"] = max(0, int(o.get("max_price", t["max_price"])))
         except (TypeError, ValueError):
             pass
-        t["on"] = bool(o.get("on", True))
+        t["on"] = bool(o.get("on", not t.get("off_by_default")))
         if pct_mode(t):
             # the old price windows and per-model caps no longer apply
             t.update(deal_pct=DEAL_PCT, min_pct=DEAL_PCT, hide_over_limit=False, model_limits=None, min_price=0)
