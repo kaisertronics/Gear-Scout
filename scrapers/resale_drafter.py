@@ -143,9 +143,10 @@ def find_ad(purchase: dict, listings: list[dict]) -> dict | None:
         return None
     best = None
     for l in listings or []:
-        p, t = _num(l.get("price")), _when(l.get("first_seen"))
+        p = l["_p"] if "_p" in l else _num(l.get("price"))
         if not p or abs(p - paid) > PRICE_TOL * paid or not iw <= _words(l.get("title")):
-            continue
+            continue  # cheap tests first: the date parse below is slow on a table of 80,000 ads
+        t = _when(l.get("first_seen"))
         if bought and t and t >= bought:
             continue
         key = t or datetime.max.replace(tzinfo=timezone.utc)
@@ -163,7 +164,7 @@ def _listings() -> list[dict]:
                             " AND price IS NOT NULL AND title IS NOT NULL", (cut,)).fetchall()
     finally:
         conn.close()
-    return [{"title": t, "price": p, "first_seen": f, "description": (d or "")[:MAX_DESC]}
+    return [{"title": t, "price": p, "_p": _num(p), "first_seen": f, "description": (d or "")[:MAX_DESC]}
             for t, p, f, d in rows]
 
 

@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-11-04",
+    "title": "Code review",
+    "items": [
+      "The Saved page was taking over three minutes to open (the new \"Draft a resale listing\" helper compared every purchase against all 80,000 stored ads, parsing a date for each one). It now opens in a couple of seconds and writes the same drafts."
+    ]
+  },
+  {
+    "date": "2026-11-04",
     "title": "Hourly improvements",
     "items": [
       "Saved page: new collapsed \"Draft a resale listing\" helper. Pick something you bought and it writes a ready-to-copy title and description with a suggested asking price (never below your cost plus fees) and a Copy button.",
@@ -18,7 +25,7 @@
       "Rare-find phone pushes no longer fire for ads that were posted weeks ago, that say sold, or that match your exclude words, and a modern \"2010s\" Neve no longer counts as a rare find.",
       "The Mic Focus and Mic deals headings on the Mics page had lost the space before their counts.",
       "eBay's daily search allowance was running out by mid-afternoon, so listings like the Hosa STX-805 never got found and searches were marked done while eBay was paused. Paused eBay searches now retry as soon as eBay is back, and guessed sibling models (STX-803F etc.) use a third of the eBay allowance so your Telex terms and shopping-list items keep the full rate.",
-      "eBay now has a backup when its search allowance runs out or eBay is paused: Gear Scout reads eBay's plain website search (newest first, Buy It Now, US sellers) at no more than one page every 3 seconds. The newest-listings check reads a couple of mic, compressor and preamp pages each time, your Telex List and shopping-list terms get up to 6 searches per 15 minutes and the starred clone makers 2. If eBay answers with a block or challenge page it is left alone for 30 minutes (nothing is bypassed). Found listings go through the same alerts. Today's ~4,800 searches went to: newest-listings check ~620, Telex List + shopping list ~1,400, mic model terms ~440, guessed siblings ~140, mic auctions ~700, auction term searches ~340, sold checks ~960 and price lookups; mic auctions now run every 2 hours and eBay sold checks are limited to 10 an hour, freeing ~1,300 searches a day for the first three.",
+      "eBay now tries a backup when its search allowance runs out or eBay is paused (in practice eBay usually blocks it, see the next item): Gear Scout reads eBay's plain website search (newest first, Buy It Now, US sellers) at no more than one page every 3 seconds. The newest-listings check reads a couple of mic, compressor and preamp pages each time, your Telex List and shopping-list terms get up to 6 searches per 15 minutes and the starred clone makers 2. If eBay answers with a block or challenge page it is left alone for 30 minutes (nothing is bypassed). Found listings go through the same alerts. Today's ~4,800 searches went to: newest-listings check ~620, Telex List + shopping list ~1,400, mic model terms ~440, guessed siblings ~140, mic auctions ~700, auction term searches ~340, sold checks ~960 and price lookups; mic auctions now run every 2 hours and eBay sold checks are limited to 10 an hour, freeing ~1,300 searches a day for the first three.",
       "eBay's daily search allowance now lasts the whole day. Every eBay search is counted by job and spread across the day, the newest-listings check (every 2 minutes) always keeps enough for the rest of the day, your Telex List and shopping-list terms get the biggest share, and the busywork (guessed sibling models, mic model terms, auction term searches, price lookups) is slowed down. Settings → eBay shows how many searches are left today and where they went. (eBay's own web search can't be used as a backup: it blocks automated visits.)",
       "Home has a new \"Clone makers, newest\" card: the latest ads from Vanguard, sE, Peluso, AudioScape, Advanced Audio, United, Serrano and Silent-Arts from every site in one short list.",
       "Gear Scout now also searches the other models of the clone makers you star (Vanguard V1/V4/V44S, sE VR1, Advanced Audio CM49/CM269, UT47/UT67 and so on) and catches common misspellings like \"Vangaurd\" and \"Pelluso\", since sellers underprice models they don't know.",

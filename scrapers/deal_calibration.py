@@ -33,7 +33,12 @@ def _when(s) -> datetime | None:
     if not s:
         return None
     d = None
-    for f in _FORMATS:
+    if s[:4].isdigit() and s[4:5] == "-" and len(s) > 10:  # the stored ISO stamps: skip the slow format guesses
+        try:
+            d = datetime.fromisoformat(s)
+        except ValueError:
+            d = None
+    for f in (_FORMATS if d is None else ()):
         try:
             d = datetime.strptime(s, f)
             break
