@@ -3186,7 +3186,10 @@ def shopping():
     """Studio shopping list: cheapest live listings per item, running total."""
     from scrapers import shopping_list
     from scrapers import build_planner
-    return render_template("shopping.html", s=shopping_list.summary(), plan=build_planner.plan(load_config_raw()))
+    from scrapers import bundle_shipping
+    ship_groups = bundle_shipping.find_groups(shopping_list.build()["items"], shopping_list.load_state()["bought"])
+    return render_template("shopping.html", s=shopping_list.summary(), plan=build_planner.plan(load_config_raw()),
+                           ship_groups=ship_groups)
 
 
 def _pickup_plan(deals: Optional[dict]) -> dict:

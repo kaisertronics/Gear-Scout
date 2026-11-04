@@ -39,6 +39,21 @@
   <p class="muted">Watching: {{ plan.counts.get('Watching', 0) }} item{{ '' if plan.counts.get('Watching', 0) == 1 else 's' }} with no deal or price signal yet.</p>
 </section>
 
+{% if ship_groups %}
+<section class="panel" id="bundle-shipping">
+  <h2>Same seller: buy together &amp; save shipping <span class="muted">&mdash; 2+ things you still need from one seller (estimate only)</span></h2>
+  {% for g in ship_groups %}
+  <div class="shop-item">
+    <div class="shop-head"><strong>{{ g.seller }}</strong> <span class="muted">on {{ g.source }}</span></div>
+    {% for l in g.lines %}
+    <div class="shop-row"><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.pieces }} &times; {{ l.title }}</a><span class="muted">{{ l.name }}</span><span>${{ '%.2f'|format(l.cost) }}</span></div>
+    {% endfor %}
+    <div class="shop-row"><span>Combined <strong>${{ '%.2f'|format(g.total) }}</strong></span><span class="shop-under">Could save about ${{ '%.0f'|format(g.saved) }} shipping if combined</span></div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
 {% if s.bundles %}
 <section class="panel" id="bundle-offers">
   <h2>🧺 Bundle offers <span class="muted">— one seller has 3+ things you still need; one lot offer 15% under their combined used value (nothing is sent for you)</span></h2>
