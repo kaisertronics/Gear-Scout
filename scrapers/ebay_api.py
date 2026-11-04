@@ -289,8 +289,22 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
         + (f"&_nkw={requests.utils.quote(keywords[0].strip())}" if is_live_search else "")
     )
 
+    def web_backup():
+        # API paused / budget spent: eBay's plain web search (see scrapers/ebay_web.py)
+        try:
+            from scrapers import ebay_web
+            return ebay_web.fallback(name, manual_url, newest=newest,
+                                     term=keywords[0].strip() if is_live_search else "",
+                                     job=job_for_term(keywords[0]) if is_live_search else "")
+        except Exception:
+            logger.exception("eBay web search backup failed")
+            return None
+
     paused = ebay_paused_until()
     if paused:
+        backup = web_backup()
+        if backup:
+            return backup
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, blocked=True,
             error="eBay's daily request limit is used up for today.",
@@ -319,6 +333,9 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
                     have = {i.get("itemId") for i in items}
                     items += [i for i in resp2.json().get("itemSummaries", []) or [] if i.get("itemId") not in have]
     except EbayBudgetError as e:
+        backup = web_backup()
+        if backup:
+            return backup
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, blocked=True, error=str(e),
             fix_hint="Resumes on its own; nothing to fix.", duration_seconds=time.time() - start,
@@ -331,6 +348,10 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: in
         )
     except Exception as e:
         logger.warning("eBay API error for %s: %s", name, e)
+        if "daily request limit" in str(e):
+            backup = web_backup()  # a 429 just paused the API
+            if backup:
+                return backup
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, error=str(e),
             fix_hint="Usually temporary — it should work again next run.",

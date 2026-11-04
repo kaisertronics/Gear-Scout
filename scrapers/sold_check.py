@@ -343,8 +343,8 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     shown = _shown_first(max_http * 3, include_fb=False)
     http = list(dict.fromkeys(shown + [u for u, _ in _candidates(max_http * 2, include_fb=False)]))
     # eBay is checked through its API, which counts against the daily
-    # allowance: at most 40 per hour, the ones you can see first.
-    ebay = [u for u in http if "ebay.com/itm" in u][:40]
+    # allowance: at most 10 per hour (was 40 = ~960 a day), the ones you can see first.
+    ebay = [u for u in http if "ebay.com/itm" in u][:10]
     # Reverb's public API is quick and has no daily cap, so those checks
     # don't share the 120 slots (Oct 30: 124 of the Feed's 179 Reverb ads
     # were over 4 h unchecked, and a sold SSL Big Six stayed up a day).

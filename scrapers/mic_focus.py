@@ -778,7 +778,7 @@ def alert(cfg: dict) -> int:
 # re-checked with eBay right before the push.
 
 AUCTION_MARK = Path("/data/mic_auctions_fetched.txt")
-AUCTION_EVERY_MIN = 60
+AUCTION_EVERY_MIN = 120  # was 60: 29 mic terms x 24 a day was ~700 eBay calls (Nov 3)
 AUCTION_DAYS = 3          # shown when ending within this many days
 AUCTION_ALERT_MIN = 75    # push when ending within this many minutes
 

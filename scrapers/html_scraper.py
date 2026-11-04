@@ -761,6 +761,38 @@ def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
 # Craigslist et al.)
 # ---------------------------------------------------------------------------
 
+def ebay_cards_to_listings(cards, name: str, keywords: Optional[list[str]]) -> list:
+    """Listings from the result cards (li.s-card) of an eBay search page.
+    keywords=None keeps every card."""
+    listings = []
+    for card in cards:
+        title_el = card.select_one(".s-card__title")
+        price_el = card.select_one(".s-card__price")
+        link_el = card.select_one("a[href*='/itm/']")
+        img_el = card.select_one("img")
+
+        title = title_el.get_text(strip=True) if title_el else ""
+        # eBay mixes in "Shop on eBay" ad placeholders (fake item 123456,
+        # generic ebaystatic.com image) among the real results.
+        title = re.sub(r'Opens in a new window or tab$', '', title).strip()
+        if not title or title == "Shop on eBay" or (keywords is not None and not keyword_match(title, keywords)):
+            continue
+
+        href = link_el["href"] if link_el else ""
+        item_id_match = re.search(r'/itm/(\d+)', href)
+        listing_id = item_id_match.group(1) if item_id_match else re.sub(r'[^a-z0-9]', '', title.lower())[:32]
+
+        listings.append(Listing(
+            source_name=name,
+            title=truncate(title, 120),
+            url=href,
+            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
+            image_url=img_el.get("src") if img_el else None,
+            listing_id=listing_id,
+        ))
+    return listings
+
+
 def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
     name = source["name"]
     url = source["url"]
@@ -791,7 +823,6 @@ def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
         )
 
     soup = BeautifulSoup(html, "html.parser")
-    listings = []
 
     if soup.title and "Error Page" in soup.title.get_text():
         return ScrapeResult(
@@ -819,31 +850,7 @@ def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
             duration_seconds=time.time() - start,
         )
 
-    for card in cards:
-        title_el = card.select_one(".s-card__title")
-        price_el = card.select_one(".s-card__price")
-        link_el = card.select_one("a[href*='/itm/']")
-        img_el = card.select_one("img")
-
-        title = title_el.get_text(strip=True) if title_el else ""
-        # eBay mixes in "Shop on eBay" ad placeholders (fake item 123456,
-        # generic ebaystatic.com image) among the real results.
-        title = re.sub(r'Opens in a new window or tab$', '', title).strip()
-        if not title or title == "Shop on eBay" or not keyword_match(title, keywords):
-            continue
-
-        href = link_el["href"] if link_el else ""
-        item_id_match = re.search(r'/itm/(\d+)', href)
-        listing_id = item_id_match.group(1) if item_id_match else re.sub(r'[^a-z0-9]', '', title.lower())[:32]
-
-        listings.append(Listing(
-            source_name=name,
-            title=truncate(title, 120),
-            url=href,
-            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
-            image_url=img_el.get("src") if img_el else None,
-            listing_id=listing_id,
-        ))
+    listings = ebay_cards_to_listings(cards, name, keywords)
 
     return ScrapeResult(
         source_name=name, source_url=url, success=True,
