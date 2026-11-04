@@ -191,6 +191,8 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
         from scrapers.fb_posts_background import pause_marketplace_search
         pause_marketplace_search(cfg)
     keep_acc = is_cable_term(term) or term in derived_terms(cfg)
+    ebay_res = [r for r in results if site_of.get(r.source_name) == "ebay"]
+    ebay_failed = bool(ebay_res) and not any(r.success for r in ebay_res)
     counts = {s: [0, 0] for s in sites}
     for r in results:
         c = counts.setdefault(site_of.get(r.source_name, "fast"), [0, 0])
@@ -204,6 +206,8 @@ def _search_sites(term: str, cfg: dict, sites: set[str]) -> dict:
         _ensure_sweep(conn)
         _ensure(conn)
         for site, (f, n) in counts.items():
+            if site == "ebay" and ebay_failed:
+                continue  # eBay was paused / errored: not searched, so due again when it's back
             conn.execute("INSERT OR REPLACE INTO wanted_sweep VALUES (?, ?, ?, ?, ?)", (term, site, now, f, n))
         conn.execute("INSERT OR REPLACE INTO telex_state VALUES (?, ?, ?, ?)", (term, now, found, new))
         conn.commit()
@@ -249,6 +253,10 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
         budget = int(min(FAST_BUDGET_SECONDS, max(0, CYCLE_TARGET_SECONDS - (time.time() - cycle_start) - fb_reserve)))
     st = sweep_state()
     now = datetime.now(timezone.utc)
+    # Guessed sibling models (not the owner's terms or shopping items) take a third of the eBay
+    # allowance: eBay's daily limit ran out by ~4pm PT with every derived term on the full rate.
+    from scrapers.shopping_list import search_terms as _shop_terms
+    sibling_only = set(derived) - set(_shop_terms())
 
     def due(term, site, minutes):
         last = (st.get((term, site)) or {}).get("searched_at")
@@ -276,7 +284,8 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
     def run_due(term):
         if time.time() - start > budget:
             return None
-        sites = {s for s, m in (("fast", fast_every), ("ebay", ebay_every)) if due(term, s, m)}
+        e_every = ebay_every * 3 if term in sibling_only else ebay_every
+        sites = {s for s, m in (("fast", fast_every), ("ebay", e_every)) if due(term, s, m)}
         return run(term, sites, "+".join(sorted(sites))) if sites else None
 
     from concurrent.futures import ThreadPoolExecutor

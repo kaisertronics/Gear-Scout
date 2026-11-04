@@ -6,7 +6,8 @@
       "The Mics page was taking 10 seconds or more to open (and over a minute when two tabs loaded at once) because the Price targets panel re-read every stored ad on each visit. It now remembers its answer for a few minutes and is kept fresh in the background, along with the price history, best month, regional gap and Flips lists.",
       "Hiding double-posted Facebook ads (Telex List, Home) was getting slower the more Facebook ads there were (90 seconds on 4,000 ads); it now takes well under a second and hides exactly the same ads.",
       "Rare-find phone pushes no longer fire for ads that were posted weeks ago, that say sold, or that match your exclude words, and a modern \"2010s\" Neve no longer counts as a rare find.",
-      "The Mic Focus and Mic deals headings on the Mics page had lost the space before their counts."
+      "The Mic Focus and Mic deals headings on the Mics page had lost the space before their counts.",
+      "eBay's daily search allowance was running out by mid-afternoon, so listings like the Hosa STX-805 never got found and searches were marked done while eBay was paused. Paused eBay searches now retry as soon as eBay is back, and guessed sibling models (STX-803F etc.) use a third of the eBay allowance so your Telex terms and shopping-list items keep the full rate."
     ]
   },
   {

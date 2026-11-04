@@ -68,3 +68,20 @@ def test_cheap_listing_not_hidden_by_median_floor(tmp_path, monkeypatch):
     dtp = next(i for i in shopping_list.build()["items"] if i["key"] == "dtp")
     assert dtp["matches"][0]["url"] == "cheap" and dtp["matches"][0]["unit"] == 22.5
     shopping_list._cache.update(at=0.0, data=None)
+
+
+def test_paused_ebay_is_not_recorded_as_searched(tmp_path, monkeypatch):
+    from types import SimpleNamespace as NS
+    from scrapers import telex
+    conn = sqlite3.connect(tmp_path / "t.db")
+    conn.row_factory = None
+    monkeypatch.setattr(telex, "_conn", lambda: conn)
+    monkeypatch.setattr(telex, "sweep_sources", lambda cfg: [{"name": "eBay", "type": "ebay"}, {"name": "Reverb", "type": "html", "url": "https://reverb.com"}])
+    monkeypatch.setattr(telex, "mark_seen", lambda l: "old", raising=False)
+    monkeypatch.setattr("scrapers.runner.run_sources", lambda *a, **k: [
+        NS(source_name="eBay", success=False, listings=[], error="limit", fix_hint=""),
+        NS(source_name="Reverb", success=True, listings=[], error="", fix_hint="")])
+    monkeypatch.setattr(telex, "_site", lambda s: "ebay" if s["name"] == "eBay" else "fast")
+    telex._search_sites("Hosa STX-805F", {}, {"ebay", "fast"})
+    sites = {r[0] for r in conn.execute("SELECT site FROM wanted_sweep")}
+    assert sites == {"fast"}
