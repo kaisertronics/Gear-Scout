@@ -616,8 +616,16 @@ def _decorate(listings: list[dict]) -> list[dict]:
             _c.close()
     except Exception:
         logging.exception("Couldn't load seller counts")
+    try:
+        from scrapers import hidden_sellers as _hs
+        hidden_sel = _hs.hidden_set()  # display filter only; empty (free) when none hidden
+    except Exception:
+        logging.exception("Couldn't load hidden sellers")
+        _hs, hidden_sel = None, frozenset()
     out = []
     for l in listings:
+        if hidden_sel and _hs.is_hidden(l, hidden_sel):
+            continue
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
                 or (hide_acc and is_accessory_only(l.get("title")) and not _cable_wanted(l))
                 or (hide_pedals and item_form(l.get("title")) == "pedal")
@@ -2762,6 +2770,23 @@ def sellers_watch():
     return redirect(url_for("sellers_page"))
 
 
+@app.route("/sellers/hide", methods=["POST"])
+def sellers_hide():
+    """Hides (or unhides) every ad from one seller. Display only; writes
+    /data/hidden_sellers.json and deletes nothing."""
+    from scrapers import hidden_sellers
+    f = request.form
+    if f.get("unhide") == "1":
+        ok = hidden_sellers.remove(f.get("source"), f.get("seller"))
+    else:
+        ok = bool(hidden_sellers.add(f.get("source"), f.get("seller")))
+    if ok:
+        _data_changed()
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=ok), (200 if ok else 400)
+    return redirect(request.form.get("next") or url_for("settings"))
+
+
 @app.route("/price-targets/add", methods=["POST"])
 def price_targets_add():
     """Saves a model + the most you'd pay (only writes /data/price_targets.json)."""
@@ -4219,6 +4244,9 @@ def sources():
     )
 
 
+from scrapers import hidden_sellers as _hidden_sellers_mod  # noqa: E402
+
+
 @app.route("/settings")
 def settings():
     cfg = load_config_raw()
@@ -4244,6 +4272,7 @@ def settings():
         ),
         exclude_text="\n".join(str(w) for w in (cfg.get("exclude_words") or [])),
         hidden_count=count_hidden(),
+        hidden_sellers=_hidden_sellers_mod.load(),
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
         ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
         ebay_runame_set=bool(str((cfg.get("ebay_api") or {}).get("runame") or "").strip()),

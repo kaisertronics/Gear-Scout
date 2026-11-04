@@ -88,7 +88,11 @@
       {% if l.seller and l.source_name %}{% set sw = seller_watched(l.source_name, l.seller) %}
       <form class="listing-each" method="post" action="/sellers/watch" onsubmit="event.preventDefault(); var f=this, w=f.dataset.w!='1'; f.unwatch.value=w?'':'1'; fetch(f.action,{method:'POST',headers:{'X-Requested-With':'fetch'},body:new FormData(f)}).then(function(r){if(r.ok){f.dataset.w=w?'1':'0';f.querySelector('button').textContent=w?'👀 Watching seller':'Watch seller'}}).catch(function(){})" data-w="{{ '1' if sw else '0' }}">
         <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller }}"><input type="hidden" name="unwatch" value="{{ '1' if sw else '' }}">
-        <button type="submit" class="btn btn-sm" title="Push me when this seller lists something new">{{ '👀 Watching seller' if sw else 'Watch seller' }}</button></form>{% endif %}
+        <button type="submit" class="btn btn-sm" title="Push me when this seller lists something new">{{ '👀 Watching seller' if sw else 'Watch seller' }}</button></form>
+      {% if not sw and not l.favorite %}
+      <form class="listing-each" method="post" action="/sellers/hide" onsubmit="event.preventDefault(); event.stopPropagation(); var f=this; fetch(f.action,{method:'POST',headers:{'X-Requested-With':'fetch'},body:new FormData(f)}).then(function(r){if(r.ok){var c=f.closest('.listing-card')||f; c.style.display='none'}}).catch(function(){})">
+        <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller }}">
+        <button type="submit" class="btn btn-sm" title="Hide every ad from this seller (undo in Settings)">Hide seller</button></form>{% endif %}{% endif %}
       {% if l.steal_check %}<div class="lowest-tag lowest-tag-model" title="A steal on paper, but only one price to compare against — check it's the real thing and the price isn't a typo">🔎 Steal? double-check · {{ l.comp.pct }}% under</div>{% endif %}
       {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}

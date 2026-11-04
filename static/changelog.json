@@ -3,6 +3,8 @@
     "date": "2026-11-03",
     "title": "Code review",
     "items": [
+      "Shopping page has a new \"This week's plan\" card: which still-needed items to buy now (a live ad is at or under your target, or 25%+ under used value), which to wait on, and how much budget is left.",
+      "New \"Hide seller\" button on listing cards hides every ad from that seller, now and later (undo under Hidden sellers in Settings). Sellers you follow or have starred are never hidden.",
       "The Mics page was taking 10 seconds or more to open (and over a minute when two tabs loaded at once) because the Price targets panel re-read every stored ad on each visit. It now remembers its answer for a few minutes and is kept fresh in the background, along with the price history, best month, regional gap and Flips lists.",
       "Hiding double-posted Facebook ads (Telex List, Home) was getting slower the more Facebook ads there were (90 seconds on 4,000 ads); it now takes well under a second and hides exactly the same ads.",
       "Rare-find phone pushes no longer fire for ads that were posted weeks ago, that say sold, or that match your exclude words, and a modern \"2010s\" Neve no longer counts as a rare find.",

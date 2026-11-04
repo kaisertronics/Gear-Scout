@@ -231,6 +231,19 @@
         <button type="submit" class="btn" {{ 'disabled' if hidden_count == 0 else '' }}>Unhide all {{ hidden_count }}</button>
       </form>
 
+      <h3>Hidden sellers</h3>
+      {% if hidden_sellers %}
+      <p class="muted">Every ad from these sellers is hidden. Nothing is deleted.</p>
+      {% for w in hidden_sellers %}
+      <form method="post" action="{{ url_for('sellers_hide') }}" class="listing-each">
+        <input type="hidden" name="source" value="{{ w.source }}"><input type="hidden" name="seller" value="{{ w.seller }}"><input type="hidden" name="unhide" value="1">
+        {{ w.seller }} <span class="muted">· {{ w.source }}</span> <button type="submit" class="btn btn-sm">Unhide</button>
+      </form>
+      {% endfor %}
+      {% else %}
+      <p class="muted">None. Use "Hide seller" on a listing card.</p>
+      {% endif %}
+
       <h3>Reset everything</h3>
       <p class="muted">
         Deletes <strong>all</strong> stored listings, favorites, and tags — every source will
