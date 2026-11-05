@@ -103,6 +103,7 @@ Each piece gets today's new price (Reverb Brand New + eBay New) and its going us
     <textarea readonly rows="12" aria-label="Draft for {{ name }}">{{ r.text }}</textarea>
     <p class="sv-help">{% if r.ask %}Suggested ask <b>${{ '{:,.0f}'.format(r.ask) }}</b> ({{ r.basis }}){% if r.floor %}; break-even after fees about ${{ '{:,.0f}'.format(r.floor) }}{% endif %}.{% endif %}
       {% if not r.found_ad %}Gear Scout never saw the original ad, so condition and extras are left for you to fill in.{% endif %}</p>
+    {% if r.trade_in %}<p class="sv-help">Trade-in check: {{ r.trade_in.line }}</p>{% endif %}
     <button type="button" class="rs-copy">Copy listing</button>
   </div>
   {% endfor %}

@@ -198,6 +198,8 @@ def drafts(items: list[dict]) -> dict:
                 from scrapers import market_value
                 used = market_value.value(ad.get("title") or name, ad.get("description"))[0]
             out[name] = draft(name, it.get("paid"), used, ad.get("title"), ad.get("description"))
+            from scrapers import trade_in
+            out[name]["trade_in"] = trade_in.compare(used)
         except Exception:
             logger.exception("resale drafter %s", it.get("item"))
     return out
