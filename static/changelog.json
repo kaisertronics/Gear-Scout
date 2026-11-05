@@ -3,6 +3,8 @@
     "date": "2026-11-05",
     "title": "Nightly improvements",
     "items": [
+      "Government-surplus auctions from Municibid are now searched for mics, preamps, compressors and studio gear, next to HiBid.",
+      "Shop listings that sold out and came back now show \"Back in stock\" on the card, matching the new back-in-stock push.",
       "Cards for models Gear Scout rarely sees now carry a \"Rare\" or \"Very rare\" tag, so you know a good one may not come around again.",
       "Listing cards now show \"Fair price $X–$Y (N comps)\" for any model with 3 or more price comparisons, so you can judge an ask at a glance.",
       "Feed cleanup: a Wi-Fi router (matched \"RE1000\") and a camera bundle with a Rode mic (matched \"sony microphone\") no longer show up.",
