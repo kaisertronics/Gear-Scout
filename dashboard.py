@@ -1021,6 +1021,32 @@ def _scarcity(l):
         return None
 
 
+@app.template_filter("back_in_stock")
+def _back_in_stock(l):
+    """'Back in stock 2h ago' label for a shop listing that restocked in the last 48h, or None.
+    restock_watch.recent() is computed once per request (cached on flask.g)."""
+    try:
+        from flask import g
+        from datetime import datetime, timezone
+        if not hasattr(g, "_restock_recent"):
+            try:
+                from scrapers import restock_watch
+                g._restock_recent = restock_watch.recent() or {}
+            except Exception:
+                g._restock_recent = {}
+        at = g._restock_recent.get(l.get("url")) if hasattr(l, "get") else None
+        if not at:
+            return None
+        dt = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        mins = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
+        ago = f"{mins}m ago" if mins < 60 else (f"{mins // 60}h ago" if mins < 2880 else f"{mins // 1440}d ago")
+        return {"label": f"Back in stock {ago}"}
+    except Exception:
+        return None
+
+
 @app.template_filter("unnamed_mic")
 def _unnamed_mic(l):
     """'Might be ...' guesses for a generic-titled mic, or None (see scrapers/unnamed_mic.py)."""
