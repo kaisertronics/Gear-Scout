@@ -1011,6 +1011,16 @@ def _fair_range(l):
         return None
 
 
+@app.template_filter("scarcity")
+def _scarcity(l):
+    """Rare-model chip data or None (see scarcity.scarcity)."""
+    try:
+        from scrapers import scarcity
+        return scarcity.scarcity(l.get("title")) if hasattr(l, "get") else None
+    except Exception:
+        return None
+
+
 @app.template_filter("unnamed_mic")
 def _unnamed_mic(l):
     """'Might be ...' guesses for a generic-titled mic, or None (see scrapers/unnamed_mic.py)."""
