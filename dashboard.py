@@ -3534,8 +3534,13 @@ def health():
         silent = term_silence.silent_terms()
     except Exception:
         silent = []
+    try:
+        from scrapers import term_hit_rate
+        noisy = term_hit_rate.cached_noisy_lines(cfg)
+    except Exception:
+        noisy = []
     return render_template("health.html", sites=sites, term_rows=term_rows, lag=lag, checks=checks,
-                           sweep=sweep, refresh=refresh, email=email, silent=silent,
+                           sweep=sweep, refresh=refresh, email=email, silent=silent, noisy=noisy,
                            fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
 
 
