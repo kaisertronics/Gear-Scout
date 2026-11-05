@@ -3,6 +3,7 @@
     "date": "2026-11-05",
     "title": "Nightly improvements",
     "items": [
+      "The Health page now lists search terms that match lots of ads but never lead to a star or alert, so you can see which ones are just noise.",
       "The Health page now tells you when a search term that used to find mics has gone quiet, a sign the site changed and the search broke.",
       "Government-surplus auctions from Municibid are now searched for mics, preamps, compressors and studio gear, next to HiBid.",
       "Shop listings that sold out and came back now show \"Back in stock\" on the card, matching the new back-in-stock push.",
