@@ -1,6 +1,6 @@
-# Owner patterns (from 44 stars, ~1,074 hides, 77.9k ads seen — 2026-11-03)
-- Stars: boutique/clone mics (Vanguard V4/V13/V44S, sE VR2 ribbon at $349–$375, Peluso P12, Advanced Audio CM12/CM49le/CM269t, UT87, Serrano 87, Apex modded Peluso), LA-2A clones (AudioScape, Silent-Arts), plus SSL/outboard gear (UVEQ, AWS 948, Avalon, WA412, Cranborne, Daking, Neumann monitors); Reverb 14 of 44, FB regions ~12, eBay 5, Craigslist ~10.
-- Star prices: boutique mics $300–$950; LA-2A clones and SSL/preamps $650–$1,100; outboard/interfaces $1,300–$2,300 (Neumann, UA Apollo); rare studio gear to $13k; bulk are under-the-radar clones 30–50% off retail used.
-- Hides: Reverb 426 and eBay 178 of ~1,074, then FB regions; top hidden brands are Lauten (107), Warm (86), AKG (81), Peluso (47); words "condenser" (400), "tube" (246), "lauten" (155), "warm" (128) block retail/commercial stock noise.
-- Tags nearly unused (1 ad tagged with 2 tags), 0 nudged ads ever, 10 of 44 stars sold—owner stars and then waits without pushing, letting the market move.
-- Takeaway: seeks under-the-radar ribbons, clones, and LA-2A gear $300–$950, plus matched pairs and high-end outboard (UA, Avalon, SSL), avoids retail-heavy brands and listings padded with descriptor words.
+# Owner patterns (from 44 stars, 1,142 hides, 84.5k ads seen — 2026-11-05)
+- Stars: active ribbon focus (sE VR2 at $349–$375), boutique condensers (Vanguard V4/V13/V44S, Advanced Audio CM12/CM269t, Peluso P12, UT87, Serrano 87, Apex modded), plus high-end outboard (SSL AWS 948, UVEQ, Warm preamps, Cranborne, Daking, Neumann monitors); Reverb 14 of 44 (31%), eBay 5, FB ~12, Craigslist ~10; no new stars since 2026-11-03.
+- Star prices: ribbons and boutique mics $300–$950; SSL/preamps $650–$1,100; interfaces and studio gear $1,300–$2,300 (UA Apollo, Neumann KH120 pair at $1,350); 14 of 44 sold (32%), indicating strong buy-and-hold patience.
+- Hides: Reverb 443 and eBay 191 of 1,142 (56%), then scattered FB regions and Craigslist; keywords "condenser" (11), "tube" (7), "ribbon" (3) in recent hides suppress retail/commercial noise; 35 new hides since 2026-11-03 suggest active filtering.
+- Tags still unused (no activity logged), 0 nudges; sold rate stable at 14 of 44, confirming owner waits for market to move without aggressive resale pushing.
+- Takeaway: persistent hunt for ribbon mics and studio-ready clones at $300–$1,000, plus matched-pair gear and SSL/Neve boutique outboard; aggressively filters Reverb/eBay retail stock; long-hold strategy with low resale urgency.

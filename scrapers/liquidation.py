@@ -13,10 +13,14 @@ term every 30 minutes, far more requests than these sites should get.
 Checked and left out (see the build notes): Proxibid (Incapsula 403),
 GovDeals (Akamai bot manager; search only through a keyed app API),
 estatesales.net (sale-level pages only, no lots, prices or bids).
+Municibid is in: its /browse?search= page is server-rendered and answered
+plain polite HTTP with 200 (Bidspotter, AuctionNinja and Mac.bid were not
+needed, so not probed).
 """
 
 DEFAULT_SOURCES = [
     {"name": "HiBid", "url": "https://hibid.com/lots", "type": "hibid", "enabled": True},
+    {"name": "Municibid", "url": "https://municibid.com/browse", "type": "municibid", "enabled": True},
 ]
 
 
