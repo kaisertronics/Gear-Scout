@@ -585,6 +585,12 @@ def run_watch_cycle():
             sold_alerts.alert(cfg)
         except Exception:
             logger.exception("Sold-favorite alert failed")
+        # A shop's mic you want, sold out and now back in stock: one push per restock.
+        try:
+            from scrapers import restock_watch
+            restock_watch.alert(cfg)
+        except Exception:
+            logger.exception("Restock watch failed")
         # A starred ad still up after 24h+: one gentle nudge (max 2/day, daytime only).
         try:
             from scrapers import star_nudge
