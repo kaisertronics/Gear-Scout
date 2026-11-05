@@ -10,6 +10,7 @@
       <li><strong>How fast new ads reach you</strong> (ads posted in the last 3 days):
         {% if lag.n %}half within {{ lag.median }} h of being posted · {{ lag.within_1h }} of {{ lag.n }} within an hour · {{ lag.within_6h }} within 6 h{% else %}no data yet{% endif %}.</li>
       <li><strong>Still for sale?</strong> {{ checks.fresh }} of the top {{ checks.total }} Feed listings re-checked in the last 6 hours.</li>
+      {% if silent %}<li><strong>⚠️ Gone quiet:</strong> {{ silent[:5]|join(', ') }}{% if silent|length > 5 %} and {{ silent|length - 5 }} more{% endif %} used to find ads but found none in the last 6 searches, so the search may be broken.</li>{% endif %}
       {% if email %}<li><strong>Emails</strong> (digest, alerts):
         {% if email.failing_ago %}⚠️ not going out — failing since {{ email.failing_ago }} ({{ email.why }}){% if email.ok_ago %}; last one sent {{ email.ok_ago }}{% endif %}. Phone alerts still work.
         {% else %}last one sent {{ email.ok_ago }}.{% endif %}</li>{% endif %}

@@ -3529,8 +3529,13 @@ def health():
                  "why": es.get("last_fail_why") or ""}
     except Exception:
         pass
+    try:
+        from scrapers import term_silence
+        silent = term_silence.silent_terms()
+    except Exception:
+        silent = []
     return render_template("health.html", sites=sites, term_rows=term_rows, lag=lag, checks=checks,
-                           sweep=sweep, refresh=refresh, email=email,
+                           sweep=sweep, refresh=refresh, email=email, silent=silent,
                            fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
 
 

@@ -291,6 +291,11 @@ def run_wanted_sweep(cfg: dict, cycle_start: float | None = None) -> list[dict]:
             res = _search_sites(term, cfg, sites)
             logger.info("Wanted sweep %s %r: %d matches, %d new (%.0fs)", label, term, res["found"], res["new"],
                         time.time() - t0)
+            try:
+                from scrapers import term_silence
+                term_silence.record(term, res["found"], label)
+            except Exception:
+                pass
             return res
         except Exception:
             logger.exception("Wanted sweep failed for %r (%s)", term, label)
