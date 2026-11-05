@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-11-05",
+    "title": "Nightly improvements",
+    "items": [
+      "Listing cards now show \"Fair price $X–$Y (N comps)\" for any model with 3 or more price comparisons, so you can judge an ask at a glance.",
+      "Feed cleanup: a Wi-Fi router (matched \"RE1000\") and a camera bundle with a Rode mic (matched \"sony microphone\") no longer show up.",
+      "Checked the top of the Feed: all 19 Reverb ads sampled are still for sale, and half of new ads reach you within 30 minutes of being posted.",
+      "New idea on the Home page: \"Wanted-term silence alert\" (tells you if a search has quietly stopped finding anything). Skip it if you don't want it.",
+      "Facebook still takes 1–2 days to come round to each Wanted term; I left it alone so Facebook load doesn't go up."
+    ]
+  },
+  {
     "date": "2026-11-04",
     "title": "Code review",
     "items": [

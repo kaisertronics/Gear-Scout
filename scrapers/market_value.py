@@ -162,8 +162,27 @@ def _build_index() -> dict:
     tiers = {}
     for k, by in tier_asks.items():
         tiers[k] = {t: (round(statistics.median(vs)), len(vs)) for t, vs in by.items()}
-    _cache.update(at=time.time(), idx=idx, tiers=tiers)
+    _cache.update(at=time.time(), idx=idx, tiers=tiers,
+                  samples={"sold": {k: sorted(vs) for k, vs in sold.items()},
+                           "asks": {k: sorted(vs) for k, vs in asks.items()}})
     return idx
+
+
+def fair_range(title: str) -> Optional[tuple[str, int]]:
+    """('$X–$Y', comps) = 25th–75th percentile of confirmed sales (else asking
+    prices) of this model; None with fewer than 3 samples. Display only."""
+    k = _key(title or "")
+    if not k:
+        return None
+    index()
+    s = _cache.get("samples") or {}
+    for src in ("sold", "asks"):
+        vs = (s.get(src) or {}).get(k) or []
+        if len(vs) >= 3:
+            q = statistics.quantiles(vs, n=4, method="inclusive")
+            lo, hi = round(q[0]), round(q[2])
+            return (f"${lo:,}–${hi:,}" if hi > lo else f"about ${lo:,}"), len(vs)
+    return None
 
 
 def value(title: str, desc: Optional[str] = None) -> tuple[Optional[float], int]:

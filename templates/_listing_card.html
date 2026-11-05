@@ -107,13 +107,14 @@
       {% if l.comp %}
         <div class="listing-typical" title="{{ 'An estimate from similar past listings' if l.comp.est else 'Comp used for the Telex List' }}">{{ l.comp.label }} ~{{ l.comp.ref }}{% if l.comp.est %} (est.){% endif %} · <strong>{{ l.comp.pct }}% under</strong></div>
       {% endif %}
+      {% set fr = l|fair_range %}{% if fr %}<div class="muted" style="font-size:.8em" title="Middle half of recent sold / asking prices for this model">Fair price {{ fr[0] }} ({{ fr[1] }} comps)</div>{% endif %}
       {% if l.price_ctx and l.price_ctx.bstock and not l.comp %}
         <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
       {% endif %}
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}
-      {% if l.ship_warn or l.watched_auction or l.bundle or l.lot or l.resale or l.no_acc or l.cond_grade or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or l.offers_ok or l.motivated or (l.seller_other and l.seller_other >= 2) %}
+      {% if l.ship_warn or l.watched_auction or l.bundle or l.lot or l.resale or l.no_acc or l.mic_case or l.cond_grade or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or l.offers_ok or l.motivated or (l.seller_other and l.seller_other >= 2) %}
         <div class="listing-flags">
           {% if l.watched_auction %}<span class="flag flag-deal" title="An auction from a seller you watch is ending soon">⏱ Watched seller auction · <span class="gs-countdown{% if l.watched_auction.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.watched_auction.ts }}">{{ l.watched_auction.label }}</span></span>{% endif %}
           {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
@@ -127,6 +128,7 @@
           {% if l.cond_grade %}<span class="flag{{ ' flag-deal' if l.cond_grade == 'Mint' }}{{ ' flag-stale' if l.cond_grade in ('Worn', 'For parts / repair') }}" title="Condition guessed from the ad's wording only (not verified)">{{ l.cond_grade }}</span>{% endif %}
           {% if l.ship_warn %}<span class="flag flag-stale" title="Listed shipping added to the price, compared with the used value of this model">{{ l.ship_warn }}</span>{% endif %}
           {% if l.no_acc %}<span class="flag flag-stale" title="The ad never mentions a {{ l.no_acc }}. Replacement shock mount / case can cost $50-$300, check before buying.">No shock mount / case?</span>{% endif %}
+          {% if l.mic_case %}<span class="flag flag-deal" title="The ad says the case, shock mount or box is included (from the ad's wording, not verified)">🧳 {{ l.mic_case }}</span>{% endif %}
           {% if l.resale %}<span class="flag flag-deal" title="Used value ~${{ '{:,}'.format(l.resale['value']) }} ({{ l.resale['n'] }} comps) x 0.92 after Reverb and payment fees, minus ~${{ l.resale['ship'] }} shipping = ~${{ '{:,}'.format(l.resale['net']) }} net, minus the asking price">Resell ~${{ '{:,}'.format(l.resale['profit']) }} profit</span>{% endif %}
           {% if l.cuts and l.cuts >= 2 %}<span class="flag" title="Price cut {{ l.cuts }} times — a motivated seller">Cut {{ l.cuts }}x — motivated</span>{% endif %}
           {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>

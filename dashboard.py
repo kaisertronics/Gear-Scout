@@ -706,6 +706,11 @@ def _decorate(listings: list[dict]) -> list[dict]:
         if not l.get("sold"):
             from scrapers.accessory_check import check as accessory_check
             l["no_acc"] = accessory_check(l.get("title"), l.get("description"))
+        try:
+            from scrapers.mic_extras import check as mic_extras_check
+            l["mic_case"] = None if l.get("sold") else mic_extras_check(l.get("title"), l.get("description"), l.get("category"))
+        except Exception:
+            l["mic_case"] = None
         l["serial_note"] = None
         try:
             if not l.get("sold"):
@@ -994,6 +999,16 @@ def _rare_find(l):
     """'Rare find' label for rare/vintage models, or None (see scrapers/rare_finds.py)."""
     from scrapers import rare_finds
     return rare_finds.rare_find(l.get("title"), l.get("brand")) if hasattr(l, "get") else None
+
+
+@app.template_filter("fair_range")
+def _fair_range(l):
+    """('$X–$Y', comps) fair-price range for a listing's model, or None (see market_value.fair_range)."""
+    try:
+        from scrapers import market_value
+        return market_value.fair_range(l.get("title")) if hasattr(l, "get") else None
+    except Exception:
+        return None
 
 
 @app.template_filter("unnamed_mic")

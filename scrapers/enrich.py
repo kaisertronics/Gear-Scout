@@ -279,6 +279,8 @@ _JUNK = re.compile(
     r"wms[\s-]?\d+\w*|ism\d?|uhf|vhf|bodypack|phoenix gold|\d+(?:\.\d)?\s?(?:watts? )?rms|tube tester|"
     # Sound Storm Laboratories car amps sold as "SSL EVO 5000", "SSL Evolution EV2.1000"
     r"sound ?storm|ssl (?:evo\w*|ev\d+\w*)|ssl force|mb ?quart|stair ?lifts?|harmar|"
+    # Wi-Fi routers / range extenders ("N300 RE1000") and cameras sold with a Rode mic
+    r"wi-?fi|routers?|range extenders?|mirrorless|dslr|camcorders?|vlog(?:ging)?|"
     r"multimeter|oscilloscope|signal generator|bass trainer|metronome|"
     # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
     r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"

@@ -31,6 +31,8 @@ the comparison price (comp) right, and is it still for sale?
 | 2026-11-02 (after fixes) | same | 100% (car-audio ad filtered) | — | — | enrich.py: "MB Quart" and "SSL Force" off-topic. |
 | 2026-11-03 Feed (before fixes) | top 40 of the Feed | 97.5% (39/40; 2 Calrec consoles still left per owner) | — | not opened tonight (Health: 199 of top 200 re-checked in 6 h; no errors in 24 h logs) · new ads: half within 0.6 h, 12/14 within 1 h, all within 6 h | Junk: Harmar "SSL-SL300" stair lift matching "ssl". All Wanted terms searched 21–51 min ago on fast sites, eBay ≤2 h; Facebook 1–15 h (connector part numbers every 3 days). AudioKarma still 403. |
 | 2026-11-03 (after fixes) | same | 100% | — | — | enrich.py: stair lifts / Harmar off-topic. |
+| 2026-11-05 Feed (before fixes) | top 45 of the Feed | 95.6% (43/45; Sony a6100 camera bundle with a Rode mic matched "sony microphone"; Linksys router "N300 RE1000" matched "Re1000") | — | 100% of 19 Reverb ads (API); eBay/Craigslist/Facebook not opened · new ads: half within 0.5 h, 32/43 within 1 h, 38 within 6 h | Wanted terms searched 2–20 min ago on fast sites, eBay ≤1 h; Facebook rotation 9–42 h (13 d for a few misspelling terms), unchanged by design (no extra Facebook load). AudioKarma still a feed error. Only log error: Gemini free-tier limit on the morning briefing. |
+| 2026-11-05 (after fixes) | same | 100% | — | — | enrich.py: Wi-Fi routers/range extenders, mirrorless/DSLR cameras, camcorders off-topic. |
 
 Next to watch: whether Reverb ads keep getting through (log shows "Mic deep read failed" if not); Feed sample not done Oct 31.
 
