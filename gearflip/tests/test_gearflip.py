@@ -85,6 +85,12 @@ def test_plan_limits_one_per_model_and_discounts_shaky_estimates():
     assert [o["url"] for o in P.optimize(opps, 400)] == ["a"]  # 200 sure beats 250 x 30%
 
 
+def test_small_budget_scores_small_flips_fairly():
+    small = E.analyze(title="Shure SM7B", ask=200, value=400, n=30, local=True, settings={**ST, "budget": 500})
+    big = E.analyze(title="Shure SM7B", ask=200, value=400, n=30, local=True, settings={**ST, "budget": 5000})
+    assert small["score"] > big["score"]
+
+
 def test_plan_with_no_cash_is_empty():
     assert P.optimize([_o("a", 100, 50)], 0) == []
 
@@ -203,6 +209,6 @@ def test_tab_renders(db):
     c = app.test_client()
     r = c.get("/gearflip", headers={"X-GearScout-Test": "1"})
     assert r.status_code == 200 and b"Gear Flip" in r.data and b"Best buys" in r.data
-    assert c.get("/gearflip/api/plan.json").json["bankroll"]["budget"] == 2000
+    assert c.get("/gearflip/api/plan.json").json["bankroll"]["budget"] == 500
     r = c.post("/gearflip/settings", data={"budget": "3000", "alerts": "on"})
     assert r.status_code == 302 and S.load()["budget"] == 3000 and S.load()["scour"] is False

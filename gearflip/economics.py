@@ -114,9 +114,11 @@ def confidence(n: int, sold_basis: bool, success: float, ask: float, value: floa
     return int(max(5, min(95, round(c))))
 
 
-def score(expected: float, roi: float, days: float, conf: int) -> int:
-    """0-100 ranking: profit, return on the money, speed, all scaled by confidence."""
-    p = max(0.0, min(expected / 500, 1.0))
+def score(expected: float, roi: float, days: float, conf: int, scale: float = 500) -> int:
+    """0-100 ranking: profit, return on the money, speed, all scaled by confidence.
+    `scale` is the profit that counts as "full marks" (half your budget), so a
+    $500 bankroll ranks $100-$250 flips well instead of chasing big-ticket gear."""
+    p = max(0.0, min(expected / max(scale, 50), 1.0))
     r = max(0.0, min(roi / 60, 1.0))
     v = max(0.0, min(14 / max(days, 1), 1.0))
     return int(round(100 * (0.45 * p + 0.30 * r + 0.25 * v) * (0.4 + 0.6 * conf / 100)))
@@ -173,8 +175,8 @@ def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = 
     conf = confidence(n, sold_basis, success * (NO_REPAIR_SUCCESS if not repair else 1), ask, value, flags,
                       age_days, speed_known)
     # Walk-away: the most you could pay and still hit the minimum ROI and profit.
-    r = float(s.get("min_roi", 20)) / 100
-    buy_max = min((k - r * spend) / (1 + r), k - float(s.get("min_profit", 75)))
+    r = float(s.get("min_roi", 25)) / 100
+    buy_max = min((k - r * spend) / (1 + r), k - float(s.get("min_profit", 40)))
     walk = (buy_max - buy["pickup"]) / (1 + (0 if local else tax_pct / 100)) - buy["ship_in"]
     return {
         "size": size, "channel": ch, "channel_label": side["label"],
@@ -185,12 +187,12 @@ def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = 
         "cash_in": round(cash_in), "cash_need": round(buy["total"] + rc), "profit_if_ok": round(fixed), "expected": round(expected),
         "downside": round(downside), "roi": round(roi, 1), "days": round(days),
         "roi_month": round(roi * 30 / max(days, 1), 1), "margin": round(expected / side["price"] * 100, 1) if side["price"] else 0,
-        "confidence": conf, "score": score(expected, roi, days, conf), "comps": n, "sold_basis": sold_basis,
+        "confidence": conf, "score": score(expected, roi, days, conf, max(100.0, float(s.get("budget", 1000)) * 0.5)), "comps": n, "sold_basis": sold_basis,
         "speed_known": speed_known, "walk_away": max(0, round(walk)),
     }
 
 
 def passes(m: dict, settings: dict) -> bool:
     """Does an analyzed listing clear your minimums?"""
-    return (m["expected"] >= float(settings.get("min_profit", 75)) and m["roi"] >= float(settings.get("min_roi", 20))
+    return (m["expected"] >= float(settings.get("min_profit", 40)) and m["roi"] >= float(settings.get("min_roi", 25))
             and m["confidence"] >= float(settings.get("min_confidence", 35)) and m["days"] <= float(settings.get("max_days", 75)))

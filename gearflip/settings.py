@@ -10,10 +10,10 @@ def data_dir() -> Path:
 
 
 DEFAULTS = {
-    "budget": 2000,              # starting investment, dollars
+    "budget": 500,               # starting investment, dollars (bk: start small, $400-500)
     "include_repairs": True,     # consider broken / "for parts" gear
-    "min_profit": 75,            # expected profit per item, after everything
-    "min_roi": 20,               # percent of the money you put in
+    "min_profit": 40,            # expected profit per item, after everything
+    "min_roi": 25,               # percent of the money you put in
     "min_confidence": 35,        # 0-100
     "max_days": 75,              # skip things that would take longer than this to sell
     "sell_on": "best",           # best | reverb | ebay | local
@@ -22,8 +22,8 @@ DEFAULTS = {
     "max_per_model": 1,          # in the plan: how many of the same model to buy at once
     # Alerts
     "alerts": True,
-    "alert_min_profit": 150,
-    "alert_min_score": 55,
+    "alert_min_profit": 60,
+    "alert_min_score": 50,
     "max_pushes_per_scan": 3,
     "email_digest": True,        # one morning email with the plan
     "ntfy_topic": "",            # blank = use Gear Scout's phone alerts topic
