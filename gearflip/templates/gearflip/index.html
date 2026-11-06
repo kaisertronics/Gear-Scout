@@ -156,7 +156,7 @@
         <div><small>Walk-away price</small>{{ m.walk_away|gf_money }}</div>
       </div>
       {% if o.photo and not o.photo.none %}<div class="gf-why">📷 <b>Photo:</b> {{ o.photo.condition }}{% if o.photo.seen_model %}, reads "{{ o.photo.seen_model }}"{% endif %}{% if o.photo.damage %}; damage: {{ o.photo.damage|join(', ') }}{% endif %}{% if o.photo.missing %}; missing: {{ o.photo.missing|join(', ') }}{% endif %}{% if o.photo.note %}. {{ o.photo.note }}{% endif %}</div>{% endif %}
-      <div class="gf-why">{{ o.why }} Based on {{ m.comps }} {{ 'real sales' if m.sold_basis else 'comparable ads' }}. Worst realistic case: <span class="{{ 'gf-pos' if m.downside >= 0 else 'gf-neg' }}">{{ m.downside|gf_money }}</span>.{% if m.tax %} Includes ~{{ m.tax|gf_money }} sales tax.{% endif %}</div>
+      <div class="gf-why">{{ o.why }} Based on {{ m.comps }} {{ 'real sales' if m.sold_basis else ('similar-titled ads (rough estimate)' if o.basis == 'similar' else 'comparable ads') }}. Worst realistic case: <span class="{{ 'gf-pos' if m.downside >= 0 else 'gf-neg' }}">{{ m.downside|gf_money }}</span>.{% if m.tax %} Includes ~{{ m.tax|gf_money }} sales tax.{% endif %}</div>
       <form class="gf-act" method="post" action="{{ url_for('gearflip.buy') }}">
         <input type="hidden" name="url" value="{{ o.url }}">
         <input type="number" name="paid" min="1" step="any" placeholder="paid ${{ m.buy_total }}">

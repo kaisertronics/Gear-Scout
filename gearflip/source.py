@@ -6,6 +6,7 @@ scoured listings, phone pushes and email.
 To spin Gear Flip off into its own product, re-implement this file against
 the new product's database and notifier; nothing else has to change."""
 import logging
+import re
 import sqlite3
 import statistics
 import threading
@@ -117,8 +118,15 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     if qty and int(qty) > 1:
         return _no(why, "several at one price")  # several at one price: not one flip
     value, n = mv.value(look, None if repair else r.get("description"))
+    basis = "model"
     if not value:
-        return _no(why, "no known used value")
+        # No model value: fall back to ads with the same specific words, as a
+        # rough estimate (lower confidence; the card says so).
+        sv = similar_value(look, r.get("url"))
+        if not sv:
+            return _no(why, "no known used value")
+        value, n = sv
+        basis = "similar"
     k = mv._key(look) or ""
     sold_n = ((mv._cache.get("sold") or {}).get(k) or (None, 0))[1] if k else 0
     # Prefer the last 6 months: real sales first, then recent asking prices,
@@ -127,11 +135,11 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     # sell that expensive"). Last 6 months first: real sales, else the lower
     # quarter of recent asks; then the lower quarter of the year's asks.
     # Never above Gear Scout's own value; condition (mint/rough) kept.
-    rv = recent_values().get(k) if k else None
+    rv = recent_values().get(k) if k and basis == "model" else None
     overall, _ = mv._overall(k, *mv.index().get(k, (None, 0))) if k else (None, 0)
     tier_x = (value / overall) if overall else 1.0
     cap = value
-    year_asks = ((mv._cache.get("samples") or {}).get("asks") or {}).get(k) or []
+    year_asks = (((mv._cache.get("samples") or {}).get("asks") or {}).get(k) or []) if basis == "model" else []
     if rv and rv["sold_n"] >= mv.MIN_N:
         value, n, sold_n = rv["sold"] * tier_x, rv["sold_n"], rv["sold_n"]
     elif rv and rv["ask_n"] >= mv.MIN_N and rv.get("ask_low"):
@@ -151,7 +159,8 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     return {"title": title, "ask": float(unit or ask), "value": float(value), "n": int(n or 0),
             "sold_basis": sold_n >= mv.MIN_N, "ship_in": r.get("shipping"), "local": is_local(r.get("source_name")),
             "repair": repair, "age_days": (now - posted).total_seconds() / 86400 if posted else None,
-            "flags": len(flags), "flag_text": flags, "model": k}
+            "flags": len(flags), "flag_text": flags + (["rough value (similar ads)"] if basis == "similar" else []),
+            "model": k or ("similar:" + " ".join(_sim_words(look)[:3])), "basis": basis}
 
 
 RECENT_DAYS = 183
@@ -214,6 +223,35 @@ def recent_values() -> dict:
                       "ask_low": quick_sale(a), "sold": statistics.median(s_) if s_ else None, "sold_n": len(s_)}
         _recent.update(at=time.time(), by_model=out)
         return out
+
+
+def _sim_words(title: str) -> list:
+    from scrapers.comps import sim_words
+    from scrapers.enrich import strip_clone_reference
+    return sim_words(strip_clone_reference(title or ""))
+
+
+def similar_value(title: str, url: Optional[str] = None) -> Optional[tuple]:
+    """(quick-sale value, how many ads) from stored ads sharing this title's 3
+    (else 2) most specific words, when there's no model value. Needs MIN_COMPS+
+    ads with consistent prices (top quarter within 2.5x of the bottom)."""
+    try:
+        from scrapers.comps import similar_index
+        sim = similar_index()
+    except Exception:
+        return None
+    ws = [w for w in _sim_words(title) if w in sim["words"] and len(sim["words"][w]) >= 2]
+    if not any(re.search(r"\d", w) and re.search(r"[a-z]", w) for w in ws):
+        return None  # needs a model number among the matching words
+    ws.sort(key=lambda w: len(sim["words"][w]))
+    for k in (3, 2):
+        if len(ws) < k:
+            continue
+        ids = set.intersection(*(sim["words"][w] for w in ws[:k]))
+        vals = sorted(sim["prices"][i] for i in ids if sim["urls"][i] != url)
+        if len(vals) >= MIN_COMPS and vals[(len(vals) * 3) // 4] <= 2.5 * vals[len(vals) // 4]:
+            return quick_sale(vals), len(vals)
+    return None
 
 
 def quick_sale(prices: list) -> Optional[float]:

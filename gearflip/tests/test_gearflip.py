@@ -164,6 +164,8 @@ def db(tmp_path, monkeypatch, gf_dir):
     from gearflip import source
     source._speed.update(at=0.0, by_model={})
     source._recent.update(at=0.0, by_model={})
+    from scrapers import comps
+    comps._similar_cache.update(at=0.0, data=None)
     yield store
     mv._cache.update(at=0.0, idx=None, sold=None, tiers=None)
 
@@ -430,3 +432,12 @@ def test_too_cheap_ads_are_held_then_photo_checked(db, monkeypatch):
     assert photos.check({}, (res.get("opps") or []) + res["held"]) == 1
     res = engine.scan({}, st)
     assert "https://example.com/77" in [o["url"] for o in res["opps"]] and not res["held"]
+
+
+def test_no_model_value_falls_back_to_similar_ads(db):
+    from gearflip import source
+    for i in range(8):
+        db.mark_seen(_listing(i, "Zorblax ZX-9000 tube preamp", 400 + i * 10))
+    v = source.similar_value("Zorblax ZX-9000 tube preamp", "https://example.com/x")
+    assert v and 400 <= v[0] <= 430 and v[1] == 8
+    assert source.similar_value("Zorblax tube preamp") is None  # no model number: too loose

@@ -92,7 +92,8 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
         m = economics.analyze(title=p["title"], ask=p["ask"], value=p["value"] * fx["value_x"] * you["value_x"],
                               n=p["n"], sold_basis=p["sold_basis"], ship_in=p["ship_in"], local=p["local"],
                               repair=repair, days_base=speed.get(p["model"]), age_days=p["age_days"],
-                              flags=p["flags"], settings=st, conf_adj=fx["conf"] + you["conf"])
+                              flags=p["flags"], settings=st,
+                              conf_adj=fx["conf"] + you["conf"] + (-15 if p.get("basis") == "similar" else 0))
         if not m:
             continue
         m["score"] = int(round(m["score"] * you["score_x"]))
@@ -104,6 +105,7 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
                     "posted": r.get("posted_at") or r.get("first_seen"), "first_seen": r.get("first_seen"),
                     "age_days": round(p["age_days"], 1) if p["age_days"] is not None else None,
                     "offers_ok": r.get("offers_ok"), "model": p["model"], "seller": r.get("seller"),
+                    "basis": p.get("basis", "model"),
                     "flags": (p.get("flag_text") or []) + fx["tags"],
                     "photo": pic, "m": m, "why": describe(m)})
     out.sort(key=lambda o: (-o["m"]["score"], -o["m"]["expected"]))
