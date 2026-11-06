@@ -161,6 +161,7 @@ def db(tmp_path, monkeypatch, gf_dir):
     mv._cache.update(at=0.0, idx=None, sold=None, tiers=None)
     from gearflip import source
     source._speed.update(at=0.0, by_model={})
+    source._recent.update(at=0.0, by_model={})
     yield store
     mv._cache.update(at=0.0, idx=None, sold=None, tiers=None)
 
@@ -326,3 +327,22 @@ def test_dismiss_route_removes_card_and_rescans(db, monkeypatch):
     page = c.get("/gearflip?thanks=1", headers={"X-GearScout-Test": "1"}).data
     assert b"https://example.com/1" not in page and b"What Gear Flip learned" in page
     assert engine.scan({}, S.load())["opps"] == []
+
+
+def test_last_six_months_beat_older_prices(db):
+    from gearflip import source
+    from scrapers.store import _conn
+    for i in range(6):
+        db.mark_seen(_listing(i, "Shure SM7B", 300 + i))
+    for i in range(6, 12):
+        db.mark_seen(_listing(i, "Shure SM7B", 450 + i))
+    old = (datetime.now(timezone.utc) - timedelta(days=300)).isoformat()
+    with _conn() as c:
+        c.execute("UPDATE seen SET first_seen = ? WHERE url IN (" + ",".join(f"'https://example.com/{i}'" for i in range(6, 12)) + ")", (old,))
+        c.commit()
+    rv = source.recent_values()["shure:sm7b"]
+    assert rv["ask_n"] == 6 and 300 <= rv["ask"] <= 306
+    db.mark_seen(_listing(99, "Shure SM7B", 150, src="Craigslist — Seattle"))
+    rows = [r for r in source.listing_rows() if r["url"].endswith("/99")]
+    p = source.prepare(rows[0], {}, True)
+    assert p and 300 <= p["value"] <= 306 and p["n"] == 6

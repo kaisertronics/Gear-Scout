@@ -110,10 +110,20 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     value, n = mv.value(look, None if repair else r.get("description"))
     if not value:
         return None
-    if verify.price_problem(float(unit or ask), float(value), repair):
-        return None  # far under value: rarely the real, complete unit
     k = mv._key(look) or ""
     sold_n = ((mv._cache.get("sold") or {}).get(k) or (None, 0))[1] if k else 0
+    # Prefer the last 6 months: real sales first, then recent asking prices,
+    # keeping the condition adjustment (mint/rough) Gear Scout's value made.
+    rv = recent_values().get(k) if k else None
+    if rv:
+        overall, _ = mv._overall(k, *mv.index().get(k, (None, 0)))
+        tier_x = (value / overall) if overall else 1.0
+        if rv["sold_n"] >= mv.MIN_N:
+            value, n, sold_n = rv["sold"] * tier_x, rv["sold_n"], rv["sold_n"]
+        elif rv["ask_n"] >= mv.MIN_N:
+            value, n, sold_n = rv["ask"] * tier_x, rv["ask_n"], 0
+    if verify.price_problem(float(unit or ask), float(value), repair):
+        return None  # far under value: rarely the real, complete unit
     flags = deal_checks.scam_flags(r, None if repair else value, unit or ask)
     if len(flags) >= 2:
         return None
@@ -123,6 +133,68 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
             "sold_basis": sold_n >= mv.MIN_N, "ship_in": r.get("shipping"), "local": is_local(r.get("source_name")),
             "repair": repair, "age_days": (now - posted).total_seconds() / 86400 if posted else None,
             "flags": len(flags), "flag_text": flags, "model": k}
+
+
+RECENT_DAYS = 183
+RECENT_TTL = 1800
+_recent = {"at": 0.0, "by_model": {}, "lock": threading.Lock()}
+
+
+def recent_values() -> dict:
+    """{model key: {"sold", "sold_n", "ask", "ask_n"}}: the middle of the last 6
+    months' confirmed Reverb sales and of single, used, US asking prices, with
+    the same exclusions as Gear Scout's yearly value. Cached 30 minutes."""
+    if time.time() - _recent["at"] < RECENT_TTL and _recent["by_model"]:
+        return _recent["by_model"]
+    with _recent["lock"]:
+        if time.time() - _recent["at"] < RECENT_TTL and _recent["by_model"]:
+            return _recent["by_model"]
+        import re
+        from scrapers import market_value as mv
+        from scrapers.enrich import is_accessory_only, is_partial, needs_repair, parse_price
+        from scrapers.store import _conn
+        cut = (datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)).isoformat()
+        asks: dict = {}
+        sold: dict = {}
+        seen_ads = set()
+        try:
+            with _conn() as conn:
+                rows = conn.execute(
+                    "SELECT title, price, description FROM seen WHERE first_seen >= ? AND price IS NOT NULL"
+                    " AND duplicate = 0 AND price NOT LIKE 'C$%' AND (country IS NULL OR country = 'US')"
+                    " AND COALESCE(description, '') NOT LIKE 'Auction%'", (cut,)).fetchall()
+                mv._ensure_sales(conn)
+                sales = conn.execute("SELECT title, price FROM confirmed_sales WHERE at >= ?", (cut,)).fetchall()
+            for title, price, desc in rows:
+                if not title or mv._SKIP.search(title) or mv._PART_WORDS.search(title) or is_partial(title) \
+                        or is_accessory_only(title) or needs_repair(title, desc):
+                    continue
+                v = parse_price(price)
+                if not v or v < 25:
+                    continue
+                ad = (re.sub(r"\s+", " ", title.lower()).strip(), round(v))
+                if ad in seen_ads:
+                    continue
+                seen_ads.add(ad)
+                k = mv._key(title)
+                if k:
+                    asks.setdefault(k, []).append(v)
+            for title, v in sales:
+                if title and v and not mv._SKIP.search(title) and not is_partial(title) and not is_accessory_only(title):
+                    k = mv._key(title)
+                    if k:
+                        sold.setdefault(k, []).append(float(v))
+        except Exception:
+            logger.exception("Gear Flip recent values")
+        out = {}
+        for k in set(asks) | set(sold):
+            a, s_ = sorted(asks.get(k, [])), sorted(sold.get(k, []))
+            cut_n = len(a) // 10 if len(a) >= 10 else (1 if len(a) >= 5 else 0)
+            core = a[cut_n:len(a) - cut_n] if cut_n else a
+            out[k] = {"ask": statistics.median(core) if core else None, "ask_n": len(a),
+                      "sold": statistics.median(s_) if s_ else None, "sold_n": len(s_)}
+        _recent.update(at=time.time(), by_model=out)
+        return out
 
 
 def drop_stolen_photos(items: list[dict]) -> list[dict]:
