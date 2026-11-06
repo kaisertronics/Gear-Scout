@@ -13,13 +13,24 @@ from gearflip import economics, engine, feedback, jobs, ledger, scour, settings 
 
 bp = Blueprint("gearflip", __name__, url_prefix="/gearflip", template_folder="templates")
 
+# "Sort by" menu: (label, value of one flip, best first is high?)
 SORTS = {
-    "score": lambda o: -o["m"]["score"],
-    "profit": lambda o: -o["m"]["expected"],
-    "roi": lambda o: -o["m"]["roi"],
-    "speed": lambda o: o["m"]["days"],
-    "confidence": lambda o: -o["m"]["confidence"],
-    "newest": lambda o: o["age_days"] if o.get("age_days") is not None else 999,
+    "score": ("Best overall (score)", lambda o: o["m"]["score"], True),
+    "profit": ("Most profit", lambda o: o["m"]["expected"], True),
+    "roi": ("Best ROI", lambda o: o["m"]["roi"], True),
+    "roi_month": ("Best ROI per month", lambda o: o["m"]["roi_month"], True),
+    "margin": ("Best margin", lambda o: o["m"]["margin"], True),
+    "confidence": ("Surest (confidence)", lambda o: o["m"]["confidence"], True),
+    "speed": ("Fastest to sell", lambda o: o["m"]["days"], False),
+    "cheapest": ("Cheapest to buy (all-in)", lambda o: o["m"]["cash_need"], False),
+    "priciest": ("Biggest buys first", lambda o: o["m"]["cash_need"], True),
+    "resale": ("Highest resale", lambda o: o["m"]["resale"], True),
+    "safest": ("Safest (best worst case)", lambda o: o["m"]["downside"], True),
+    "under_walk": ("Most room to haggle", lambda o: o["m"]["walk_away"] - o["m"]["ask"], True),
+    "under_value": ("Furthest under value", lambda o: 1 - o["m"]["ask"] / o["m"]["value"] if o["m"]["value"] else 0, True),
+    "fees": ("Lowest fees + shipping", lambda o: o["m"]["fees"] + o["m"]["ship_out"], False),
+    "comps": ("Most price data", lambda o: o["m"]["comps"], True),
+    "newest": ("Newest ads", lambda o: o["age_days"] if o.get("age_days") is not None else 999, False),
 }
 
 
@@ -76,11 +87,14 @@ def index():
     elif kind == "local":
         opps = [o for o in opps if o["m"]["pickup"]]
     sort = request.args.get("sort", "score")
-    opps = sorted(opps, key=SORTS.get(sort, SORTS["score"]))
+    sort = sort if sort in SORTS else "score"
+    _label, val, high_first = SORTS[sort]
+    flip = request.args.get("dir") == "rev"  # "reverse" turns the order around
+    opps = sorted(opps, key=val, reverse=high_first != flip)
     sc = scour.status()
     hours = round(len(scour.FLIP_TERMS) / scour.REVERB_TERMS_PER_PASS * st["scan_minutes"] / 60, 1)
     return render_template("gearflip/index.html", st=st, res=res, book=book, plan=plan, opps=opps[:80],
-                           total=len(opps), kind=kind, sort=sort, owned=owned, scanning=engine.scanning(),
+                           total=len(opps), kind=kind, sort=sort, sorts=SORTS, rev=flip, owned=owned, scanning=engine.scanning(),
                            scan_ago=_ago(res.get("at")) if res else "", job=jobs.status(), sc=sc, cover_hours=hours,
                            age=_age, ago=_ago, channels=economics.CHANNELS, repairs=economics.REPAIRS,
                            saved=request.args.get("saved"), reasons=feedback.REASONS, learned=feedback.learned(),

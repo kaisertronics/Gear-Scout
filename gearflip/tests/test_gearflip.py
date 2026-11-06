@@ -346,3 +346,30 @@ def test_last_six_months_beat_older_prices(db):
     rows = [r for r in source.listing_rows() if r["url"].endswith("/99")]
     p = source.prepare(rows[0], {}, True)
     assert p and 300 <= p["value"] <= 306 and p["n"] == 6
+
+
+def test_every_sort_option_works(db, monkeypatch):
+    flask = pytest.importorskip("flask")
+    import jinja2
+    from gearflip import engine, settings as S
+    from gearflip.web import SORTS, bp
+    db.mark_seen(_listing(1, "Shure SM7B", 200, src="Craigslist — Seattle"))
+    db.mark_seen(_listing(50, "Shure SM7B", 215, src="Craigslist — Seattle"))
+    for i in range(2, 10):
+        db.mark_seen(_listing(i, "Shure SM7B", 370 + i * 3))
+    engine.scan({}, S.save({"min_confidence": 0}))
+    monkeypatch.setattr(engine, "scan_in_background", lambda cfg=None: False)
+    app = flask.Flask(__name__)
+    app.jinja_loader = jinja2.ChoiceLoader([jinja2.DictLoader({"base.html": "{% block content %}{% endblock %}"}),
+                                           app.jinja_loader])
+    app.register_blueprint(bp)
+    c = app.test_client()
+    for k in SORTS:
+        for d in ("", "rev"):
+            assert c.get(f"/gearflip?sort={k}&dir={d}", headers={"X-GearScout-Test": "1"}).status_code == 200
+    urls = [o["url"] for o in engine.latest()["opps"]]
+    assert "https://example.com/50" in urls, [(o["url"], o["m"]["expected"], o["m"]["roi"]) for o in engine.latest()["opps"]]
+    a = c.get("/gearflip?sort=cheapest", headers={"X-GearScout-Test": "1"}).data.split(b'id="all"')[1]
+    b = c.get("/gearflip?sort=cheapest&dir=rev", headers={"X-GearScout-Test": "1"}).data.split(b'id="all"')[1]
+    i1, i50 = a.find(b"example.com/1\""), a.find(b"example.com/50\"")
+    assert 0 < i1 < i50 and b.find(b"example.com/50\"") < b.find(b"example.com/1\"")

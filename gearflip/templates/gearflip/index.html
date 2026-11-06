@@ -106,15 +106,18 @@
   {% if thanks %}<p class="gf-pos">Got it. That one's gone, and Gear Flip is re-ranking with what you told it.</p>{% endif %}
   <div class="gf-chips">
     {% for k, label in [('all', 'All'), ('working', 'Working'), ('repair', '🔧 Needs repair'), ('local', '📍 Local pickup')] %}
-    <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort) }}#all">{{ label }}</a>
+    <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort, dir='rev' if rev else None) }}#all">{{ label }}</a>
     {% endfor %}
   </div>
-  <div class="gf-chips">
-    <span class="muted">Sort:</span>
-    {% for k, label in [('score', 'Best overall'), ('profit', 'Most profit'), ('roi', 'Best ROI'), ('speed', 'Fastest sale'), ('confidence', 'Surest'), ('newest', 'Newest')] %}
-    <a class="gf-chip {{ 'on' if sort == k }}" href="{{ url_for('gearflip.index', kind=kind, sort=k) }}#all">{{ label }}</a>
-    {% endfor %}
-  </div>
+  <form class="gf-chips" method="get" action="{{ url_for('gearflip.index') }}#all">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <label class="muted" for="gf-sort">Sort by</label>
+    <select id="gf-sort" name="sort" onchange="this.form.submit()">
+      {% for k, s in sorts.items() %}<option value="{{ k }}" {{ 'selected' if sort == k }}>{{ s[0] }}</option>{% endfor %}
+    </select>
+    <label class="muted"><input type="checkbox" name="dir" value="rev" {{ 'checked' if rev }} onchange="this.form.submit()"> reverse</label>
+    <noscript><button type="submit">Sort</button></noscript>
+  </form>
   {% if not opps %}<p class="muted">No flips clear your minimums{% if kind != 'all' %} in this view{% endif %} yet.</p>{% endif %}
   <div class="gf-cards">
   {% for o in opps %}{% set m = o.m %}{% set rank = plan.rank.get(o.url) %}
