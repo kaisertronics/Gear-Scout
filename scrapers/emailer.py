@@ -72,7 +72,7 @@ def build_email_html(
         color = _source_status_color(r)
         icon = "✓" if r.success else ("🔗" if r.blocked else "✗")
         if r.success:
-            count = f"{len(r.listings)} new"
+            count = f"{len(r.listings)} read"  # listings read from the site, not new ones
         elif r.blocked:
             count = "manual check only"
         else:
@@ -185,6 +185,14 @@ def build_email_html(
                 <span style="display:inline-block;margin-top:6px;padding:2px 10px;
                     background:#dcfce7;color:#166534;border-radius:12px;
                     font-size:13px;font-weight:600;">{display_price(item.price)[0]}</span>"""
+                ship = getattr(item, "shipping", None)
+                if isinstance(ship, (int, float)):
+                    from scrapers.enrich import parse_price as _pp
+                    v = _pp(item.price)
+                    ship_txt = "free shipping" if ship == 0 else (
+                        f"+ ${ship:,.0f} shipping = ${(v or 0) + ship:,.0f} delivered" if v else f"+ ${ship:,.0f} shipping")
+                    price_html += f"""
+                <span style="font-size:11px;color:#475569;">&nbsp;{ship_txt}</span>"""
                 if display_price(item.price)[1]:
                     price_html += f"""
                 <span style="font-size:11px;color:#94a3b8;">&nbsp;{display_price(item.price)[1]}</span>"""
@@ -293,7 +301,7 @@ def build_email_html(
           border-radius:8px;display:flex;align-items:center;justify-content:space-between;
           flex-wrap:wrap;gap:10px;">
         <span style="color:#ffffff;font-size:13px;">
-          Only listings at least <strong>10% under their comp</strong> are listed here{no_comp_note}.
+          New listings matching your <strong>Wanted list</strong> (Telex List), at any price — deals are marked “% under”{no_comp_note}.
         </span>
         <a href="{dashboard_url}" target="_blank" rel="noopener"
            style="display:inline-block;padding:8px 18px;background:#ffffff;
@@ -408,13 +416,17 @@ def send_html_email(html: str, subject_line: str, cfg: dict) -> bool:
     msg["To"] = cfg["to"]
     msg.attach(MIMEText(html, "html"))
 
+    step = "connecting"
     try:
-        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"]) as server:
+        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"], timeout=60) as server:
             server.ehlo()
             server.starttls()
+            step = "signing in"
             server.login(cfg["from"], cfg["password"])
+            step = "sending"
             server.sendmail(cfg["from"], [cfg["to"]], msg.as_string())
         logger.info("Email sent: %s", msg["Subject"])
+        _record_status(True, subject_line)
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error(
@@ -422,10 +434,35 @@ def send_html_email(html: str, subject_line: str, cfg: dict) -> bool:
             "Make sure you're using an App Password, not your regular password. "
             "Get one at: https://myaccount.google.com/apppasswords"
         )
+        _record_status(False, subject_line, "Gmail refused the sign-in (app password)")
         return False
     except smtplib.SMTPException as e:
-        logger.error("SMTP error: %s", e)
+        logger.error("SMTP error while %s: %s", step, e)
+        _record_status(False, subject_line, f"Gmail closed the connection while {step}")
         return False
     except Exception as e:
-        logger.error("Failed to send email: %s", e)
+        logger.error("Failed to send email while %s: %s", step, e)
+        _record_status(False, subject_line, f"couldn't reach Gmail while {step}")
         return False
+
+
+EMAIL_STATUS = "/data/email_status.json"
+
+
+def _record_status(ok: bool, subject: str, why: str = "") -> None:
+    """Last sent / last failed email, for the Health page."""
+    import json
+    from pathlib import Path
+    try:
+        p = Path(EMAIL_STATUS)
+        st = json.loads(p.read_text()) if p.exists() else {}
+        now = datetime.now(timezone.utc).isoformat()
+        if ok:
+            st.update(last_ok=now, last_ok_subject=subject, failing_since=None)
+        else:
+            st.update(last_fail=now, last_fail_subject=subject, last_fail_why=why)
+            st.setdefault("failing_since", None)
+            st["failing_since"] = st["failing_since"] or now
+        p.write_text(json.dumps(st))
+    except Exception:
+        logger.debug("Couldn't record email status", exc_info=True)

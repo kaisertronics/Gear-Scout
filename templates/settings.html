@@ -15,6 +15,11 @@
 
     {% if saved == 'email' %}
       <div class="settings-saved">✓ Email &amp; schedule settings saved.</div>
+    {% elif saved == 'email_pw_warn' %}
+      <div class="settings-warning">Saved, but that doesn't look like a Gmail app password (16 letters). Gmail won't accept your
+        regular Google password from Gear Scout. Make one at myaccount.google.com/apppasswords and paste it here.</div>
+    {% elif saved == 'login_short' %}
+      <div class="settings-warning">Email settings saved. The new sign-in password wasn't changed: it needs at least 8 characters.</div>
     {% elif saved == 'fbposts' %}
       <div class="settings-saved">✓ Facebook post search list saved — it runs with the next scheduled scrape.</div>
     {% elif saved == 'notifications' %}
@@ -31,6 +36,12 @@
       <div class="settings-saved">✓ Unhid {{ saved.split(':')[1] }} listing(s).</div>
     {% elif saved == 'ebay' %}
       <div class="settings-saved">✓ eBay settings saved — takes effect on the next scrape or live search.</div>
+    {% elif saved == 'ebay-connected' %}
+      <div class="settings-saved">✓ eBay account connected. Send offer on eBay buttons now appear on Best Offer listings.</div>
+    {% elif saved == 'ebay-error' %}
+      <div class="settings-saved">eBay sign-in did not finish. Try Connect eBay again (check the RuName and that the accepted URL ends in /ebay/callback).</div>
+    {% elif saved == 'ebay-needs-runame' %}
+      <div class="settings-saved">Save your eBay keys and RuName below first, then press Connect eBay.</div>
     {% elif saved == 'keywords' %}
       <div class="settings-saved">✓ Search terms saved — {{ keyword_count }} keyword{{ 's' if keyword_count != 1 else '' }}.</div>
     {% elif saved and saved.startswith('cleanup:') %}
@@ -59,8 +70,16 @@
           </label>
         </div>
         <div class="form-row">
-          <label class="grow">App password
+          <label class="grow">Gmail app password <span class="muted">— only for sending email. 16 letters from
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>
+            (needs 2-Step Verification on). Not your Google password.</span>
             <input type="password" name="password" placeholder="Leave blank to keep the current one" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="grow">Gear Scout sign-in password <span class="muted">— what you type to log in to Gear Scout
+            (with your email address). Separate from the app password; at least 8 characters.</span>
+            <input type="password" name="login_password" placeholder="Leave blank to keep the current one" autocomplete="new-password">
           </label>
         </div>
         <div class="form-row">
@@ -212,6 +231,19 @@
         <button type="submit" class="btn" {{ 'disabled' if hidden_count == 0 else '' }}>Unhide all {{ hidden_count }}</button>
       </form>
 
+      <h3>Hidden sellers</h3>
+      {% if hidden_sellers %}
+      <p class="muted">Every ad from these sellers is hidden. Nothing is deleted.</p>
+      {% for w in hidden_sellers %}
+      <form method="post" action="{{ url_for('sellers_hide') }}" class="listing-each">
+        <input type="hidden" name="source" value="{{ w.source }}"><input type="hidden" name="seller" value="{{ w.seller }}"><input type="hidden" name="unhide" value="1">
+        {{ w.seller }} <span class="muted">· {{ w.source }}</span> <button type="submit" class="btn btn-sm">Unhide</button>
+      </form>
+      {% endfor %}
+      {% else %}
+      <p class="muted">None. Use "Hide seller" on a listing card.</p>
+      {% endif %}
+
       <h3>Reset everything</h3>
       <p class="muted">
         Deletes <strong>all</strong> stored listings, favorites, and tags — every source will
@@ -306,6 +338,17 @@
 
     <div class="settings-panel" id="tab-ebay" style="display:none;">
       <h3>eBay results</h3>
+      {% if ebay_budget %}
+      <p>
+        <strong>eBay searches today: {{ "{:,}".format(ebay_budget.left) }} left</strong>
+        of {{ "{:,}".format(ebay_budget.limit) }} ({{ "{:,}".format(ebay_budget.used) }} used; resets at midnight Pacific).
+        {% if ebay_budget.paused_until %}<span class="badge badge-blocked">Paused: eBay's limit was reached</span>{% endif %}
+      </p>
+      {% if ebay_budget.jobs %}
+      <p class="muted">Where they went: {% for label, n in ebay_budget.jobs %}{{ label }} {{ "{:,}".format(n) }}{{ ", " if not loop.last }}{% endfor %}.
+        The newest-listings check is always kept enough for the rest of the day; other searches are spread across the day.</p>
+      {% endif %}
+      {% endif %}
       <p>
         {% if ebay_client_id and ebay_has_secret %}
           <span class="badge badge-ok">Connected</span> eBay listings (used, open box, seller
@@ -346,6 +389,43 @@
                   onclick="return confirm('Remove the saved eBay keys?');">Remove keys</button>
         {% endif %}
       </form>
+
+      <h3 style="margin-top:1.5em;">Send offers from your eBay account</h3>
+      <p>
+        {% if ebay_connected %}
+          <span class="badge badge-ok">Connected</span> Listings that take Best Offer show a
+          "Send offer on eBay" button (it always asks you to confirm first). Your eBay account needs a payment method on file.
+        {% else %}
+          <span class="badge badge-blocked">Not connected</span> Connect your eBay account to send Best Offers from a card.
+        {% endif %}
+      </p>
+      <form method="post" action="{{ url_for('settings_ebay_runame') }}" class="settings-form">
+        <div class="form-row">
+          <label class="grow">RuName (from developer.ebay.com, looks like Name-AppName-PRD-xxxx-xxxx)
+            <input type="text" name="runame" value="" autocomplete="off" spellcheck="false"
+                   placeholder="{{ 'Saved. Paste a new one to replace it' if ebay_runame_set else '' }}">
+          </label>
+        </div>
+        <button type="submit" class="btn">Save RuName</button>
+      </form>
+      <p class="muted">
+        Setup steps: in your eBay developer account open Application Keys, Production, User Tokens,
+        add an eBay redirect URL. Set the accepted URL to your dashboard's public https address plus
+        <code>/ebay/callback</code> and the declined URL to the same address plus <code>/settings</code>,
+        then paste the RuName above. Full steps are in docs/ebay_connect_steps.md.
+      </p>
+      {% if ebay_runame_set and ebay_client_id and ebay_has_secret %}
+        <a class="btn btn-primary" href="{{ url_for('ebay_connect') }}">{{ 'Reconnect eBay' if ebay_connected else 'Connect eBay' }}</a>
+      {% else %}
+        <button type="button" class="btn btn-primary" disabled
+                title="Save your App ID, Cert ID and RuName first">Connect eBay</button>
+        <span class="muted">Save your keys and the RuName first.</span>
+      {% endif %}
+      {% if ebay_connected %}
+        <form method="post" action="{{ url_for('ebay_disconnect') }}" style="display:inline;">
+          <button type="submit" class="btn btn-danger" onclick="return confirm('Disconnect your eBay account?');">Disconnect</button>
+        </form>
+      {% endif %}
     </div>
   </section>
 
@@ -372,7 +452,7 @@
     if (location.hash === '#ebay') document.querySelector('.settings-tab[data-tab="ebay"]').click();
     if (location.hash === '#ai') document.querySelector('.settings-tab[data-tab="ai"]').click();
     {% if saved == 'ai' %}document.querySelector('.settings-tab[data-tab="ai"]').click();{% endif %}
-    {% if saved == 'ebay' %}
+    {% if saved == 'ebay' or (saved and saved.startswith('ebay-')) %}
       document.querySelector('.settings-tab[data-tab="ebay"]').click();
     {% elif saved in ('notifications', 'push_ok', 'push_fail') %}
       document.querySelector('.settings-tab[data-tab="notify"]').click();

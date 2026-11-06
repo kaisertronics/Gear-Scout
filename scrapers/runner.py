@@ -56,7 +56,13 @@ def run_sources(
     on_progress(done, total, name_just_started) may be called from worker
     threads, but never concurrently."""
     perf = cfg.get("performance") or {}
+    one_term = len(keywords) == 1 and fb_workers is None
     fb_workers = max(1, int(fb_workers or perf.get("facebook_workers") or FB_WORKERS))
+    if one_term:
+        # A one-term search (Telex sweep, Price Board, live search): one
+        # Facebook page at a time. Several at once from one account is what
+        # gets Marketplace search throttled.
+        fb_workers = 1
     other_workers = max(1, int(other_workers or perf.get("other_workers") or OTHER_WORKERS))
     total = len(sources)
     results: list[Optional[ScrapeResult]] = [None] * total

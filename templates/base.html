@@ -6,35 +6,58 @@
   <title>{% block title %}Gear Scout{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ css_version }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-  <meta name="theme-color" content="#1e3a5f">
+  <meta name="theme-color" content="#161512">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gear Scout">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
 </head>
 <body data-endpoint="{{ request.endpoint }}">
   <header class="topbar">
     <div class="topbar-inner">
-      <a href="{{ url_for('index') }}" class="brand">🎛 Gear Scout</a>
+      <a href="{{ url_for('feed') }}" class="brand" aria-label="Gear Scout home"><img src="{{ url_for('static', filename='icons/mark.svg') }}" alt="" width="58" height="36"><span>Gear <em>Scout</em></span></a>
       <form method="get" action="{{ url_for('search') }}" class="topbar-search">
         <input type="text" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'search' else '' }}" placeholder="Search all sources...">
         <button type="submit" class="topbar-search-btn" aria-label="Search">&rarr;</button>
       </form>
       <nav>
-        <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Dashboard</a>
+        {% if mic_focus_on %}
+        <a href="{{ url_for('mics_page') }}" class="{{ 'active' if request.endpoint in ('mics_page', 'feed') and not request.args.get('inbox') else '' }}">🏠 Home</a>
+        <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
+        <a href="{{ url_for('shopping') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('shopping') else '' }}">Shopping list</a>
+        <a href="{{ url_for('pickup_route_page') }}" class="{{ 'active' if request.endpoint == 'pickup_route_page' else '' }}">Pickup route</a>
+        <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>
+        <details class="nav-more"><summary>More</summary><div class="nav-more-list">
+        <a href="{{ url_for('feed', inbox=1) }}">📬 Inbox</a>
+        {% else %}
+        <a href="{{ url_for('feed') }}" class="{{ 'active' if request.endpoint == 'feed' and not request.args else '' }}">🏠 Home</a>
+        <a href="{{ url_for('mics_page') }}" class="{{ 'active' if request.endpoint == 'mics_page' else '' }}">🎤 Mics</a>
+        {% endif %}
+        {% if not mic_focus_on %}<a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
+        <a href="{{ url_for('shopping') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('shopping') else '' }}">Shopping list</a>
+        <a href="{{ url_for('pickup_route_page') }}" class="{{ 'active' if request.endpoint == 'pickup_route_page' else '' }}">Pickup route</a>
+        <a href="{{ url_for('feed', inbox=1) }}" class="{{ 'active' if request.endpoint == 'feed' and request.args.get('inbox') else '' }}">📬 Inbox</a>{% endif %}
+        <a href="{{ url_for('health') }}" class="{{ 'active' if request.endpoint == 'health' else '' }}">Health</a>
+        <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}" title="Everything Gear Scout has collected, not just your Wanted list">Browse all</a>
         <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>
         <a href="{{ url_for('steals') }}" class="{{ 'active' if request.endpoint == 'steals' else '' }}">🔥 Steals</a>
-        <a href="{{ url_for('favorites') }}" class="{{ 'active' if request.endpoint == 'favorites' else '' }}">Favorites</a>
+        <a href="{{ url_for('outboard_page') }}" class="{{ 'active' if request.endpoint == 'outboard_page' else '' }}">🎛️ Outboard</a>
+        <a href="{{ url_for('offers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('offers') else '' }}">Offers</a>
+        <a href="{{ url_for('sellers_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sellers') else '' }}">Sellers</a>
+        <a href="{{ url_for('flips_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('flips') else '' }}">Flips</a>
+        <a href="{{ url_for('favorites') }}" class="nav-favorites {{ 'active' if request.endpoint == 'favorites' else '' }}">★ Favorites</a>
+        <a href="{{ url_for('savings_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('savings') else '' }}">💰 Saved</a>
         <a href="{{ url_for('lowest') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('lowest') else '' }}">Price Board</a>
+        <a href="{{ url_for('sweetwater') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sweetwater') else '' }}">🎸 Sweetwater</a>
         <a href="{{ url_for('fb_posts_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('fb_posts') else '' }}">FB Posts</a>
         <a href="{{ url_for('ask_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('ask') else '' }}">Ask AI</a>
-        <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('learning_page') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('learning') else '' }}">Learning</a>
         <a href="{{ url_for('whats_new') }}" class="{{ 'active' if request.endpoint == 'whats_new' else '' }}">What's new</a>
         <a href="{{ url_for('sources') }}" class="{{ 'active' if request.endpoint in ('sources','add_source') else '' }}">Sources</a>
-        <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>
+        {% if not mic_focus_on %}<a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>{% endif %}
+        {% if mic_focus_on %}</div></details>{% endif %}
         <form method="post" action="{{ url_for('logout') }}" class="logout-form">
           <button type="submit">Log out</button>
         </form>
@@ -102,7 +125,9 @@
         try {
           const resp = await fetch(form.action, { method: 'POST', body: new FormData(form) });
           if (!resp.ok) throw new Error('bad status');
-          card.remove();
+          // On the inbox the card sits in a box with its ✓ Done button: take the whole box.
+          const box = card.closest('.inbox-item');
+          if (box && window.gsInboxDrop) window.gsInboxDrop(box); else card.remove();
         } catch (err) {
           card.style.opacity = '';
           form.submit();
@@ -200,6 +225,26 @@
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove('show'), 3500);
   }
+</script>
+<script>
+  // Auction countdowns: refresh every 30s from data-end-ts.
+  (function () {
+    function tick() {
+      const now = Date.now() / 1000;
+      document.querySelectorAll('.gs-countdown[data-end-ts]').forEach((el) => {
+        const mins = Math.floor((el.dataset.endTs - now) / 60);
+        let t;
+        if (el.dataset.endTs - now <= 0) t = 'ended';
+        else if (mins < 60) t = Math.max(mins, 1) + ' min left';
+        else if (mins < 1440) t = Math.floor(mins / 60) + 'h ' + String(mins % 60).padStart(2, '0') + 'm left';
+        else { const d = Math.floor(mins / 1440); t = d + ' day' + (d === 1 ? '' : 's') + ' left'; }
+        el.textContent = t;
+        el.classList.toggle('gs-urgent', el.dataset.endTs - now > 0 && mins < 60);
+      });
+    }
+    tick();
+    setInterval(tick, 30000);
+  })();
 </script>
 <script>
   // Progress bar inside a status banner. `data` is a status payload:

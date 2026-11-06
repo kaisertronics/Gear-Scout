@@ -1,5 +1,5 @@
 {% macro listing_card(l) %}
-<div class="listing-card{{ ' is-deal' if l.is_deal else '' }}">
+<div{% if l.price_dim %} title="Dimmed: outside your usual price range"{% endif %} class="listing-card{{ ' price-dim' if l.price_dim else '' }}{{ ' is-deal' if l.is_deal else '' }}{{ ' is-lowest' if l.lowest_for else (' is-model-lowest' if l.model_lowest else '') }}">
   {% set card_body %}
     {% if l.image_url %}
       <img src="{{ l.image_url|img }}" alt="" class="listing-img" loading="lazy"
@@ -17,36 +17,124 @@
     <div class="listing-body">
       {% set tag = l.source_name|source_tag %}
       <span class="source-tag source-tag-{{ tag[1] }}" title="{{ l.source_name }}">{{ tag[0] }}</span>{% if l.is_new %}<span class="new-tag">NEW</span>{% endif %}{% if l.age_days is not none %}{% set d = l.age_days %}<span class="age-tag{{ ' age-old' if d > 7 else (' age-fresh' if d <= 2 else '') }}" title="{{ 'Posted by the seller' if l.age_known else 'Found by Gear Scout (the site doesn’t say when it was posted)' }}">{{ '' if l.age_known else '~' }}{% if d < 1 %}today{% elif d < 60 %}{{ d|int }}d{% else %}{{ (d / 30)|int }}mo{% endif %}</span>{% endif %}
+      {% if l.lowest_for %}<div class="lowest-tag" title="The cheapest working one for sale anywhere Gear Scout searches (Price Board)">💲 Lowest: {{ l.lowest_for|join(', ') }}{% if l.model_lowest_label %} · {{ l.model_lowest_label }}{% endif %}</div>
+      {% elif l.model_lowest %}<div class="lowest-tag lowest-tag-model" title="The cheapest working one of this model for sale anywhere Gear Scout searches">💲 Lowest {{ l.model_lowest_label }}</div>{% endif %}
+      {% if l.repost_count and l.repost_count >= 2 %}<span class="age-tag" title="The seller re-listed this same ad (same title and price) {{ l.repost_count }} times; showing one card">reposted {{ l.repost_count }}×</span>{% endif %}
+      {% set rare = l|rare_find %}
+      {% if rare %}<div class="listing-each rare-find" title="A rare / vintage model that almost never shows up: {{ rare }}">💎 Rare find · {{ rare }}</div>{% endif %}
+      {% set unm = l|unnamed_mic %}
+      {% if unm %}<div class="listing-each muted" title="Unnamed mic; a guess from clues in the ad ({{ unm.reason }})">🔎 Might be: {{ unm.guesses|join(' · ') }}</div>{% endif %}
+      {% set srep = l|seller_reply %}
+      {% if srep %}<div class="listing-each{{ '' if srep.good else ' muted' }}" title="{{ srep.title }}">⏱️ {{ srep.text }}</div>{% endif %}
+      {% set oodds = l|offer_odds %}
+      {% if oodds and l.price %}<div class="listing-each{{ '' if oodds.good else ' muted' }}" title="{{ oodds.title }}">🤝 {{ oodds.text }}</div>{% endif %}
       <div class="listing-title">{{ l.title }}</div>
+      {% if l.finder_note %}<div class="listing-each" title="Found by a Home finder (pair-up, lot hunter, wanted-ad sniper or fixer-upper)">{{ l.finder_note }}</div>{% endif %}
+      {% if l.finder_msg %}<div class="listing-each"><button type="button" class="btn btn-sm" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.finder_msg }}">Copy message to seller</button></div>{% endif %}
       {% if l.price %}
         <div class="listing-price-row">
-          <span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>
+          {% set dl = l|delivered %}
+          {% if dl %}<span class="listing-price" title="Price + listed shipping">{{ dl }}</span><span class="listing-was" style="text-decoration:none;">delivered</span>
+          {% else %}<span class="listing-price" {% if l.price|orig_price %}title="Converted from Canadian dollars"{% endif %}>{{ l.price|usd }}</span>{% endif %}
           {% if l.price|orig_price %}<span class="listing-was" style="text-decoration:none;">{{ l.price|orig_price }}</span>{% endif %}
           {% if l.previous_price %}<span class="listing-was">was {{ l.previous_price }}</span>{% endif %}
-          {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
+          {% if l.spark %}<svg class="price-spark" width="{{ l.spark.w }}" height="{{ l.spark.h }}" viewBox="0 0 {{ l.spark.w }} {{ l.spark.h }}" style="vertical-align:middle;" role="img" aria-label="Price history {{ l.spark.title }}"><title>{{ l.spark.title }}</title><polyline points="{{ l.spark.points }}" fill="none" stroke="{{ l.spark.color }}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="{{ l.spark.cx }}" cy="{{ l.spark.cy }}" r="2.2" fill="{{ l.spark.color }}"/></svg>{% endif %}
+          {% if l.is_auction %}<span class="listing-was" style="text-decoration:none;">current bid{% if l.auction_left %} · <span class="gs-countdown{% if l.auction_left.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.auction_left.ts }}" {% if l.auction_ends %}title="ends {{ l.auction_ends }}"{% endif %}>{{ l.auction_left.label }}</span>{% elif l.auction_ends %} · ends {{ l.auction_ends }}{% endif %}</span>{% endif %}
         </div>
         {% if l.price_ctx and l.price_ctx.note %}<div class="listing-each">{{ l.price_ctx.note }}</div>{% endif %}
+        {% set ppc = l|per_channel %}
+        {% if ppc and ppc.warning %}<div class="listing-each muted" title="{{ ppc.warning }}">⚠️ {{ ppc.text }}</div>
+        {% elif ppc %}<div class="listing-each{{ ' ppc-low' if ppc.low else '' }}" title="{{ ppc.channels }} channels read from the title{{ '; a low price per channel' if ppc.low }}">{{ '🎚️ ' if ppc.low }}{{ ppc.text }} · {{ ppc.channels }} ch</div>{% endif %}
+        {% if l.shipping is number %}
+          <div class="listing-ship">{% if l.shipping == 0 %}free shipping{% else %}{{ l.price|usd }} + ${{ '{:,.0f}'.format(l.shipping) }} shipping{% endif %}</div>
+        {% elif (l.source_name or '') is local_pickup %}
+          <div class="listing-ship muted">local pickup</div>
+        {% endif %}
       {% endif %}
       {% if l.source_detail %}<div class="listing-source">{{ l.source_detail }}</div>{% endif %}
+      {% if l.warn %}<div class="lowest-tag lowest-tag-model" title="Signs this ad may be a scam or a mix-up">⚠️ Check first: {{ l.warn|join(' · ') }}</div>{% endif %}
+      {% if l.photo %}<div class="listing-each" title="The AI looked at the photo">📷 {% if l.photo.matches == 'yes' and not l.photo.stock %}Photo matches the title{% else %}{{ l.photo.note or 'Photo unclear' }}{% endif %}</div>{% endif %}
+      {% if l.offer %}<div class="listing-each offer-help">💬 Offer ~${{ '{:,}'.format(l.offer.amount) }} ({{ l.offer.why }}){% if l.offer.walk %} · walk away above ${{ '{:,}'.format(l.offer.walk) }}{% endif %}
+        <button type="button" class="btn btn-sm" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'" data-msg="{{ l.offer.msg }}">Copy message</button>
+        {% if l.url and l.price %}<a class="btn btn-sm btn-primary" href="/offer?url={{ l.url|urlencode }}" onclick="event.stopPropagation()" title="One-tap offer page">Offer ${{ '{:,}'.format(l.offer.amount) }}</a>{% endif %}
+        {% if l.is_deal and l.url and 'reverb.com/item/' in l.url %}
+        <button type="button" class="btn btn-sm reverb-offer-btn" title="Sends a real offer through your Reverb account (asks to confirm first)" onclick="event.preventDefault(); event.stopPropagation(); this.parentNode.querySelector('.ro-confirm').hidden=false; this.hidden=true">Send offer on Reverb</button>
+        <div class="ro-confirm" hidden onclick="event.preventDefault(); event.stopPropagation()" data-url="{{ l.url }}" data-amount="{{ l.offer.amount }}" data-title="{{ l.title }}" data-asking="{{ l.price }}" data-seller="{{ l.seller or '' }}">
+          <div class="ro-q">Send ${{ '{:,}'.format(l.offer.amount) }} offer for {{ l.title }} to Reverb? This is a real, binding offer.</div>
+          <button type="button" class="btn btn-sm ro-yes" onclick="event.preventDefault(); event.stopPropagation(); var p=this.closest('.ro-confirm'), q=p.querySelector('.ro-q'), fd=new FormData(); fd.append('confirm','1'); ['url','amount','title','asking','seller'].forEach(function(k){fd.append(k,p.dataset[k])}); p.querySelectorAll('button').forEach(function(b){b.hidden=true}); q.textContent='Sending...'; fetch('/reverb/offer',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(j){q.textContent=j.ok?'Offer sent':'Reverb said: '+(String(j.message||'').replace(/^Reverb said: /,'')||'no reason given'); if(!j.ok&&j.copy_msg){var c=document.createElement('button');c.type='button';c.className='btn btn-sm';c.textContent='Copy message';c.dataset.msg=j.copy_msg;c.onclick=function(e){e.preventDefault();e.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText(c.dataset.msg);c.textContent='Copied'};p.appendChild(c)}}).catch(function(){q.textContent='Reverb said: could not send (network error)'})">Confirm</button>
+          <button type="button" class="btn btn-sm" onclick="event.preventDefault(); event.stopPropagation(); var p=this.closest('.ro-confirm'); p.hidden=true; p.parentNode.querySelector('.reverb-offer-btn').hidden=false">Cancel</button>
+        </div>
+        {% endif %}
+        {% if ebay_connected and l.offers_ok and l.url and 'ebay.com/itm' in l.url %}
+        <button type="button" class="btn btn-sm ebay-offer-btn" title="Sends a real Best Offer through your eBay account (asks to confirm first)" onclick="event.preventDefault(); event.stopPropagation(); this.parentNode.querySelector('.eo-confirm').hidden=false; this.hidden=true">Send offer on eBay</button>
+        <div class="eo-confirm" hidden onclick="event.preventDefault(); event.stopPropagation()" data-url="{{ l.url }}" data-amount="{{ l.offer.amount }}" data-title="{{ l.title }}" data-asking="{{ l.price }}" data-seller="{{ l.seller or '' }}">
+          <div class="eo-q">Send ${{ '{:,}'.format(l.offer.amount) }} Best Offer for {{ l.title }} on eBay? This is a real, binding offer.</div>
+          <button type="button" class="btn btn-sm eo-yes" onclick="event.preventDefault(); event.stopPropagation(); var p=this.closest('.eo-confirm'), q=p.querySelector('.eo-q'), fd=new FormData(); fd.append('confirm','1'); ['url','amount','title','asking','seller'].forEach(function(k){fd.append(k,p.dataset[k])}); p.querySelectorAll('button').forEach(function(b){b.hidden=true}); q.textContent='Sending...'; fetch('/ebay/offer',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(j){q.textContent=j.ok?'Offer sent':'eBay said: '+(String(j.message||'').replace(/^eBay said: /,'')||'no reason given'); if(!j.ok&&j.copy_msg){var c=document.createElement('button');c.type='button';c.className='btn btn-sm';c.textContent='Copy message';c.dataset.msg=j.copy_msg;c.onclick=function(e){e.preventDefault();e.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText(c.dataset.msg);c.textContent='Copied'};p.appendChild(c)}}).catch(function(){q.textContent='eBay said: could not send (network error)'})">Confirm</button>
+          <button type="button" class="btn btn-sm" onclick="event.preventDefault(); event.stopPropagation(); var p=this.closest('.eo-confirm'); p.hidden=true; p.parentNode.querySelector('.ebay-offer-btn').hidden=false">Cancel</button>
+        </div>
+        {% endif %}{% if l.offer.hint %}<div class="muted">{{ l.offer.hint }}</div>{% endif %}</div>{% endif %}
+      {% set pbq = l|prebuy_questions %}
+      {% if pbq %}<details class="listing-each" onclick="event.stopPropagation()"><summary>Questions to ask</summary>
+        <div class="muted" style="white-space:pre-line; user-select:text;">{% for q in pbq %}{{ loop.index }}. {{ q }}{{ '\n' if not loop.last }}{% endfor %}</div></details>{% endif %}
+      {% if l.price and l.url %}<details class="listing-each offer-log"><summary>Log an offer</summary>
+        <form method="post" action="/offers/add" onsubmit="event.preventDefault(); var f=this; fetch(f.action,{method:'POST',body:new FormData(f)}).then(function(r){f.querySelector('.ol-msg').textContent=r.ok?'Saved':'Check the numbers'}).catch(function(){f.querySelector('.ol-msg').textContent='Not saved'})">
+          <input type="hidden" name="url" value="{{ l.url }}"><input type="hidden" name="title" value="{{ l.title }}">
+          <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller or '' }}">
+          <input type="hidden" name="asking" value="{{ l.price }}">
+          <input type="number" name="offered" min="1" step="any" placeholder="I offered $" required style="width:7em">
+          <select name="reply" onchange="this.form.counter.hidden = this.value != 'countered'">
+            <option value="accepted">Accepted</option><option value="countered">Countered</option>
+            <option value="declined">Declined</option><option value="no_reply">No reply</option></select>
+          <input type="number" name="counter" min="1" step="any" placeholder="their $" hidden style="width:6em">
+          <button type="submit" class="btn btn-sm">Save</button> <span class="ol-msg muted"></span>
+        </form></details>{% endif %}
+      {% if l.seller and l.source_name %}{% set sw = seller_watched(l.source_name, l.seller) %}
+      <form class="listing-each" method="post" action="/sellers/watch" onsubmit="event.preventDefault(); var f=this, w=f.dataset.w!='1'; f.unwatch.value=w?'':'1'; fetch(f.action,{method:'POST',headers:{'X-Requested-With':'fetch'},body:new FormData(f)}).then(function(r){if(r.ok){f.dataset.w=w?'1':'0';f.querySelector('button').textContent=w?'👀 Watching seller':'Watch seller'}}).catch(function(){})" data-w="{{ '1' if sw else '0' }}">
+        <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller }}"><input type="hidden" name="unwatch" value="{{ '1' if sw else '' }}">
+        <button type="submit" class="btn btn-sm" title="Push me when this seller lists something new">{{ '👀 Watching seller' if sw else 'Watch seller' }}</button></form>
+      {% if not sw and not l.favorite %}
+      <form class="listing-each" method="post" action="/sellers/hide" onsubmit="event.preventDefault(); event.stopPropagation(); var f=this; fetch(f.action,{method:'POST',headers:{'X-Requested-With':'fetch'},body:new FormData(f)}).then(function(r){if(r.ok){var c=f.closest('.listing-card')||f; c.style.display='none'}}).catch(function(){})">
+        <input type="hidden" name="source" value="{{ l.source_name }}"><input type="hidden" name="seller" value="{{ l.seller }}">
+        <button type="submit" class="btn btn-sm" title="Hide every ad from this seller (undo in Settings)">Hide seller</button></form>{% endif %}{% endif %}
+      {% if l.steal_check %}<div class="lowest-tag lowest-tag-model" title="A steal on paper, but only one price to compare against — check it's the real thing and the price isn't a typo">🔎 Steal? double-check · {{ l.comp.pct }}% under</div>{% endif %}
+      {% if l.wanted %}<div class="listing-wanted" title="Matches these terms on your Wanted (Telex) list">📋 {{ l.wanted|join(' · ') }}</div>{% endif %}
       {% if l.location %}
         <div class="listing-location">📍 {{ l.location.split(' @')[0] }}{% if l.distance is not none %} · {{ '{:,}'.format(l.distance) }} mi{% endif %}</div>
       {% endif %}
-      {% if l.price_ctx and l.price_ctx.typical %}
+      {% if l.price_ctx and l.price_ctx.typical and not l.comp %}
         <div class="listing-typical" title="{{ l.price_ctx.label_title }}">{{ l.price_ctx.label }}{% if l.price_ctx.qty > 1 %} each{% endif %}</div>
       {% endif %}
       {% if l.comp %}
         <div class="listing-typical" title="{{ 'An estimate from similar past listings' if l.comp.est else 'Comp used for the Telex List' }}">{{ l.comp.label }} ~{{ l.comp.ref }}{% if l.comp.est %} (est.){% endif %} · <strong>{{ l.comp.pct }}% under</strong></div>
       {% endif %}
+      {% set fr = l|fair_range %}{% if fr %}<div class="muted" style="font-size:.8em" title="Middle half of recent sold / asking prices for this model">Fair price {{ fr[0] }} ({{ fr[1] }} comps)</div>{% endif %}
+      {% set sc = l|scarcity %}{% if sc %}<div class="muted" style="font-size:.8em" title="How many distinct ads of this exact model Gear Scout has ever seen">{{ sc.label }}</div>{% endif %}
+      {% set bis = l|back_in_stock %}{% if bis %}<div class="muted" style="font-size:.8em" title="This shop listing was out of stock and came back in the last 48 hours">{{ bis.label }}</div>{% endif %}
+      {% set rbn = l|ribbon_note %}{% if rbn %}<div class="muted" style="font-size:.8em" title="Ribbon mics are fragile; this is what the ad says about the ribbon">{{ rbn }}</div>{% endif %}
       {% if l.price_ctx and l.price_ctx.bstock and not l.comp %}
         <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
       {% endif %}
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}
-      {% if l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale %}
+      {% if l.ship_warn or l.watched_auction or l.bundle or l.lot or l.resale or l.no_acc or l.mic_case or l.cond_grade or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or l.offers_ok or l.motivated or l.closeout or (l.seller_other and l.seller_other >= 2) %}
         <div class="listing-flags">
+          {% if l.watched_auction %}<span class="flag flag-deal" title="An auction from a seller you watch is ending soon">⏱ Watched seller auction · <span class="gs-countdown{% if l.watched_auction.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.watched_auction.ts }}">{{ l.watched_auction.label }}</span></span>{% endif %}
           {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
+          {% if l.seller_other and l.seller_other >= 2 %}<span class="flag flag-stale" title="This seller has {{ l.seller_other }} other ads Gear Scout has seen — likely a dealer or flipper, often open to bundle deals">🏪 {{ l.seller_other }} other ads</span>{% endif %}
           {% if l.stale %}<span class="flag flag-stale" title="Listed {{ l.stale.days }} days ago — sellers often take an offer after a few weeks">Listed {{ l.stale.days }}d · try {{ l.stale.offer }}</span>{% endif %}
+          {% if l.motivated %}<span class="flag flag-deal" title="The ad says why the seller wants it gone ({{ l.motivated }}) — likely to take a lower offer">Motivated seller · {{ l.motivated }}</span>{% endif %}
+          {% if l.closeout %}<span class="flag flag-deal" title="The ad reads like a studio closeout, estate or liquidation ({{ l.closeout }}) — often priced to clear">Closeout · {{ l.closeout }}</span>{% endif %}
+          {% if l.haggle %}<span class="flag" title="The ad says it's open to offers">Room to haggle</span>{% endif %}
+          {% if l.offers_ok %}<span class="flag" title="The seller accepts offers on Reverb (Make an Offer button)">Offers OK</span>{% endif %}
+          {% if l.lot %}<span class="flag flag-deal" title="{{ l.lot['title'] }}">{{ l.lot['text'] }}</span>{% endif %}
+          {% if l.bundle %}<span class="flag flag-deal" title="Used value of the pieces: {% for i in l.bundle['items'] %}{{ i['name'] }} ~${{ '{:,}'.format(i['value']) }}{{ '; ' if not loop.last }}{% endfor %} ({{ l.bundle['pct_under'] }}% under)">Bundle: ${{ '{:,}'.format(l.bundle['ask']) }} vs ~${{ '{:,}'.format(l.bundle['total']) }} of parts</span>{% endif %}
+          {% if l.cond_grade %}<span class="flag{{ ' flag-deal' if l.cond_grade == 'Mint' }}{{ ' flag-stale' if l.cond_grade in ('Worn', 'For parts / repair') }}" title="Condition guessed from the ad's wording only (not verified)">{{ l.cond_grade }}</span>{% endif %}
+          {% if l.ship_warn %}<span class="flag flag-stale" title="Listed shipping added to the price, compared with the used value of this model">{{ l.ship_warn }}</span>{% endif %}
+          {% if l.no_acc %}<span class="flag flag-stale" title="The ad never mentions a {{ l.no_acc }}. Replacement shock mount / case can cost $50-$300, check before buying.">No shock mount / case?</span>{% endif %}
+          {% if l.mic_case %}<span class="flag flag-deal" title="The ad says the case, shock mount or box is included (from the ad's wording, not verified)">🧳 {{ l.mic_case }}</span>{% endif %}
+          {% if l.resale %}<span class="flag flag-deal" title="Used value ~${{ '{:,}'.format(l.resale['value']) }} ({{ l.resale['n'] }} comps) x 0.92 after Reverb and payment fees, minus ~${{ l.resale['ship'] }} shipping = ~${{ '{:,}'.format(l.resale['net']) }} net, minus the asking price">Resell ~${{ '{:,}'.format(l.resale['profit']) }} profit</span>{% endif %}
+          {% if l.cuts and l.cuts >= 2 %}<span class="flag" title="Price cut {{ l.cuts }} times — a motivated seller">Cut {{ l.cuts }}x — motivated</span>{% endif %}
           {% if l.sold %}<span class="flag flag-sold">Sold / removed</span>
           {% elif l.pending %}<span class="flag flag-pending" title="The seller marked this Pending — a sale is in progress. Gear Scout re-checks it every few hours.">⏳ Pending</span>{% endif %}
           {% if l.price_ctx and l.price_ctx.deal %}<span class="flag flag-deal">🔥 Deal · {{ l.price_ctx.pct_under }}% under</span>{% endif %}
@@ -54,6 +142,7 @@
           {% if l.needs_repair %}<span class="flag flag-repair">Needs repair</span>{% endif %}
         </div>
       {% endif %}
+      {% if l.checked_label %}<div class="listing-checked" title="When Gear Scout last checked the ad is still up">✓ still listed · checked {{ l.checked_label }}</div>{% endif %}
     </div>
   {% endset %}
   {% if l.url %}

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
 
-from .base import Listing, ScrapeResult, keyword_match, truncate
+from .base import Listing, ScrapeResult, keyword_match, seller_key, truncate
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +308,8 @@ def _parse_group_post(post: dict) -> Optional[dict]:
     lines = [l for l in post["lines"] if not l.lower().startswith("comment as")]
     # Skip the author name and the "·" separator after it.
     body_start = next((i + 1 for i, l in enumerate(lines[:4]) if l == "·"), 1)
+    # The author's name is the first line, already on the page (no extra load).
+    author = lines[0] if lines and not _is_ui_line(lines[0]) else None
     body = lines[body_start:]
 
     if post["listing"]:
@@ -330,6 +332,7 @@ def _parse_group_post(post: dict) -> Optional[dict]:
             "description": " ".join(body[:pi]),
             "url": f"https://www.facebook.com/marketplace/item/{post['listing']}/",
             "id": post["listing"],
+            "author": author,
         }
 
     content = [l for l in body if not _is_ui_line(l)]
@@ -345,6 +348,7 @@ def _parse_group_post(post: dict) -> Optional[dict]:
         "title": content[0], "price": price_match.group(0) if price_match else None,
         "location": None, "description": " ".join(content[1:]),
         "url": permalink, "id": post_id,
+        "author": author,
     }
 
 
@@ -511,6 +515,7 @@ def scrape_facebook_group(source: dict, keywords: list[str]) -> ScrapeResult:
                         image_url=post["img"],
                         listing_id=parsed["id"],
                         location=parsed["location"],
+                        seller=seller_key("fb", parsed.get("author")),
                     ))
                 except Exception as e:
                     logger.debug("Error parsing FB group post: %s", e)
@@ -606,6 +611,12 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
     # mean hundreds of requests against the actual Facebook account, one
     # term is exactly what a search box is for.
     is_live = len(keywords) == 1 and bool(keywords[0].strip())
+    from scrapers.fb_posts_background import marketplace_search_paused
+    search_paused = marketplace_search_paused()
+    if is_live and search_paused:
+        return ScrapeResult(source_name=name, source_url=url, success=False, blocked=True,
+                            error="Marketplace search paused (Facebook isn't returning search results).",
+                            fix_hint="Resumes on its own after the pause.", duration_seconds=0.0)
     if is_live:
         from scrapers.facebook_marketplace_regions import facebook_marketplace_search_url
 
@@ -655,6 +666,23 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     duration_seconds=time.time() - start,
                 )
 
+            # Facebook asking the account to slow down / confirm itself: stop,
+            # and say so in words the sweep recognizes (it pauses Facebook).
+            try:
+                head = page.inner_text("body")[:3000]
+            except Exception:
+                head = ""
+            if "checkpoint" in page.url or re.search(
+                    r"you'?re temporarily blocked|we limit how often|suspicious activity|confirm your identity",
+                    head, re.I):
+                context.close()
+                return ScrapeResult(
+                    source_name=name, source_url=url, success=False,
+                    error="Facebook checkpoint: temporarily blocked / asked to confirm the account.",
+                    fix_hint="Gear Scout pauses Facebook searching for a few hours on its own.",
+                    duration_seconds=time.time() - start,
+                )
+
             # Marketplace item cards are always wrapped in a
             # /marketplace/item/{id}/ anchor — this URL scheme is far more
             # stable than any class name on a React-rendered page. The list
@@ -663,12 +691,19 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
             collected: dict[str, dict] = {}
             _collect_marketplace_cards(page, collected, scrolls=(8 if is_live else FEED_SCROLLS))
 
-            # Scheduled runs also search a few broad words newest-first in
-            # each region — the browse feed alone is a small, personalized
-            # sample. Skipped on the lighter hourly refresh runs.
+            # Also search broad words newest-first in each region — the browse
+            # feed alone is a small, personalized sample. Scheduled runs: all
+            # of them; the hourly refresh: one, taking turns.
             loc_id = re.search(r'/marketplace/(\d+)', source["url"])
-            if not is_live and not source.get("_light") and loc_id:
-                for term in source.get("_broad_terms") or DEFAULT_BROAD_TERMS:
+            broad = list(source.get("_broad_terms") or DEFAULT_BROAD_TERMS)
+            if source.get("_light") and broad:
+                # The hourly refresh: one of the words, newest first, taking
+                # turns hour by hour (the browse feed alone isn't sorted by
+                # newest, so fresh ads could wait for a full scheduled run).
+                hour = int(time.time() // 3600)
+                broad = [broad[(hour + int(loc_id.group(1)[-3:]) if loc_id else hour) % len(broad)]]
+            if not is_live and loc_id and not search_paused:
+                for term in broad:
                     # A time budget per region, so one slow page can't stall the run.
                     if time.time() - start > REGION_BUDGET_SECONDS:
                         logger.info("%s: time budget reached, skipping remaining broad searches", name)
@@ -684,6 +719,15 @@ def scrape_facebook_marketplace_region(source: dict, keywords: list[str]) -> Scr
                     except Exception as e:
                         logger.warning("FB Marketplace broad search %r failed for %s: %s", term, name, e)
             cards = list(collected.values())
+            if is_live and len(cards) <= 1:
+                # A Marketplace search with no results at all (one link is
+                # usually just a Messenger chat) — on the account, not the term:
+                # even "microphone" comes back empty when Facebook limits search.
+                _save_session(context)
+                context.close()
+                return ScrapeResult(source_name=name, source_url=url, success=False,
+                                    error="Marketplace search returned no results at all.",
+                                    fix_hint="EMPTY_MARKETPLACE_SEARCH", duration_seconds=time.time() - start)
             listings = []
             seen_ids = set()
 

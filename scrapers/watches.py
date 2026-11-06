@@ -87,6 +87,7 @@ def seed_from_stored(query: str, max_price) -> int:
 def run_watches(cfg: dict) -> dict[str, list[dict]]:
     """Runs every enabled watch. Returns {query: [new hit dicts]} for watches
     with new matches (empty on a watch's silent first run)."""
+    from scrapers.fb_posts_background import marketplace_quiet_hours
     from scrapers.live_search import run_live_search
 
     watches = [w for w in get_watches(cfg) if w["enabled"]]
@@ -96,7 +97,7 @@ def run_watches(cfg: dict) -> dict[str, list[dict]]:
     for w in watches:
         q = w["query"]
         try:
-            results = run_live_search(q, cfg)
+            results = run_live_search(q, cfg, skip_facebook=marketplace_quiet_hours(cfg))
         except Exception as e:
             logger.exception("Watch %r failed", q)
             status[q] = {**status.get(q, {}), "last_run": _now(), "error": str(e)}

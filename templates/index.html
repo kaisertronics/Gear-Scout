@@ -8,7 +8,7 @@
     <form method="post" action="{{ url_for('scrape_start') }}" id="scrape-now-form">
       <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
     </form>
-    <span class="muted">Quick scrape of every source right now (about 5 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.</span>
+    <span class="muted">Re-reads every site, then searches each of your terms (about 5–8 minutes) — updates everything below, never sends an email. Facebook post search runs on its own all day.</span>
   </div>
   {{ last_searched(['manual', 'auto']) }}
   <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
@@ -103,7 +103,7 @@
 
   {% if watches %}
   <section class="panel watches-panel">
-    <h2>Saved searches <span class="muted">— checked about every hour; new matches alert you</span></h2>
+    <h2>Saved searches <span class="muted">— checked every 30 minutes; new matches alert you</span></h2>
     <div class="watch-list">
       {% for w in watches %}
         <div class="watch-row">
@@ -263,6 +263,24 @@
     </details>
   </section>
   {% endif %}
+
+  {% if usually_hidden_total %}
+  <section class="panel">
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(usually_hidden)) }}">
+      <summary class="muted">{{ usually_hidden_total }} ad{{ '' if usually_hidden_total == 1 else 's' }} from brands you usually hide ({{ usually_hidden_brands|map('title')|join(', ') }}) — tap to look</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endif %}
+
+  {% for g in shop_folds %}
+  <section class="panel">
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(g['items'])) }}">
+      <summary class="muted">{{ g['count'] }} shop cop{{ 'y' if g['count'] == 1 else 'ies' }} of {{ g['model'] }}{% if g['low'] %}, lowest ${{ '{:,.0f}'.format(g['low']) }}{% endif %} — tap to look</summary>
+      <div class="listing-grid"></div>
+    </details>
+  </section>
+  {% endfor %}
 
   {% if no_comp_total %}
   <section class="panel">

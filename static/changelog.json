@@ -1,5 +1,675 @@
 [
   {
+    "date": "2026-11-05",
+    "title": "Hourly improvements",
+    "items": [
+      "Ads that read like a studio closing, estate sale, liquidation, whole-studio sale or rack lot now get a \"Closeout\" tag and join the motivated-seller finds.",
+      "Ribbon mic cards now show a short note on the ribbon's condition (re-ribboned, sagging or blown, or \"not mentioned, ask the seller\"). Ribbons were already covered by the 2-minute fast scan."
+    ]
+  },
+  {
+    "date": "2026-11-05",
+    "title": "Nightly improvements",
+    "items": [
+      "The Health page now lists search terms that match lots of ads but never lead to a star or alert, so you can see which ones are just noise.",
+      "The Health page now tells you when a search term that used to find mics has gone quiet, a sign the site changed and the search broke.",
+      "Government-surplus auctions from Municibid are now searched for mics, preamps, compressors and studio gear, next to HiBid.",
+      "Shop listings that sold out and came back now show \"Back in stock\" on the card, matching the new back-in-stock push.",
+      "Cards for models Gear Scout rarely sees now carry a \"Rare\" or \"Very rare\" tag, so you know a good one may not come around again.",
+      "Listing cards now show \"Fair price $X–$Y (N comps)\" for any model with 3 or more price comparisons, so you can judge an ask at a glance.",
+      "Feed cleanup: a Wi-Fi router (matched \"RE1000\") and a camera bundle with a Rode mic (matched \"sony microphone\") no longer show up.",
+      "Checked the top of the Feed: all 19 Reverb ads sampled are still for sale, and half of new ads reach you within 30 minutes of being posted.",
+      "New idea on the Home page: \"Wanted-term silence alert\" (tells you if a search has quietly stopped finding anything). Skip it if you don't want it.",
+      "Facebook still takes 1–2 days to come round to each Wanted term; I left it alone so Facebook load doesn't go up."
+    ]
+  },
+  {
+    "date": "2026-11-04",
+    "title": "Code review",
+    "items": [
+      "The Saved page was taking over three minutes to open (the new \"Draft a resale listing\" helper compared every purchase against all 80,000 stored ads, parsing a date for each one). It now opens in a couple of seconds and writes the same drafts."
+    ]
+  },
+  {
+    "date": "2026-11-04",
+    "title": "Hourly improvements",
+    "items": [
+      "Saved page: new collapsed \"Draft a resale listing\" helper. Pick something you bought and it writes a ready-to-copy title and description with a suggested asking price (never below your cost plus fees) and a Copy button.",
+      "Starred page: when a starred ad sells and you still have another star of the same model, a note shows what it sold for and what you could safely offer on the other one."
+    ]
+  },
+  {
+    "date": "2026-11-03",
+    "title": "Code review",
+    "items": [
+      "Shopping page has a new \"This week's plan\" card: which still-needed items to buy now (a live ad is at or under your target, or 25%+ under used value), which to wait on, and how much budget is left.",
+      "New \"Hide seller\" button on listing cards hides every ad from that seller, now and later (undo under Hidden sellers in Settings). Sellers you follow or have starred are never hidden.",
+      "The Mics page was taking 10 seconds or more to open (and over a minute when two tabs loaded at once) because the Price targets panel re-read every stored ad on each visit. It now remembers its answer for a few minutes and is kept fresh in the background, along with the price history, best month, regional gap and Flips lists.",
+      "Hiding double-posted Facebook ads (Telex List, Home) was getting slower the more Facebook ads there were (90 seconds on 4,000 ads); it now takes well under a second and hides exactly the same ads.",
+      "Rare-find phone pushes no longer fire for ads that were posted weeks ago, that say sold, or that match your exclude words, and a modern \"2010s\" Neve no longer counts as a rare find.",
+      "The Mic Focus and Mic deals headings on the Mics page had lost the space before their counts.",
+      "eBay's daily search allowance was running out by mid-afternoon, so listings like the Hosa STX-805 never got found and searches were marked done while eBay was paused. Paused eBay searches now retry as soon as eBay is back, and guessed sibling models (STX-803F etc.) use a third of the eBay allowance so your Telex terms and shopping-list items keep the full rate.",
+      "eBay now tries a backup when its search allowance runs out or eBay is paused (in practice eBay usually blocks it, see the next item): Gear Scout reads eBay's plain website search (newest first, Buy It Now, US sellers) at no more than one page every 3 seconds. The newest-listings check reads a couple of mic, compressor and preamp pages each time, your Telex List and shopping-list terms get up to 6 searches per 15 minutes and the starred clone makers 2. If eBay answers with a block or challenge page it is left alone for 30 minutes (nothing is bypassed). Found listings go through the same alerts. Today's ~4,800 searches went to: newest-listings check ~620, Telex List + shopping list ~1,400, mic model terms ~440, guessed siblings ~140, mic auctions ~700, auction term searches ~340, sold checks ~960 and price lookups; mic auctions now run every 2 hours and eBay sold checks are limited to 10 an hour, freeing ~1,300 searches a day for the first three.",
+      "eBay's daily search allowance now lasts the whole day. Every eBay search is counted by job and spread across the day, the newest-listings check (every 2 minutes) always keeps enough for the rest of the day, your Telex List and shopping-list terms get the biggest share, and the busywork (guessed sibling models, mic model terms, auction term searches, price lookups) is slowed down. Settings → eBay shows how many searches are left today and where they went. (eBay's own web search can't be used as a backup: it blocks automated visits.)",
+      "Home has a new \"Clone makers, newest\" card: the latest ads from Vanguard, sE, Peluso, AudioScape, Advanced Audio, United, Serrano and Silent-Arts from every site in one short list.",
+      "Gear Scout now also searches the other models of the clone makers you star (Vanguard V1/V4/V44S, sE VR1, Advanced Audio CM49/CM269, UT47/UT67 and so on) and catches common misspellings like \"Vangaurd\" and \"Pelluso\", since sellers underprice models they don't know.",
+      "Facebook Marketplace gets a maker lane: each cycle one extra Facebook search goes to the clone makers (Vanguard, sE, Peluso, AudioScape, Advanced Audio, United, Serrano), so their newest local ads are checked about every 1-2 hours instead of waiting a full rotation. Still quiet overnight and still pauses if Facebook asks it to slow down.",
+      "Posting-time boost: Gear Scout learns which hours of the weekday and weekend your kind of gear gets posted and, in those busy hours, checks the fast sites every 15 minutes instead of 30.",
+      "The Hold-value card on the Mics page is now kept warm in the background so it can't slow the page down.",
+      "New Pair-ups section on Home: when two separate single ads of the same model (a 1176, EQP-1A, BT-50, Advent, Peluso, U87 and similar), even from different sellers or sites, together cost 12%+ under what a used pair is worth, Gear Scout shows both side by side with the saving and a Copy message button for each seller (nothing is sent for you).",
+      "New Lot hunter section on Home: lots, bundles and \"8x\" of one model (like a batch of CAPI modules) that ask 25%+ under what the recognisable parts are worth used, biggest dollar saving first, with the parts math on the card (extras like cables are not counted).",
+      "New Wanted-ad sniper section on Home: Facebook, Craigslist, OfferUp and Kijiji ads with no price (or a $1 stand-in) for gear on your buy list or worth $200+ used, ranked by what the model is worth, each with a ready message asking the price (nothing is sent for you).",
+      "New Fixer-uppers section on Home: ads saying for parts, not working, needs tubes or as-is on gear worth $400+ working (mics, LA-2A-style comps, vintage outboard), with the profit if fixed worked out as working value minus the ask minus a typical repair cost (an estimate), biggest profit first.",
+      "New Modded mics section on Home: ads that say the capsule or transformer was swapped (Peluso, CK12 or K67-style capsule, Lundahl, Jensen, Cinemag) and ask 15%+ under the stock mic's used value plus the parts, like a $429 Apex 460 with a Peluso C12 capsule and Lundahl transformer, with the body + parts math on the card (part values are estimates).",
+      "New Parts radar section on Home: transformers (UTC, Sowter, Carnhill, Lundahl and similar), T4B opto cells and NOS tubes for LA-2A builds, listed when a fresh ad asks 25%+ under what that same part usually asks (median of its own ads over six months), with a ready message to the seller (nothing is sent for you). Part ads are still hidden from every other list.",
+      "New Buying windows section on Home: when the asking prices of a buy-list model (a U87, 1073, Royer and similar) fall 10%+ across at least three different sellers over the last two weeks compared with the 60 days before, the model is listed with its cheapest live ad, so you hear a window is opening before any single ad shows a price cut.",
+      "The Shopping list page now has a Bundle offers panel: when one seller (same site) has three or more of the items you still need, it builds a single lot offer 15% under their combined used value (never under 70% of their ask or above it), listing each item with its link and a Copy message button (nothing is sent for you). The list is also kept warm in the background so the page opens fast.",
+      "Saved page has a Deal calibration card: for the gear you bought, how many hours ahead Gear Scout had already seen a matching ad (same model, price within 15% of what you paid) and how far under the going used price you paid, so alert thresholds can follow what you really buy."
+    ]
+  },
+  {
+    "date": "2026-11-03",
+    "title": "Nightly check",
+    "items": [
+      "Shopping list items are now searched on their own: every /shopping item (Hosa STX-805F, DTP-802 and the rest) is a search term on eBay, Reverb and Craigslist at the same rate as the Telex List, matched on the title or the description, and the cheapest live one (price + shipping, per unit) feeds the running total. Hosa snake sibling models (STX-803F/805F/805M, DTP-803, CSS-802/803/807, XLR-803/805...) are searched too, without touching your Telex List. Cheap cables are no longer hidden by a high-priced look-alike family.",
+      "Seller reply chip: cards from sellers you've sent offers to now show how many of your offers they answered (e.g. \"Replied to 1 of 2 offers\").",
+      "Checked everything: no errors in the logs, every Wanted term searched within the hour on the quick sites, and new ads reach you in about 0.6 hours (12 of 14 within an hour).",
+      "A stair lift (\"Harmar SSL-SL300\") was showing up under your \"ssl\" term. Stair lifts are now filtered out.",
+      "Rare finds radar: rare or vintage models (U47, C12, Pultec, Fairchild and similar) now also send a phone push when they're not on your Wanted list, up to 3 per half hour. Tell me if it's too chatty.",
+      "New idea on the Home page: Wrong-model title check."
+    ]
+  },
+  {
+    "date": "2026-11-03",
+    "title": "Hourly improvements",
+    "items": [
+      "Starred-ad sold tracker: a new card on the Mics page shows how many days your starred ads usually last before they sell (about 8 days so far, faster on Facebook, slower on Craigslist) and lists the starred ads at risk of selling today.",
+      "Price-cut sniper: when an older ad is cut to a price that now meets your mic deal rules, you get a \"Price cut\" push with the Offer button (up to 3 per run). Nothing in your price rules changed.",
+      "New ideas waiting in Coming next: Estate-sale and studio-closeout finder, Sold-while-you-watched price memory, Shopping-list bundle shipping saver.",
+      "One-tap instant offer: every mic/outboard deal push now has an \"Offer $X\" button and the deal emails an Offer link. It opens a phone-friendly /offer page with the ask, used value, a suggested offer (about 15% under, never under 70% of the ask, rounded to $5, shipped to Seattle), an editable amount, and one Send button (Reverb/eBay offers, with the usual confirm, logged in the offer log) or a Copy message button for other sites. Home cards with a suggested offer show the same \"Offer $X\" link.",
+      "Rare find chip: listings of rare/vintage models (Neumann U47, AKG C12, Telefunken ELA M 251, Pultec, Fairchild and similar) get a purple \"Rare find\" tag on the card, whatever the price.",
+      "Price per channel: multi-channel preamps and interfaces (like an 8-channel preamp) now show \"$X per channel\" on the card, in green when it's $75 or less per channel.",
+      "Outboard page: lists current 1176, LA-2A, Fairchild, EQP-1A/Pultec, API/CAPI 500 module, Distressor, WA-412, Neve and Neumann/Telex preamps and compressors asking 20%+ under their used value, newest and biggest discount first (very big discounts are marked double-check).",
+      "Price-range dimmer: mic cards priced far outside what you usually star appear dimmed (never hidden) on Home and Mics; starred ads and real deals are never dimmed.",
+      "Home, Mics and the other lists now hide vinyl-record and non-gear ads that were stored before the junk guard existed (the Ronco Records album was still showing).",
+      "Best month to buy: under a mic model's price chart on the Mics page, a line like \"Cheapest month to buy: June (about 18% under average)\" appears when there's at least a year of ads to back it up.",
+      "Catch speed: the Sources page has a new card showing, for each site, how many minutes after an ad is posted Gear Scout typically finds it (Facebook times are rough).",
+      "Starred-ad nudge: if an ad you starred is still for sale a day later, you get one gentle push (\"Still thinking about this one? It's still up at $X\"), at most twice a day and only in daytime.",
+      "Shopping-list deals: a brand-new listing for something on your studio shopping list that is 25%+ under its usual price now sends a push (items with your own price target keep using that target).",
+      "Vinyl records, CDs and cassettes whose titles happen to hold a mic model number (like the Ronco Records \"RE-1000\" album) no longer show up as gear.",
+      "Telex List cable part numbers now find cables sold without the number: a \"Hosa DTP-802\" search also looks up Hosa + DB25 + TRS (eBay), keeps listings whose title names that brand and connectors (or that carry the model number in the description), and no longer drops them as \"accessories\" because they say \"6 ft\". Missed: eBay 117500374503 \"HOSA 6 ft DB25 to 8 TRS cables (2)\". Cheap (under $100) Telex items 20%+ under used value now show on Deals instead of needing 50% off and $100+."
+    ]
+  },
+  {
+    "date": "2026-11-02",
+    "title": "Code review",
+    "items": [
+      "Home: a \"reposted N×\" tag could stick to an ad on other pages where the copies weren't folded together. It now only shows on the folded card."
+    ]
+  },
+  {
+    "date": "2026-11-02",
+    "title": "Hourly improvements",
+    "items": [
+      "Send offer on eBay: on eBay Buy It Now cards that take Best Offer, a button sends your suggested offer from your own eBay account (asks to confirm first, shows eBay's real reason if it fails). Connect your eBay account once under Settings > eBay; the click-by-click steps are in docs/ebay_connect_steps.md.",
+      "Offer log: tap \"Log an offer\" on any card to record what you offered and the reply; the new Offers page shows which discounts and sellers actually work.",
+      "Price history: /mics now charts each model's asking price over time, with a Buy now / Wait / Steady badge.",
+      "Seller watchlist: tap \"Watch seller\" on a card and you get a push whenever that seller posts something new; see them on the Sellers page.",
+      "Regional price gap: /mics flags models that are 25%+ cheaper in another state than at home, with links to the cheapest ads.",
+      "Fast lane now also watches Reverb compressors and preamps (Distressor, LA-2A, 1176, Fairchild, API/CAPI); Reverb cards and pushes show an \"Offers OK\" tag with your usual offer.",
+      "HiBid auctions are now a source, checked with the same used-value rules (Proxibid and GovDeals block scrapers, so they were skipped).",
+      "Motivated sellers: ads saying moving, closing, estate, divorce or must sell get a tag, a deeper suggested offer, and a Home section.",
+      "Flips: new page of cheap listings you could resell on Reverb at a profit, with a draft listing and a profit tracker. It posts nothing.",
+      "Resale profit: deal cards now show \"Resell ~$X profit\", what the mic should net on Reverb after fees and shipping, when that is $50 or more.",
+      "Missing accessories: ads for mics that normally come with a shock mount or case, but never mention one, get a \"No shock mount / case?\" tag.",
+      "Bundle breakdown: when an ad sells several things together (mic + preamp + cables), Gear Scout adds up the used value of each piece and tags the card \"Bundle: $X vs ~$Y of parts\" if the ask is 40%+ under.",
+      "Quiet auctions: new Home section listing eBay mic auctions ending within 6 hours with zero bids and a price 40%+ under used value, soonest first.",
+      "Stubborn-seller flag: ads whose price has been cut 2 or more times get a \"Cut 2x — motivated\" tag, a good sign to lowball.",
+      "Room to haggle: ads that say OBO, \"make offer\" or \"must sell\" get a tag, and the offer helper opens about 20% lower on them.",
+      "Sunday buyer's report: every Sunday at 8:30 AM you get one email with the week's new mics, price drops, what sold and a market headline.",
+      "Price history: ads whose price has changed now show a tiny line chart next to the price (green = cheaper, red = pricier). Hover or long-press to see each price.",
+      "Sold-out alert: when a listing you starred sells or is taken down, you get one push and email (only for ones that sold in the last 2 days).",
+      "Price targets: new panel on the Mics page. Type a model and the most you'd pay; you get a push the moment any ad for it, deal or not, is at or under that price.",
+      "Offer helper: every mic deal now shows a suggested opening offer (about 10% under asking) and a walk-away price, with a Copy message button. Before, only price-dropped or long-listed ads got one.",
+      "Send offer on Reverb: Reverb deal cards with a suggested offer get a \"Send offer on Reverb\" button. It asks you to confirm in the page, then sends only on your second tap and logs it in the Offer log. If Reverb refuses, you see its reason and a message to copy. Reverb doesn't publish the offer fields, so the first real send may need a tweak."
+    ]
+  },
+  {
+    "date": "2026-11-02",
+    "title": "Nightly improvements",
+    "items": [
+      "New Shopping list page (in the menu next to Telex List): your cable and connector list from the Rev H wiring plan, each item matched to the 3 cheapest ads that are still for sale, with an estimated price including WA tax and shipping, and the price of buying new for comparison.",
+      "At the top: what's still to buy in total, an optional budget box (it tells you if you're over or under), and a Bought tick for each item so it drops out of the total.",
+      "Feed: car-audio ads (MB Quart amps, \"SSL Force\" subwoofers) no longer match your \"ssl\" search.",
+      "Look at: some items have no used ad yet (5 of 28 had a match tonight), so they're priced as new. A few matches can be bundles, so open the ad before you buy."
+    ]
+  },
+  {
+    "date": "2026-11-02",
+    "title": "Nightly check",
+    "items": [
+      "Health check: all Wanted terms searched in the last 20 minutes on quick sites and eBay; new ads reach you in a median 2.2 h (7 of 16 within an hour); 197 of the top 200 Feed ads were re-checked for sold in the last 6 hours.",
+      "Facebook: many Wanted terms still show 11 days since their last search because Mic Focus was on until Nov 1; the rotation is catching up at the same Facebook load.",
+      "No errors in either container in the last 24 hours. No code change tonight.",
+      "New idea added to Coming next: Offer helper (suggested opening offer and walk-away price on each deal). Studio shopping list is still approved and queued for the hourly builder."
+    ]
+  },
+  {
+    "date": "2026-11-01",
+    "title": "Hourly improvements",
+    "items": [
+      "Mics page has a new \"Market pulse\" panel: for each mic brand, new ads per week, the typical asking price per week, and how fast they usually sell. The up/down arrow only appears once there's enough history to trust it.",
+      "Mic deal pushes now end with how long similar mics usually take to sell (e.g. \"similar mics usually sell in ~4 days\"), so you know how fast to move.",
+      "Mic Focus is off: Gear Scout searches your whole Telex List again, with the mic searches in the same rotation (every search gets the same check rate, least recently searched first). Home is now new results plus 'Smokin' hot deals' (Telex List and mic deals together, best score first), then a small Distressor section (it's a compressor, not a mic, so it's no longer under Mics), a collapsed Mics section with the lowest price per model, Coming next, and Check these. The full menu is back with Home first. The 2-minute fast lane now always runs, so hot mic deals still push right away, with the same deal rules. You can turn Mic Focus back on from the Mics page.",
+      "Fast lane for fresh mics: every 2 minutes Gear Scout now checks only the newest Reverb and eBay Buy It Now mic listings, and a mic that meets your usual deal rules is pushed within a couple of minutes of being posted instead of waiting for the next 15-minute round. Same rules and prices as before; nothing is pushed twice.",
+      "Telex page has a new \"Sharper terms\" box: for broad searches like 'ssl' or 'drawmer' it suggests specific models from mics you've starred, with a one-tap add.",
+      "Gear Scout now remembers who is selling each new Reverb and eBay ad. When a seller has 2+ other ads, the card shows a '🏪 N other ads' tag (likely a dealer or flipper, often open to bundle deals). It fills in as new ads arrive."
+    ]
+  },
+  {
+    "date": "2026-11-01",
+    "title": "Mic searches run every 15 minutes again",
+    "items": [
+      "The 15-minute mic search was taking about 19 minutes, so every other round got skipped. Craigslist searches that found nothing were each launching a slow browser; they now finish instantly. Canadian stores are no longer searched, and a couple of mics are searched at once.",
+      "A full round of mic searches should now take a few minutes instead of 19."
+    ]
+  },
+  {
+    "date": "2026-11-01",
+    "title": "Gear Scout improves itself every hour",
+    "items": [
+      "An hourly update now ships one improvement at a time on its own: new capabilities, sharper matching and better prices. Each is tested, and undone automatically if anything breaks.",
+      "Proposals became 'Coming next' on Home. They're built without waiting for you. Tap Skip on any you don't want, or 'Do this first' to move one up.",
+      "Updates never restart Gear Scout in the middle of a 15-minute sweep any more."
+    ]
+  },
+  {
+    "date": "2026-11-01",
+    "title": "Only real deals in your updates",
+    "items": [
+      "United and Dachman mics still all show in their own sections, but they reach your updates, Mic deals, pushes and the morning email only when they're in your price range AND at least 20% under their used value. Before, a $899 UT FET47 (its normal used price) and a Dachman priced over used got in."
+    ]
+  },
+  {
+    "date": "2026-10-31",
+    "title": "Deal checks, offers, proposals and a morning email",
+    "items": [
+      "Scam check: deals with warning signs (a 'brand new, several available' ad, Zelle or wire requests, contact off the site, shipping only, a photo reused on another ad, a local ad far below market) aren't pushed. They sit under a ⚠️ line or in 'Check these'.",
+      "Photo check: the AI looks at each deal's photo and says whether it shows the item in the title. A wrong photo, or a catalogue photo on a local ad, counts as a warning.",
+      "Best deals are sorted by a deal score: the discount, plus a little for a fresh ad, a price cut or pickup within 150 miles.",
+      "Offer helper: ads whose price was cut, or that have sat 3+ weeks, show a suggested offer (about 15% under) with a Copy message button.",
+      "eBay auctions show the most to bid to stay 50% under the used value.",
+      "Real sold prices: Gear Scout now records Reverb listings that truly sold, not just ended. Once a model has 3+ sales, its used value comes from those. Reverb closed its public price history, so this builds up over the coming weeks.",
+      "A morning email at 8 AM with today's best deals, and a Proposals section on Home: a new idea each night, with Build or Skip."
+    ]
+  },
+  {
+    "date": "2026-10-31",
+    "title": "New home page and honest used prices",
+    "items": [
+      "The Home page (was Mics) now opens with what's new since your last visit, then the best deals on everything on your Telex List posted in the last 150 days, then your mics.",
+      "Used values are rebuilt: the middle of what single, used US listings of that exact model asked over the last year, with 3 or more needed. An audit found about a quarter of the old values were off by 50% or more: Telex prices or new prices counted as 'used', pairs priced as one, and vintage, reissue and FET versions lumped together.",
+      "Every mic brand except United and Dachman now shows, and pushes, only at 50% or more under its used value, and $300 or more. United, Dachman and the Distressor keep their price ranges.",
+      "Mics with too few listings to judge, or more than 75% under (usually a scam), are in a closed 'Check these' section at the bottom. They don't push."
+    ]
+  },
+  {
+    "date": "2026-10-31",
+    "title": "Faster clicks",
+    "items": [
+      "Search and the Mics page no longer freeze for several seconds (sometimes minutes). Gear Scout's price-history refresh, every 15 minutes, now runs on its own, out of the page's way."
+    ]
+  },
+  {
+    "date": "2026-10-31",
+    "title": "Reverb was blocking Gear Scout — fixed",
+    "items": [
+      "Found that Reverb's security layer (Cloudflare) had started turning away Gear Scout's Python requests: the every-2-hours mic read failed every time since yesterday, and Reverb sold checks and price lookups were being blocked too.",
+      "Gear Scout now falls back to curl (which Reverb lets through) whenever that happens, for Reverb searches, sold checks, price lookups and shipping reads. Tested live: searches and sold checks work again.",
+      "Code review: the AI \"Is this a good deal?\" check also reads a Reverb ad's full text through that fallback now, so it no longer falls back to the short saved description.",
+      "New ads still reach you fast (half within 20 minutes). Your non-mic Wanted terms still show as days old because Mic Focus is on. AudioKarma is still blocked."
+    ]
+  },
+  {
+    "date": "2026-10-30",
+    "title": "Sold Reverb ads come down faster",
+    "items": [
+      "Found that a sold SSL Big Six stayed in your Feed for about a day: most of the Feed's Reverb ads were going 4+ hours (some 24+) without a sold check because the hourly check ran out of room.",
+      "Reverb ads now get their own allowance of up to 250 checks an hour (Reverb has no daily limit), so sold ones should drop off within a few hours.",
+      "New ads still reach you fast: half within 40 minutes, 25 of 32 within an hour. AudioKarma is still blocking Gear Scout, nothing else is failing."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Code review",
+    "items": [
+      "A Distressor pair listed as '$1,300 each' was counted as $1,300 total and could show as a deal under the $2,400 pair limit; it now counts as $2,600.",
+      "The every-2-hours deep Reverb mic read now also clears a wrong 'sold' mark on a mic that is still listed."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Nightly check: all quiet",
+    "items": [
+      "Checked the top 40 Feed ads: 35 still for sale, 1 sold on Reverb (the hourly sold check will remove it), 4 Facebook ads not opened.",
+      "New ads reach you fast: half within 30 minutes, 21 of 23 within an hour. No errors in the logs, so nothing was changed tonight.",
+      "Your non-mic Wanted terms haven't been searched for about 37 hours because Mic Focus is on. Turn it off if you want everything searched again."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Empirical Labs Distressor deals",
+    "items": [
+      "New Mics section: Empirical Labs Distressor (EL8, EL8-X and so on). A deal is a single at $1,300 or less, delivered, or a pair at $2,400 or less. A listing sold as a pair or '2x' counts against the pair price, and the card shows it as '$2,400 for 2 ($1,200 each)'. You get a push and an email for each, and auctions count too.",
+      "Brochures, manuals, knobs and software are left out, and so are Distressor clones and 'style' copies."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Frozen routines can't hide anymore",
+    "items": [
+      "If the nightly update or the code review hasn't finished in 30 hours (it's usually frozen on an approval prompt nobody can see), Gear Scout now pushes and emails you, at most once a day, with the exact steps to unfreeze it. It checks every 3 hours.",
+      "Fixed the cause of the Oct 28 freeze: the instructions for both routines told them to copy the code into a scratch folder with `cp`, and that command asks for approval. They now `docker cp` straight into the container instead."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Nightly check: newest mics really on top",
+    "items": [
+      "'In your price range' now goes by when the seller posted the ad, not when Gear Scout first found it. Newly added brands (and the new deeper Reverb read) turn up old dealer ads, some listed since 2017, which had pushed this week's ads down the list.",
+      "Spot check of 40 price-range mics: all real mics in the right section and all 40 still for sale (5 Facebook ads opened). Most new ads were found within an hour of being posted.",
+      "Car amplifiers sold as 'SSL EVO' or 'SSL Evolution' (Sound Storm, not Solid State Logic) no longer match your 'ssl' term. There were 20 of them.",
+      "While Mic Focus is on, your other Telex terms aren't searched (Health shows them 13+ hours old). That's how Mic Focus works; turn it off on the Mics page when you want the full Telex search back."
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "title": "Mics: older Reverb ads, titles without 'microphone', and email",
+    "items": [
+      "Gear Scout was reading only the newest 150 results of each Reverb search, so for brands with hundreds of used listings (Neumann, AKG) the older ads that were still for sale were never seen. Every 2 hours each brand search is now read 500 results deep. The first read found 312 mics Gear Scout didn't have (298 older ads, 14 new ones, including a $399 Dachman DA87). Older ads are stored but not pushed.",
+      "Searches for brands like 'dachman microphone' used to need the word 'microphone' in the listing title, so 'Dachman DA87' or 'Neumann U87 Ai' were dropped. The title now only has to name the brand.",
+      "Mic alerts now also come by email (one email per batch of new mics, with pictures, prices and links), not just a push. The email goes to the same address as your digest."
+    ]
+  },
+  {
+    "date": "2026-10-28",
+    "title": "Code review",
+    "items": [
+      "The eight new mic brands (Telefunken, Mojave, Soyuz, Josephson, Flea, JZ, Neumann, AKG) only counted an ad when its title had a model number. 'Telefunken Tube Recording Microphone', 'Josephson C551FA Microphone' or a Soyuz 013 FET were left out. Fixed: about 18 more mics now show in 'In your price range' and about 120 more in the brand sections. Mic preamps ('V76 Mic Pre'), direct boxes and loose spare tubes from those brands stay out."
+    ]
+  },
+  {
+    "date": "2026-10-28",
+    "title": "Mics page: lowest price per model, in order",
+    "items": [
+      "Each mic section now opens with a 'Lowest price per model' table: every model, its cheapest listing (tap to open) and how many are for sale, cheapest first.",
+      "The cheapest ad of each model is highlighted on its card (💲 Lowest, with a colored border) in its section and in 'In your price range'.",
+      "The cards in each section are in the order of the price they show. They used to be sorted by price per piece, so a $1,299 pair showed up before a $650 single.",
+      "Listings priced under 20% of what that model sells for are left out. They're scams, fakes or parts, like a 'Neumann U87' for $100. Spare nuvistor tubes (13CW4 and similar) are left out too.",
+      "Lauten's minimum is now $150.",
+      "Every Lauten from $150 up to your limit shows again, including the LA-120, LA-220 and the Tom, Snare and Kick mics. Only Lautens over the limit stay hidden."
+    ]
+  },
+  {
+    "date": "2026-10-27",
+    "title": "Eight more mic brands",
+    "items": [
+      "New sections on the Mics page: Telefunken, Mojave, Soyuz, Josephson, Flea and JZ ($300 to $1,000, like the rest), plus Neumann and AKG, which only show and push when one is 30%+ under what that model sells for used (otherwise they'd flood the page with TLM 103s and C414s at normal prices).",
+      "Each brand's non-mic products and clones are left out: Neumann monitors and headphones, Telefunken radios and TVs, AKG headphones and wireless, Soyuz's Launcher DI, 'Soviet clone AKG' and '-style' copies, flea markets and the Chili Peppers bassist's gear. AKG D12s stay in their own section."
+    ]
+  },
+  {
+    "date": "2026-10-27",
+    "title": "Nightly check: sold mics drop off sooner",
+    "items": [
+      "The hourly sold check now looks at your Mics page's 'In your price range' list first, then the rest of the Mics page. Before, it went through about 400 Feed ads first, so about half of your price-range mics went 5 to 19 hours between checks.",
+      "Spot check of 40 price-range mics: all were real mics in the right section, and 38 were still for sale. A Peluso TR-14 (Reverb) and a Serrano Vintage 87 (Craigslist) had just sold. The next hourly check removes them.",
+      "Mic searches are on time: every 15 minutes on Reverb, Craigslist and the other fast sites, eBay within half an hour, and each Facebook brand search within 10 hours. Most new ads were found within an hour of being posted.",
+      "AudioKarma now blocks Gear Scout. Health shows it as a 'feed parse error', but it's a block. Nothing to do; it was rarely finding anything."
+    ]
+  },
+  {
+    "date": "2026-10-27",
+    "title": "Code review",
+    "items": [
+      "Lowest Price trackers leave out overseas eBay sellers, like the rest of Gear Scout. Their eBay 'cheapest first' search was letting UK, Korean and Chinese sellers in (12 of 38 results for 'neve 1073'), so one could have been pushed as a new lowest.",
+      "When Facebook asks Gear Scout to slow down, the four daily full scrapes, 'Scrape now' and the favorites price check now leave Facebook alone too, like everything else already did."
+    ]
+  },
+  {
+    "date": "2026-10-25",
+    "title": "Code review",
+    "items": [
+      "Mic Focus really pauses Telex List pushes now. The hourly refresh was still sending new Telex matches to your phone (about 20 in the last day), and the end-of-run lowest-price check was still running for Telex terms.",
+      "Mic auctions follow the WA-14's own $300 limit. A WA-14 auction at $350 would have been listed and pushed, showing 'your limit $900'.",
+      "Deals and Steals in Mic Focus are US-only, like the Mics page. Two Canadian mics (a Kijiji D12 VR and a Canadian Reverb United 87) are gone from Deals.",
+      "Rolls and Vanguard mixers ('Mic/Source Mixer', 'Sound Mixer') are no longer counted as mics.",
+      "Saving the Mics page settings (on/off, limits) updates Deals and Steals right away. Before, they could take up to 10 minutes."
+    ]
+  },
+  {
+    "date": "2026-10-24",
+    "title": "Fewer Lauten mics; Warm Audio narrowed",
+    "items": [
+      "Lauten now shows only their studio mics (Eden, Atlantis, Clarion, Oceanus, Horizon, Torch, the LA-320 tube) at or under your Lauten limit. Their LA-120 / LA-220 budget mics and Tom, Snare and Kick drum mics are left out, and so is anything over the limit.",
+      "Warm Audio is now just the WA-CX12 (and the stereo pair), the Fentone and the WA-14 (and WA-14 SP pair), from $150 to $900. Other Warm mics aren't shown or searched.",
+      "Other Warm Audio mics (WA-251, WA-47 and so on) no longer turn up in the U47 / 251-style or C12 groups either. Brands with their own section stay in it.",
+      "WA-14s only show up to $300, and Warm's minimum is $150.",
+      "Mics page: an ad you hide with the ✕ stays gone. Before, it came back on the next reload until the list was rebuilt. Hiding one also hides its re-posts (same title and price), and ads that sell or go pending drop off as soon as Gear Scout knows.",
+      "New on the Mics page: Vanguard Audio Labs (V13, V44S, V1S, V4 and others), $300 to $1,000, searched as 'vanguard microphone', 'vanguard v13' and 'vanguard audio labs'. Vanguard tripods and bags are left out."
+    ]
+  },
+  {
+    "date": "2026-10-23",
+    "title": "Mics page refreshes itself; Facebook checks each brand more often",
+    "items": [
+      "An open Mics page checks every minute for a finished sweep and reloads itself, so it no longer sits on what was there when you opened it. It also checks when you come back to the tab, and never reloads while you're typing in the settings.",
+      "Facebook now runs one broad search per mic brand (17 searches instead of about 45), so each brand gets searched there about every 2 hours during the day instead of every 5 to 14, at the same load on the account. Reverb, eBay, Craigslist and the other fast sites still run every mic search every 15 minutes.",
+      "Older mic ads found before Oct 7 (when Gear Scout started noting when it last saw an ad) are back on the Mics page, about 200 of them, like a $399 WA-47 on Facebook. They don't push. The hourly sold check now looks at the Mics page first, your price range first, so the ones that have sold drop off within a few hours.",
+      "Cheap WA-47s now show as deals. Gear Scout had been reading 'WA-47 Jr' (the cheaper FET mic) as the WA-47 tube, so hiding Jr ads counted as disputing the tube WA-47's price, and no WA-47 could be a deal. The same thing happened to the AKG D12 with 'D12-type' knockoffs. Fixed, and both disputes cleared: a $300 WA-47 is 45% under the ~$548 they sell for.",
+      "In Mic Focus, the Deals and Steals pages cover your mic list (not the paused Telex List): about 150 mic deals right now. Attenuator pads and aviation headsets are left out.",
+      "Warm Audio mics over $500 aren't shown anywhere now (Mics page, Warm section, Deals), and Warm pushes stay at $300–$500. Every price limit now includes the limit itself ($500 counts as under $500).",
+      "🔨 eBay auctions for your mics: each mic is searched on eBay auctions every hour, and the Mics page lists ones ending in the next 3 days with bid + shipping under your limit. About an hour before one ends you get a push if it's still under (the bid is re-checked with eBay first).",
+      "📱 Mercari alerts: Mercari blocks Gear Scout, so the Mics page has a checklist of your 17 mic searches. Open each in the Mercari app, tap Save this search, and Mercari pushes new ones to you.",
+      "The catch-all (47 / 67 / 87 / 251 / C12) no longer picks up brands that have their own section (a Warm WA-87 FET isn't a Warm tube mic), handheld or dynamic mics, wireless, Bluetooth or earbuds."
+    ]
+  },
+  {
+    "date": "2026-10-22",
+    "title": "Nightly check back on, safer saving, scanners off your Feed",
+    "items": [
+      "The nightly check and the code review had been stuck since Oct 20, waiting for a permission click nobody saw. They're unstuck and will run again tonight. Gear Scout itself kept finding ads the whole time.",
+      "Changing your Telex List or Settings now saves in one step. Before, the file sat empty for a split second, and a page that read it at that moment broke (it happened once today, when you removed a term).",
+      "NASCAR scanner radios (\"RE1000\") and Voltech power analyzers (\"PM1000\") are filtered out. Your Re1000 and Pm1000 terms still find the mic and the Yamaha console.",
+      "Spot check of 40 Feed ads: all still for sale. New ads reached you within about 20 minutes (20 of 25 within an hour).",
+      "Health now marks the connector part numbers that are searched on Facebook every 3 days, so their older times don't look like a problem.",
+      "Still your call: two Calrec consoles list \"SSL modules\" in their titles and show under \"ssl\". That's the same question as SSL-style gear from Oct 20."
+    ]
+  },
+  {
+    "date": "2026-10-22",
+    "title": "Mic Focus: Gear Scout hunts only your mics now",
+    "items": [
+      "New 🎤 Mics page, now the front page. It covers Peluso, Golden Age tube mics, Stam tube mics, Warm Audio tube mics, Lauten, Bees Neez tube mics, Advanced Audio, United Studio Technologies, Signal Art, Dachman Audio, the AKG D12, C12-style tube mics, and U47 / ELA M 251-style tube mics.",
+      "Every 15 minutes Gear Scout searches just those mics: the fast sites every time, eBay every 30 minutes, and Facebook in rotation. Any one under its price goes to your phone, once per price (a price drop sends it again).",
+      "Prices are delivered (with listed shipping): from $300 (cheaper ones are usually parts or lookalikes) up to under $1,000 for each mic, under $375 for C12-style tube mics and under $500 for the AKG D12. You can change any of them on the Mics page. Each card also shows how far under the new price it is (or the used price, for mics no longer made). US listings only; spare tubes, capsules, parts, power supplies, repair jobs and multi-mic lots are left out.",
+      "Everything else is paused while Mic Focus is on: Telex List matches, steals, price drops, auctions and the AI briefing. Your Telex List is kept. Turn Mic Focus off on the Mics page to go back. The other pages are under More.",
+      "Each mic now shows every listing still for sale from the last 90 days, lowest price first, open on the page. Pushes are still only for ones a site showed in the last 10 days.",
+      "Dachman: listings that just say 'DA 87SE', 'DA-87i', 'DA FET 47' or 'DA 67' now count as Dachman (unless another brand is named), and 'DA 87SE' is searched too.",
+      "New catch-all: 'Any 47 / 67 / 87 / 251 / C12 mic' picks up mics sold by model number alone, from any brand or none ('47 tube mic', 'U87 clone', 'Vintage 87', 'TC-67'), searched as '47 microphone', '67 microphone' and so on. Mics from your named brands stay in their own sections."
+    ]
+  },
+  {
+    "date": "2026-10-20",
+    "title": "Vintage King is back, and Facebook searches your mics more often",
+    "items": [
+      "Vintage King had been failing for about 2 weeks because their site moved to a new shop system. Gear Scout reads the new one now: about 180 used and demo items in stock, including 4 on your Wanted list you hadn't seen (SSL Origin console, SSL 2+, Soyuz Silver 17, Mojave MA-37). Some may show up as new on your Feed.",
+      "Facebook: the connector part numbers (Neutrik NC3FXX, Hosa DTP-805 and so on) almost never turn up there, so they're searched on Facebook every 3 days instead. Your mic and outboard terms get those turns. Facebook load stays the same.",
+      "Spot check of the top 40 Feed ads: all 40 still for sale, 39 were real matches, and new ads reached you within about 20 minutes (26 of 27 within an hour).",
+      "Your call: the \"ssl\" term also catches SSL-style gear (Warm Audio and Tegler bus compressors, and a Soundcraft console with \"SSL style modules\"). Do you want those? If not, they can be dropped. Stam and Audioscape ones would still show under those terms."
+    ]
+  },
+  {
+    "date": "2026-10-20",
+    "title": "Code review",
+    "items": [
+      "Inbox: ✓ Done now really clears an ad — a steal you marked done no longer pops back under “New since you last looked”. A further price cut or an auction about to end still shows.",
+      "All-ads page: the All, Newest first and “show all terms” buttons stay on the full list instead of jumping back to the inbox.",
+      "Price Board: between its 6-hourly Facebook checks, the Facebook ads it already found stay in the top 10, so the lowest price no longer jumps around and you won't get a “new lowest” alert for an ad that's pricier than a Facebook one.",
+      "Price Board and saved searches leave Facebook alone 1–7 AM and while Facebook has asked the account to slow down."
+    ]
+  },
+  {
+    "date": "2026-10-20",
+    "title": "Follow-ups from the Oct 18 code review",
+    "items": [
+      "Gentler on Facebook: the Price Board's “still for sale?” check now opens only each term's single cheapest Facebook ad (about 20, not up to 72), at most every 6 hours, and never 1–7 AM.",
+      "A Trek bike and a rack shelf that matched “ssl” are filtered out.",
+      "Saved slides: the cover counts pieces of gear (a pair is 2), and the running-total chart stays readable if an early buy cost more than new."
+    ]
+  },
+  {
+    "date": "2026-10-20",
+    "title": "Flower postcards off your Feed",
+    "items": [
+      "eBay postcards like “Flowerpower No.1 Tulips Art Unlimited Amsterdam Holland Postcard P16” were matching your “ART P16” term (the publisher is Art Unlimited, the card number is P16). Postcards, greeting cards, art prints, posters, lithographs and flowers are now filtered out everywhere, the same way tractors and T-shirts already are.",
+      "Checked against your whole Feed: no real gear is affected."
+    ]
+  },
+  {
+    "date": "2026-10-19",
+    "title": "New: 🎸 Sweetwater used-gear sweep",
+    "items": [
+      "Sweetwater's used gear (Gear Exchange) blocks automated browsers with a “press & hold” human check, so Gear Scout can't search it on its own.",
+      "The new Sweetwater page walks your Telex terms one at a time and opens each search in a Sweetwater tab in your own browser: automatically every 15–90 seconds, or with Next and Back.",
+      "Mark each term “Found something” (with an optional note like a price) or “Nothing”. Gear Scout remembers, and starts the next pass with the terms you checked longest ago.",
+      "Sweetwater page: a one-time setup checklist for automatic alerts. 25 saved searches (Sweetwater's limit) that cover 56 of your 84 Telex terms. Each has a one-tap link; save it on Sweetwater, turn on the bell, tick it off here."
+    ]
+  },
+  {
+    "date": "2026-10-19",
+    "title": "Emails: the fix is yours to finish, plus a safer sign-in",
+    "items": [
+      "Why emails stopped: the saved email password isn't a Gmail app password (those are always 16 letters). Gmail refuses anything else from Gear Scout. Make one at myaccount.google.com/apppasswords (2-Step Verification needs to be on) and paste it in Settings → Email. Google shows it with spaces; Gear Scout removes them.",
+      "Gear Scout's sign-in has its own password now. Before, logging in used the same field as the email app password, so a new app password would have changed your login, and the sign-in page (reachable through your phone link) guarded your Gmail credential. Your sign-in password stays exactly what it is today; change it any time in Settings → Email.",
+      "Settings warns if a pasted email password doesn't look like an app password.",
+      "Inbox: hiding a card with ✕ now removes the whole card, including its ✓ Done button.",
+      "Deals and Steals pages weren't empty, just filtered: Deals opened on “posted in the last 3 days, $500–$2,000” (none right now, out of 99 deals), and Steals only counted ones posted this week. Deals now opens on every deal, newest first, with the filters still there. Steals counts everything in its headline and shows the older and double-check ones right away when nothing new was posted this week."
+    ]
+  },
+  {
+    "date": "2026-10-18",
+    "title": "Gentler on Facebook, so Marketplace search stops getting paused",
+    "items": [
+      "Facebook pauses Marketplace search on an account that searches constantly. Gear Scout was running about 95–115 Facebook searches an hour, around the clock. It's now about 40 an hour in the daytime and none overnight.",
+      "Price Board trackers (api 550, audioscape) were searching every Facebook region every 30 minutes. They now include Facebook every 6 hours; the other sites are still every 30 minutes, and your Telex sweep covers Facebook in between. A check you start yourself always includes Facebook.",
+      "1–7 AM Pacific: no background Marketplace searching or feed reading. Groups, posts and anything you start yourself carry on. (Change or turn off with facebook_quiet_hours in config.yaml.)",
+      "One-term searches load one Facebook page at a time instead of two at once.",
+      "Your Telex terms are still searched on Facebook 2 at a time every 30 minutes in the daytime, so new Marketplace ads reach you as quickly as before."
+    ]
+  },
+  {
+    "date": "2026-10-18",
+    "title": "New front page: your inbox",
+    "items": [
+      "The front page is now an inbox of only what needs your attention: auctions ending in the next 48 hours, steals, price cuts of 10%+ in the last 3 days, changes on gear you starred, and new ads since you last looked.",
+      "Tap “✓ Done” on a card (or “✓ All done” on a section) and it leaves the inbox for good. The ad itself stays on the Telex List.",
+      "Every ad for a term still lives on the Telex List. “All N ads” on the inbox shows the old full list.",
+      "Telex List: each term's listings start collapsed. Tap “Show N listings”, or “Expand all terms” at the top.",
+      "The search bar now has black text on a light field so it's easy to read.",
+      "Market analytics at the bottom of the inbox, for every Telex term: whether prices are falling or rising (last 2 weeks vs the 4 before, with a 6-week mini chart), how fast it sells, how many sell within a week, how many are for sale and the cheapest, new ads per week, how often sellers cut prices, how long ads sit, and a one-line buying tip. Leaderboards on top: prices falling, prices rising, sells fastest, best to haggle, most for sale. Updated hourly."
+    ]
+  },
+  {
+    "date": "2026-10-18",
+    "title": "Nightly: cleaner Feed, and your emails need a look",
+    "items": [
+      "Two forestry tillers ($42,500 and $85,419, model “SSL-175”) were showing on your Feed under “ssl”. Forestry and tiller ads are now filtered out.",
+      "Your “XLR cable” and snake terms no longer bring up microphones, mixers and recorders that just come “with XLR cable” (Shure SM58s, a Zoom H4n, a Mackie mixer bundle…). Real cables, snakes, patchbays, wall plates and connector lots still show.",
+      "Checked the top 40 Feed ads by hand: every one I could open was still for sale, and new ads reach you fast (half within 20 minutes of being posted).",
+      "Please look: Gear Scout's emails (daily digest and email alerts) haven't gone out since Oct 15. Gmail closes the connection when Gear Scout tries to send. Phone alerts still work. Check that Gmail hasn't flagged the account, or make a new app password and put it in Settings. The Health page now shows whether emails are going out.",
+      "Facebook has paused Marketplace search on your account again (until about 4:30 pm today). Your groups are still searched in the meantime."
+    ]
+  },
+  {
+    "date": "2026-10-18",
+    "title": "Code review: about 80 missing Wanted ads are back",
+    "items": [
+      "Since Oct 7, a check meant to keep junk out of broad terms was also hiding real gear: “SSL Big Six”, “SSL Fusion”, “SSL AWS 948”, Peluso, Audioscape, Stam Audio, BeesNeez, Sebatron, Warm Audio WA-19 and Golden Age GA-47 listings never reached your Feed, alerts or Price Board. About 80 of them are back; pianos, comics and paintings that share those names stay out.",
+      "Picking a term on the Feed and then Deals or Steals now shows only deals or steals. Before, every model's cheapest ad was pinned on top whether it was a deal or not (for “ssl” + Steals, about 48 ads instead of 1).",
+      "The Price Board's full hourly refresh runs on time again. Quick fixes to a few rows (when a cheapest ad sells) kept pushing it back; overnight it went about 4 hours without one.",
+      "Saved page: names like “NS10s” or “C414s” count as a pair and are looked up as NS10 / C414."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Saved: more pieces priced",
+    "items": [
+      "“beyer 818” searches as Beyerdynamic M818, so shorthand Beyer mic names find their listings.",
+      "Listings Gear Scout finds that say “brand new”, “new in box” or “sealed” now count toward a piece's new price. That helps with gear sold mainly direct by its maker. A private “brand new” ad priced under the used market average is treated as a bargain, not as what new costs.",
+      "When no new price can be found, the page and slides now say “no new price found” instead of claiming the gear isn't sold new."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Saved: pairs and active/passive priced right",
+    "items": [
+      "A plural name (“mixcubes”, “NS10s”, “mics”) counts as a pair, like “x 2” does.",
+      "Listings for a pair now count, priced per piece ($300 a pair = $150 each). Before, every “pair” listing was ignored as a lot.",
+      "“Active” gear is never priced off passive versions (and the other way round). Your active MixCubes pair at $200 is now $100 under the used market, not $30 over.",
+      "A row with two things in it (“4 x CAPI VP28 / 4 x …”) prices each part and adds them up. CAPI “VM28” is read as the VP28."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Saved: vs new, vs the used market, and where you overpaid",
+    "items": [
+      "Every piece now gets two prices: today's new price (Reverb Brand New + eBay New) and its used market average (your Telex prices, then listings Gear Scout has found, then Reverb).",
+      "“Saved” is always against new. Gear that isn't made new any more is compared to its used market average and says so: never labeled “new”.",
+      "New Analytics on the Saved page: 1) saved vs new, 2) saved vs the used market average, 3) where you overpaid, plus best buys, what your gear is worth used today, and prices worth double-checking.",
+      "Slides show NEW, USED MARKET AVERAGE and YOU PAID bars on every piece, and a new “Market check” slide.",
+      "Junk new listings (cables and parts that mention the same model) no longer drag a new price down, and your Telex term names help find the right gear (“vanguard 13” searches as “Vanguard V13”)."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Gear Scout has its brand back",
+    "items": [
+      "The whole app now wears the original Gear Scout look, the same as the Saved page's social slides: the knob, VU meter and patch-cable logo, the “Gear Scout” wordmark, charcoal top bar with an orange edge, warm paper pages and Fraunces italic headings.",
+      "The home-screen icon is the new logo too (remove and re-add Gear Scout to your home screen if your phone keeps the old one)."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Saved: every piece gets a real price",
+    "items": [
+      "Items without a new price now use today's going used price: your Telex List prices first, then listings Gear Scout has found, then Reverb. Before, discontinued or shorthand items (260VU, Ampex, Sony 56s, Distressors…) counted as $0 saved.",
+      "Quantities count: “x 2”, “(2)”, “pair” or “20's” multiply the price.",
+      "Brand-last names work (“la-2a audioscape”), plurals work (“distressors”), and parts, cards, cabinets and add-ons no longer drag a price down (the Ampex 440C was being priced off $150 preamp cards).",
+      "A piece you paid over today's price stays in the table but is left off the social slides."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "title": "Saved slides wear the Gear Scout brand",
+    "items": [
+      "The social slides now use the original Gear Scout logo (knob, VU meter and patch-cable mark) and wordmark, in charcoal, cream and orange with the Fraunces italic and IBM Plex type.",
+      "The cover reads “You saved $X using Gear Scout”, and each piece shows “You saved” and “You paid”.",
+      "The fonts are built into each slide, so the PNGs you save look exactly like the preview on any phone."
+    ]
+  },
+  {
+    "date": "2026-10-13",
+    "title": "New: 💰 Saved page with social slides",
+    "items": [
+      "Paste a Google Sheet link (columns Item and Paid; New, Date and Where optional) and Gear Scout shows what you saved on each piece vs. buying new, plus a running total.",
+      "Rows without a new price get today's Reverb “Brand New” price automatically.",
+      "Makes 1080×1080 slides for Instagram/Facebook: a cover with your total, one slide per piece, a leaderboard and a running-total chart. Save one or all as images."
+    ]
+  },
+  {
+    "date": "2026-10-13",
+    "title": "Lowest price picks: older ads count again",
+    "items": [
+      "Fixed: some of your cheapest ads were never marked “💲 Lowest” because the parts filter read brand names as parts. “sE Electronics” looked like “electronics (part)”, and “w/ gold XLR connector” looked like a loose connector. The VR2 Voodoo now shows the $349 ad from 2024 instead of a $375 one.",
+      "Fixed: “HEDD Type 20” was treated as a knock-off (“type”), and “Audioscape … SSL style” was skipped as a copy even though that’s exactly what the term asks for. Both now get their cheapest marked.",
+      "Connector terms (Neutrik NP3X, NC3MXX…) now count connector listings."
+    ]
+  },
+  {
+    "date": "2026-10-12",
+    "title": "Cables, snakes and patchbays on your list",
+    "items": [
+      "✕ on an ad now hides it for good: it stays hidden after the 90-day cleanup, and a repost of the same ad (new link, same title and price on Facebook or Craigslist) is hidden too, with no push or email. The 294 ads you'd already hidden are remembered. Settings → Unhide all still brings everything back.",
+      "Terms that are cables, snakes, patchbays or connectors (“XLR snake”, “Hosa DTP-805”, “Neutrik NC3FXX”, “Canare L-4E6S”) now find those listings — before, they were skipped as accessories, and broad ones were held to a $150 minimum.",
+      "You can leave words out of a term with a minus: “patchbay -behringer” finds any patchbay except Behringer.",
+      "Added for the studio wiring: Hosa DTP-805, Hosa STX-807F, ART P16, XLR snake, TRS snake, DB25 TRS, patchbay -behringer."
+    ]
+  },
+  {
+    "date": "2026-10-11",
+    "title": "Overseas ads removed",
+    "items": [
+      "Steals are back: a steal is now 50%+ under (was 60%), from your Telex List. Ones with only one price to compare against show too, tagged “🔎 Steal? double-check” (up to 90% under) — and steal alerts mark them the same way. Parts like console faders and “box only”, and camcorders, are filtered.",
+      "Overseas listings are left out completely: only sellers in the US and Canada. Reverb sellers are identified by the currency they list in (a Japanese shop lists in yen, a UK shop in pounds — about half of Reverb's used Neumann listings were overseas); eBay by the item's location.",
+      "They're dropped when scraped and kept out of the Feed, Telex page, Price Board, cheapest picks, deals, alerts and the digest. Listings already stored were checked once."
+    ]
+  },
+  {
+    "date": "2026-10-09",
+    "title": "Shipping counts in the cheapest price",
+    "items": [
+      "Fixed: deleting (or adding) several Telex terms one after another no longer stalls the site — the Price Board is rebuilt once, shortly after your last change, and the Telex page and Feed show right away (removed terms gone) while they refresh in the background.",
+      "When a site lists shipping, the price you see on every ad is now the delivered price (price + shipping), with the breakdown underneath; free shipping and local pickup are labelled. Cheapest picks, Cheapest first, the Price Board and the Deals page's cheapest sort all go by delivered cost. The digest email and auction / price-drop alerts show shipping too.",
+      "Gear Scout now records US shipping for Reverb and eBay listings (to your zip for eBay) and shows it on each card: “free shipping”, “+ $72 shipping · $1,706 delivered”, or “local pickup” for Facebook, Craigslist, OfferUp and Kijiji.",
+      "The cheapest per term and per model, “Cheapest first” and the Price Board all decide by price + known shipping (split per piece for pairs and lots). Where a site doesn't show shipping (dealers, ShopGoodwill), it counts as unknown.",
+      "Listings already stored are getting their shipping looked up once; it's refreshed whenever a listing is re-checked."
+    ]
+  },
+  {
+    "date": "2026-10-07",
+    "title": "Fewer wrong matches for broad terms; Price Board cheapest fixed",
+    "items": [
+      "“Cheapest first” (Telex page, and now also on the Feed) includes every ad still for sale whatever its age — it used to sort only the last week and leave older, cheaper ads in the collapsed section.",
+      "Models are recognised however they're written: “VT-737SP”, “VT 737 sp”, “737sp” and “VT-737” are all one Avalon 737; Distressors split cleanly into EL8 / EL8X / EL8XS. The cheapest of each model is worked out from the list you're looking at (so a new cheaper ad is marked right away), and it no longer skips cheap real units (e.g. the $499 PCM60). Display parts, plug-in bundles, grills, shirts and records filtered.",
+      "The cheapest per term and per model is now the cheapest working ad still for sale no matter how old it is (it was limited to ads posted in the last 90 days) — e.g. Daking's cheapest is now a $599 mic pre posted 5 months ago.",
+      "For terms that cover several models (“d12” → D12, D12E, D12VR; “Lexicon pcm” → PCM60, PCM70, PCM91…), the cheapest working one of EACH model now comes first, cheapest model first, with a gold “💲 Lowest <model>” tag. The term's overall cheapest still pulses. Each is checked to still be for sale; add-on cards, ROMs, manuals and copies don't count.",
+      "Every term now gets a “cheapest anywhere”, brands too (daking, stam, peluso, beesneez…), from any working ad still for sale posted in the last 90 days. Furniture is filtered out (“Mart Stam” dining chairs).",
+      "Filtered out off-topic listings that share letters with your terms: tractors and loaders (“SSL attach”), trailers, mowers, guitar pickups (Seymour Duncan SSL-1…), guitars by model (Strat, Tele, Les Paul…), T-shirts and jerseys — about 130 removed.",
+      "Fixed the site hanging: “Scrape now” runs as its own lower-priority process (it used to share the website's process and starve the pages), the Feed shows the current list instantly and refreshes in the background after any change, and a saved copy makes it load instantly after a restart. A Scrape now cut off by a restart no longer stays “running” forever (which also paused the hourly refresh).",
+      "The cheapest working listing for each term (the Price Board's “cheapest anywhere”) now pulses gold with a “💲 Lowest” tag, and sits at the top of that term on the Telex page and when you filter the Feed by a term. Broken / “Non Functioning” ads no longer count as the cheapest.",
+      "Each term's cheapest is checked to still be for sale (re-checked if not confirmed in the last 3 hours; if it's gone, the next cheapest takes over) and can be any ad posted in the last 90 days. The Feed now keeps ads up to 90 days old that are still listed.",
+      "Broad terms (“DIY”, “Golden age”) and short model codes without a brand (“se8”) now only match listings that look like audio gear — no more tiny homes, die-cast cars, Batman art or network switches.",
+      "Records, albums and CDs named like gear (“Whirr – Distressor” LP) are filtered out; the PRS Mary Cries is recognised as a pedal.",
+      "Price Board “cheapest anywhere” skips junk priced far under what the model normally asks, and skips clones / “style” / “type” copies unless your term asks for a clone.",
+      "Tip: for the real thing only, name the maker — “Teletronix LA-2A” or “UA LA-2A” instead of “LA-2A” (which also finds AudioScape and other copies).",
+      "Fixed: adding a term didn't update its Price Board row until the next hourly rebuild."
+    ]
+  },
+  {
+    "date": "2026-10-06",
+    "title": "Code review fixes",
+    "items": [
+      "Telex page shows every new ad on your list, at any price (it only showed ones 10%+ under their usual price — about two-thirds of new ads never appeared there: 31 shown vs. 126 posted in the last 2 days). It now uses the same listings as the Feed, newest first, deals marked.",
+      "Scrape now (also on the Feed) re-reads every site and then searches every one of your terms; it reports how many new ads are on your list. It no longer deletes listings older than 30 days.",
+      "Listings are cleaned up by when a site last showed them, not when they were first found — long-running ads no longer come back as “new”, and ones still listed stay on the Feed.",
+      "Price increases are shown; an ad wrongly marked sold comes back when a site shows it again; “✓ still listed” only appears when a check actually confirmed it.",
+      "Fresher searches: Reverb and Kijiji term searches now sort newest first (they used “best match”), specific models are searched on all of eBay (not just Pro Audio), and Facebook's hourly refresh adds a newest-first search in every region.",
+      "Adding a term on the Telex page searches it right away; the comma-joined Lexicon entry now works everywhere (Price Board, lowest-price alerts).",
+      "Phone alerts for a new match now include the listing's photo. Favorites show a pink title, and the ★ Favorites link is pink in the top bar.",
+      "One deal calculation everywhere: the Feed's badges and Deals/Steals filters, the digest email, the Price Board, the Deals and Steals pages and the steal alerts now all give a listing the same “% under” (the Feed used to use a different, stricter formula). Steals = 60%+ under everywhere.",
+      "Price Board counts the same listings as the Feed (it used to include ads not seen for months), and its “best deal this week” matches the Deals page. It's rebuilt hourly.",
+      "Facebook safety: if Facebook asks your account to slow down, every Facebook search (Marketplace, groups, posts, sold checks) now pauses together for a few hours, and you get a push.",
+      "Digest email lists deals first; the per-site lines say how many listings were read (not “new”)."
+    ]
+  },
+  {
+    "date": "2026-10-06",
+    "title": "Everything now follows your Wanted list",
+    "items": [
+      "Auction alerts, the digest email, steal and price-drop alerts, the AI briefing and the Deals/Steals pages now only cover your Telex List — no more irrelevant gear (e.g. this week's auction alerts: 16 random items before, 2 on your list now).",
+      "The regular scrapes no longer throw away gear you want: “lexicon 960” now keeps “Lexicon 960L”, “Avalon 737” keeps “VT-737sp”, Eventide H9000s etc. (hundreds a month were being dropped).",
+      "Fewer junk matches: “link audio”, “Coil audio” and similar brand terms need the brand name together (no more PS Audio Digital Link or moving-coil phono cartridges); spare tubes with “V72 V76” stuffed in the title are filtered.",
+      "Your terms are really searched every 30 minutes now (a timing slip made it hourly), and new matches are pushed before the slower sold check runs.",
+      "Telex page explains what the list does and links every term to all its listings on the Feed. The old Dashboard is now “Browse all” (everything collected, not just your list).",
+      "“New since you last looked” only shows ads posted in the last 2 weeks; old ads Gear Scout just dug up go to “Older ads”, tagged NEW."
+    ]
+  },
+  {
+    "date": "2026-10-06",
+    "title": "New home page: one Feed for your Wanted list",
+    "items": [
+      "📬 Feed is the new home page: everything for sale that matches your Telex List — at any price, newest post first. The Telex page only showed listings 10%+ under their comp, so normally priced gear never reached you.",
+      "“New since you last looked” at the top; anything you've already seen drops below it, so the same listings no longer sit on top day after day.",
+      "Only your own Telex List counts now. The imported model group (Cole Picks, e.g. Sony C-38B) and the long keyword list no longer put listings in front of you.",
+      "Every Wanted term is now searched directly on Reverb, Craigslist, Kijiji, ShopGoodwill, Long & McQuade and OfferUp every 30 minutes and on eBay every 2 hours (before: each term every 12–40 hours). Facebook Marketplace and group posts rotate through your terms all day.",
+      "Phone alert within ~30 minutes for every new ad that matches your Wanted list.",
+      "Sold Facebook ads: when a seller deletes or sells an ad, Facebook usually just shows Marketplace with no ad on it — Gear Scout now counts that as gone (about 1 in 5 Facebook ads on your pages were already gone). Feed ads are re-checked first and show when they were last checked.",
+      "🩺 Health page: when each term was last searched on each kind of site, how many new ads every site found today, and how fast new ads reach you.",
+      "Deals and Steals are now filters on the Feed. The old Dashboard, Deals and Steals pages are still there for now."
+    ]
+  },
+  {
     "date": "2026-10-05",
     "title": "Nightly update: fewer fake deals, no repeats",
     "items": [

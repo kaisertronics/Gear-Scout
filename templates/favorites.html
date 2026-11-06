@@ -10,6 +10,14 @@
     {% endif %}
   </section>
 
+  {% if star_offers %}
+  <section class="panel">
+    {% for o in star_offers %}
+      <p class="muted">Sold at ${{ o.sold_price }}{% if o.median %} — similar model sold for ${{ o.median }} ({{ o.n }} sales){% endif %}; you could offer about ${{ o.ask }} on your other stars of this model <span title="{{ o.sold_title }}">({{ o.sold_title[:40] }})</span>.</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {% include "_distance_filter.html" %}
 
   {% for source_name, items in grouped_listings %}

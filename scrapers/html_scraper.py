@@ -370,6 +370,18 @@ def _scrape_craigslist_listings(
         no_results_text = soup.get_text().lower()
         if "no results found" in no_results_text:
             return [], None, None
+        # Craigslist's current zero-result page has NO "no results found"
+        # text: it is the normal search page with an empty static list and
+        # an empty schema.org ItemList. Treat that as "nothing matched"
+        # instead of launching a browser (~5 s each, 3 regions per term).
+        ld = soup.find("script", id="ld_searchpage_results")
+        if ld is not None and soup.select_one("ol.cl-static-search-results") is not None:
+            try:
+                import json as _json
+                if not _json.loads(ld.string or ld.get_text() or "{}").get("itemListElement"):
+                    return [], None, None
+            except Exception:
+                pass
 
         # Try Playwright as fallback (CL sometimes needs JS)
         logger.info("Craigslist: no results with requests, trying Playwright")
@@ -749,6 +761,38 @@ def scrape_reverb(source: dict, keywords: list[str]) -> ScrapeResult:
 # Craigslist et al.)
 # ---------------------------------------------------------------------------
 
+def ebay_cards_to_listings(cards, name: str, keywords: Optional[list[str]]) -> list:
+    """Listings from the result cards (li.s-card) of an eBay search page.
+    keywords=None keeps every card."""
+    listings = []
+    for card in cards:
+        title_el = card.select_one(".s-card__title")
+        price_el = card.select_one(".s-card__price")
+        link_el = card.select_one("a[href*='/itm/']")
+        img_el = card.select_one("img")
+
+        title = title_el.get_text(strip=True) if title_el else ""
+        # eBay mixes in "Shop on eBay" ad placeholders (fake item 123456,
+        # generic ebaystatic.com image) among the real results.
+        title = re.sub(r'Opens in a new window or tab$', '', title).strip()
+        if not title or title == "Shop on eBay" or (keywords is not None and not keyword_match(title, keywords)):
+            continue
+
+        href = link_el["href"] if link_el else ""
+        item_id_match = re.search(r'/itm/(\d+)', href)
+        listing_id = item_id_match.group(1) if item_id_match else re.sub(r'[^a-z0-9]', '', title.lower())[:32]
+
+        listings.append(Listing(
+            source_name=name,
+            title=truncate(title, 120),
+            url=href,
+            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
+            image_url=img_el.get("src") if img_el else None,
+            listing_id=listing_id,
+        ))
+    return listings
+
+
 def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
     name = source["name"]
     url = source["url"]
@@ -779,7 +823,6 @@ def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
         )
 
     soup = BeautifulSoup(html, "html.parser")
-    listings = []
 
     if soup.title and "Error Page" in soup.title.get_text():
         return ScrapeResult(
@@ -807,31 +850,7 @@ def scrape_ebay(source: dict, keywords: list[str]) -> ScrapeResult:
             duration_seconds=time.time() - start,
         )
 
-    for card in cards:
-        title_el = card.select_one(".s-card__title")
-        price_el = card.select_one(".s-card__price")
-        link_el = card.select_one("a[href*='/itm/']")
-        img_el = card.select_one("img")
-
-        title = title_el.get_text(strip=True) if title_el else ""
-        # eBay mixes in "Shop on eBay" ad placeholders (fake item 123456,
-        # generic ebaystatic.com image) among the real results.
-        title = re.sub(r'Opens in a new window or tab$', '', title).strip()
-        if not title or title == "Shop on eBay" or not keyword_match(title, keywords):
-            continue
-
-        href = link_el["href"] if link_el else ""
-        item_id_match = re.search(r'/itm/(\d+)', href)
-        listing_id = item_id_match.group(1) if item_id_match else re.sub(r'[^a-z0-9]', '', title.lower())[:32]
-
-        listings.append(Listing(
-            source_name=name,
-            title=truncate(title, 120),
-            url=href,
-            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
-            image_url=img_el.get("src") if img_el else None,
-            listing_id=listing_id,
-        ))
+    listings = ebay_cards_to_listings(cards, name, keywords)
 
     return ScrapeResult(
         source_name=name, source_url=url, success=True,
@@ -920,66 +939,35 @@ def scrape_audiogon(source: dict, keywords: list[str]) -> ScrapeResult:
 
 
 # ---------------------------------------------------------------------------
-# Vintage King — Used Gear
+# Vintage King — Used Gear / Demo Deals
 # ---------------------------------------------------------------------------
 
+# Vintage King moved to Shopify (Oct 2026): its old pages are now
+# collections, read through Shopify's product JSON like Alto Music.
+_VK_COLLECTIONS = {"used-and-vintage": "used-and-vintage", "sale/demo-deals": "sale-demo-deals",
+                   "demo-deals": "sale-demo-deals"}
+# Each collection holds thousands of long-sold products (~1 MB per 250);
+# new stock is listed on the first pages, so only those are read hourly.
+VK_PAGES = 4
+
+
 def scrape_vintageking(source: dict, keywords: list[str]) -> ScrapeResult:
-    name = source["name"]
-    url = source["url"]
-    start = time.time()
-
-    html, error = _get_html(url)
-    if not html:
-        return ScrapeResult(
-            source_name=name, source_url=url, success=False,
-            error=error or "Failed to fetch Vintage King page",
-            fix_hint="Vintage King may be blocking scrapers. Try again next run.",
-            duration_seconds=time.time() - start,
-        )
-
-    soup = BeautifulSoup(html, "html.parser")
-    listings = []
-
-    cards = soup.select(".product-item")
-    if not cards:
-        return ScrapeResult(
-            source_name=name, source_url=url, success=False,
-            error="Could not find product cards on Vintage King page.",
-            fix_hint=(
-                "Vintage King may have updated their layout. Open the URL in a browser, "
-                "inspect a product card, and update the selector in "
-                "scrapers/html_scraper.py → scrape_vintageking()."
-            ),
-            duration_seconds=time.time() - start,
-        )
-
-    for card in cards:
-        title_el = card.select_one(".product-item-link")
-        price_el = card.select_one(".price")
-        link_el = card.select_one("a.product-item-link") or card.select_one("a.product-item-photo")
-        img_el = card.select_one("img")
-
-        title = title_el.get_text(strip=True) if title_el else ""
-        if not title or not keyword_match(title, keywords):
-            continue
-
-        href = link_el["href"] if link_el else ""
-        if href and not href.startswith("http"):
-            href = "https://vintageking.com" + href
-
-        listings.append(Listing(
-            source_name=name,
-            title=truncate(title, 120),
-            url=href,
-            price=clean_price(price_el.get_text(strip=True)) if price_el else None,
-            image_url=img_el.get("src") if img_el else None,
-            listing_id=re.sub(r'[^a-z0-9]', '', title.lower())[:32],
-        ))
-
-    return ScrapeResult(
-        source_name=name, source_url=url, success=True,
-        listings=listings, duration_seconds=time.time() - start,
-    )
+    from scrapers.shopify_store import scrape_shopify_collection
+    url = source["url"].split("?")[0].rstrip("/")
+    path = url.split("vintageking.com/", 1)[-1]
+    if not path.startswith("collections/"):
+        path = "collections/" + _VK_COLLECTIONS.get(path, path)
+    result = scrape_shopify_collection({**source, "url": f"https://vintageking.com/{path}",
+                                        "max_pages": source.get("max_pages") or VK_PAGES}, keywords)
+    result.source_url = source["url"]
+    for l in result.listings:
+        # Same ID as before the move (from the title), so gear already seen
+        # there doesn't come back as "new".
+        l.listing_id = re.sub(r'[^a-z0-9]', '', l.title.lower())[:32]
+    if not result.success:
+        result.fix_hint = ("Vintage King's product list didn't load. Usually temporary; if it keeps "
+                           "failing, see scrapers/html_scraper.py → scrape_vintageking().")
+    return result
 
 
 # ---------------------------------------------------------------------------

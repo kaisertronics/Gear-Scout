@@ -24,6 +24,7 @@ DATA_PATH = Path("/data/geo/US.txt")
 
 _lock = threading.Lock()
 _zip: dict[str, tuple[float, float]] = {}
+_zip_state: dict[str, str] = {}
 _place: dict[tuple[str, str], tuple[float, float]] = {}
 _place_states: dict[str, set[str]] = {}
 _loaded = False
@@ -49,6 +50,7 @@ def _load() -> bool:
                 zip_code, place, state = cols[1], cols[2].lower(), cols[4].upper()
                 lat, lon = float(cols[9]), float(cols[10])
                 _zip[zip_code] = (lat, lon)
+                _zip_state[zip_code] = state
                 acc = sums.setdefault((place, state), [0.0, 0.0, 0])
                 acc[0] += lat
                 acc[1] += lon
@@ -66,6 +68,14 @@ def zip_coords(zip_code: Optional[str]) -> Optional[tuple[float, float]]:
     if len(z) != 5 or not _load():
         return None
     return _zip.get(z)
+
+
+def zip_state(zip_code: Optional[str]) -> Optional[str]:
+    """"90210" -> "CA" (None when the ZIP is unknown)."""
+    z = re.sub(r"\D", "", zip_code or "")[:5]
+    if len(z) != 5 or not _load():
+        return None
+    return _zip_state.get(z)
 
 
 def place_coords(location: Optional[str]) -> Optional[tuple[float, float]]:

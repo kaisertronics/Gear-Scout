@@ -4,7 +4,8 @@ term list (keywords + learned terms), with the priority list mixed in so it
 comes around several times a day.
 
 Pacing (config `fb_post_search: background:`):
-  per_hour      searches per hour (default 60)
+  per_hour      searches per hour (default 30; Marketplace searches of your
+                Wanted list share the Facebook account)
   start_hour    first hour of the day to search (default 6)
   end_hour      stops at this hour (default 22)
   roundup_hour  hour of the daily "Facebook posts roundup" email (default 15)
@@ -42,7 +43,7 @@ def settings(cfg: dict) -> dict:
     bg = ((cfg.get("fb_post_search") or {}).get("background")) or {}
     return {
         "enabled": bg.get("enabled", True),
-        "per_hour": max(8, min(200, int(bg.get("per_hour", 60) or 60))),
+        "per_hour": max(8, min(200, int(bg.get("per_hour", 30) or 30))),
         "start_hour": int(bg.get("start_hour", 6)),
         "end_hour": int(bg.get("end_hour", 22)),
         "roundup_hour": int(bg.get("roundup_hour", 15)),
@@ -69,14 +70,97 @@ def state() -> dict:
 
 
 def all_terms(cfg: dict) -> list[str]:
-    from scrapers.learning import keywords_with_learned
+    # Your Wanted list (Telex List) only — the long keyword list found
+    # mostly things you don't want, and each term now comes around about
+    # hourly instead of once every day or two.
+    from scrapers.telex import search_query
+    from scrapers.wanted import terms as wanted_terms
     seen, out = set(), []
-    for t in keywords_with_learned(cfg):
+    # Long descriptive terms go in as brand + model ("Warm WA-412"), like
+    # every other search — the whole phrase finds nothing.
+    for t in (search_query(t) for t in wanted_terms(cfg)):
         t = str(t).strip()
         if len(t) >= 3 and t.lower() not in seen:
             seen.add(t.lower())
             out.append(t)
     return out
+
+
+def facebook_paused() -> bool:
+    """True while Facebook searching is paused because Facebook asked the
+    account to slow down (shared by every Facebook search, not just posts)."""
+    with _conn() as conn:
+        until = _state_get(conn, "paused_until")
+    try:
+        return bool(until and datetime.fromisoformat(until) > datetime.now(timezone.utc))
+    except ValueError:
+        return False
+
+
+MARKETPLACE_SEARCH_PAUSE_HOURS = 48
+QUIET_HOURS = (1, 7)  # 1–7 AM Pacific: no background Marketplace searching
+
+
+def marketplace_quiet_hours(cfg: Optional[dict] = None) -> bool:
+    """True overnight, when Gear Scout leaves Facebook Marketplace alone in
+    the background. Searching one account around the clock is what gets its
+    Marketplace search throttled, and few ads are posted overnight anyway.
+    Groups/posts and anything you start yourself carry on. Set
+    facebook_quiet_hours: [start, end] (Pacific, 24h) or false in config.yaml."""
+    from zoneinfo import ZoneInfo
+    span = (cfg or {}).get("facebook_quiet_hours", QUIET_HOURS)
+    if not span:
+        return False
+    start, end = int(span[0]), int(span[1])
+    h = datetime.now(ZoneInfo("America/Los_Angeles")).hour
+    return start <= h < end if start < end else (h >= start or h < end)
+
+
+def marketplace_search_paused() -> bool:
+    """True while Gear Scout leaves Marketplace *searches* alone because
+    Facebook stopped returning search results for the account (browsing
+    the regional feeds, groups and posts carry on)."""
+    with _conn() as conn:
+        until = _state_get(conn, "mp_search_paused_until")
+    try:
+        return bool(until and datetime.fromisoformat(until) > datetime.now(timezone.utc))
+    except ValueError:
+        return False
+
+
+def pause_marketplace_search(cfg: Optional[dict] = None, hours: int = MARKETPLACE_SEARCH_PAUSE_HOURS) -> None:
+    if marketplace_search_paused():
+        return
+    until = datetime.now(timezone.utc) + timedelta(hours=hours)
+    with _conn() as conn:
+        _state_set(conn, "mp_search_paused_until", until.isoformat())
+    logger.warning("Facebook Marketplace search returns nothing — Marketplace searches paused %dh", hours)
+    if cfg:
+        try:
+            from scrapers.notify import push_enabled, send_push
+            if push_enabled(cfg):
+                send_push(cfg, "Facebook Marketplace search is returning nothing",
+                          f"Facebook seems to be limiting Marketplace search on your account. Gear Scout stops "
+                          f"searching Marketplace for {hours} hours (browsing, groups and posts continue).",
+                          tags=["warning"])
+        except Exception:
+            logger.exception("Couldn't send Marketplace pause notification")
+
+
+def pause_facebook(reason: str, cfg: Optional[dict] = None) -> None:
+    until = datetime.now(timezone.utc) + timedelta(hours=BLOCK_PAUSE_HOURS)
+    with _conn() as conn:
+        _state_set(conn, "paused_until", until.isoformat())
+        _state_set(conn, "pause_reason", reason)
+    logger.warning("Facebook searching paused %dh: %s", BLOCK_PAUSE_HOURS, reason)
+    if cfg:
+        try:
+            from scrapers.notify import push_enabled, send_push
+            if push_enabled(cfg):
+                send_push(cfg, "Gear Scout paused Facebook searching",
+                          f"{reason}. It will try again in {BLOCK_PAUSE_HOURS} hours on its own.", tags=["warning"])
+        except Exception:
+            logger.exception("Couldn't send pause notification")
 
 
 def _local_now(cfg: dict) -> datetime:
@@ -127,8 +211,9 @@ def term_weight(st: Optional[dict]) -> float:
 def _next_jobs(cfg: dict, n: int) -> list[tuple[str, str]]:
     """[(category, term)] — a couple of priority terms, then the terms most
     "due": hours since last searched × learned weight (see term_weight)."""
-    from scrapers.fb_posts import priority_terms
-    prio = priority_terms(cfg)
+    # Only your Wanted list now: the old priority categories (East German,
+    # Soviet, vintage ribbons…) aren't on it.
+    prio = []
     terms = all_terms(cfg)
     jobs = []
     now = datetime.now(timezone.utc)

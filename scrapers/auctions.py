@@ -1,8 +1,11 @@
 """
 Auctions about to end with the current bid far under what the gear sells for.
 
-- Every hour, eBay's pro-audio auctions ending soonest are fetched (2 API
-  calls) and stored like other listings (description "Auction · current bid
+- Only gear on your Wanted list (Telex List, see scrapers/wanted.py) —
+  never the long keyword list.
+- Every half hour, eBay's pro-audio auctions ending soonest are fetched (2 API
+  calls), plus every 2 hours a direct eBay auction search for each Wanted
+  term, and stored like other listings (description "Auction · current bid
   (N bids) · ends YYYY-MM-DD HH:MM", Pacific time — same as ShopGoodwill).
 - During the day: a push + email about an hour before a good one ends.
 - At 9:30 PM: one message listing tonight's overnight auctions (ending
@@ -65,27 +68,38 @@ def fetch_ebay_ending(cfg: dict) -> int:
     from scrapers.base import keyword_match
     from scrapers.ebay_api import (CONDITION_FILTER, PRO_AUDIO_CATEGORY, SEARCH_URL, _check_response,
                                    _get_token, ebay_paused_until)
-    from scrapers.learning import keywords_with_learned
     from scrapers.store import _conn, mark_seen
+    from scrapers import wanted
     api = cfg.get("ebay_api") or {}
     if not (api.get("client_id") and api.get("client_secret")) or ebay_paused_until():
         return 0
-    keywords = list(keywords_with_learned(cfg))
+    ms = wanted.matchers(cfg)
     token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
     stored = 0
-    for offset in (0, 200):
-        resp = requests.get(SEARCH_URL, params={
-            "category_ids": PRO_AUDIO_CATEGORY, "sort": "endingSoonest", "limit": "200", "offset": str(offset),
-            "filter": f"{CONDITION_FILTER},buyingOptions:{{AUCTION}},priceCurrency:USD"},
-            headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=30)
+    base = {"sort": "endingSoonest", "filter": f"{CONDITION_FILTER},buyingOptions:{{AUCTION}},priceCurrency:USD"}
+    searches = [{**base, "category_ids": PRO_AUDIO_CATEGORY, "limit": "200", "offset": str(o)} for o in (0, 200)]
+    if _term_search_due():
+        from scrapers.telex import search_query
+        searches += [{**base, "q": search_query(t), "limit": "50"} for t in wanted.terms(cfg)]
+        _TERM_SEARCH_MARK.write_text(datetime.now(timezone.utc).isoformat())
+    for params in searches:
+        from scrapers.ebay_api import _headers
+        from scrapers.ebay_api import ebay_get
+        resp = ebay_get(SEARCH_URL, job="ending_auctions", params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             logger.warning("eBay ending-soon auctions failed: HTTP %s", resp.status_code)
             break
         for item in resp.json().get("itemSummaries", []) or []:
             listing = ebay_auction_listing(item, "eBay — Auctions")
-            if not listing or not keyword_match(listing.title, keywords):
+            if not listing or not wanted.match(listing.title, listing.price, ms, listing.source_name):
                 continue
+            from scrapers.ebay_api import country_of, shipping_of
+            from scrapers.store import is_overseas
+            if is_overseas(country_of(item)):
+                continue  # overseas sellers are left out
+            listing.shipping = shipping_of(item)
+            listing.country = country_of(item)
             mark_seen(listing)
             with _conn() as conn:
                 conn.execute("UPDATE seen SET price = ?, description = ? WHERE url = ?",
@@ -93,6 +107,18 @@ def fetch_ebay_ending(cfg: dict) -> int:
                 conn.commit()
             stored += 1
     return stored
+
+
+_TERM_SEARCH_MARK = __import__("pathlib").Path("/data/auction_term_search.txt")
+TERM_SEARCH_EVERY_HOURS = 6  # was 2: 72 terms x 12 a day was ~860 of eBay's ~5,000 daily calls
+
+
+def _term_search_due() -> bool:
+    try:
+        last = datetime.fromisoformat(_TERM_SEARCH_MARK.read_text().strip())
+    except Exception:
+        return True
+    return datetime.now(timezone.utc) - last >= timedelta(hours=TERM_SEARCH_EVERY_HOURS)
 
 
 def _ensure(conn):
@@ -105,8 +131,8 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
     from scrapers.comps import evaluate, price_index, similar_index
     from scrapers.enrich import (exclude_match, is_accessory_only, is_not_audio, is_partial, is_relevant,
                                  item_form, needs_repair)
-    from scrapers.learning import keywords_with_learned
-    terms = tuple(keywords_with_learned(cfg))
+    from scrapers import wanted
+    ms = wanted.matchers(cfg)
     exclude_words = cfg.get("exclude_words") or []
     from scrapers.market import load_market
     from scrapers.store import _conn
@@ -114,7 +140,7 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             "SELECT * FROM seen WHERE description LIKE 'Auction%' AND hidden = 0 AND duplicate = 0"
-            " AND COALESCE(sold, 0) = 0")]
+            " AND COALESCE(sold, 0) = 0 AND (country IS NULL OR country IN ('US', 'CA'))")]
     market, index, similar = load_market(), price_index(), similar_index()
     out, seen = [], set()
     for r in rows:
@@ -125,7 +151,8 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
         if not (start <= ends <= end):
             continue
         title = r.get("title") or ""
-        if (exclude_match(title, exclude_words) or not is_relevant(title, r.get("price"), terms)
+        found = wanted.match(title, r.get("price"), ms, r.get("source_name"))
+        if (exclude_match(title, exclude_words) or not found
                 or is_not_audio(title) or is_accessory_only(title) or is_partial(title) or item_form(title) == "pedal"
                 or needs_repair(title, r.get("description"))):
             continue
@@ -133,7 +160,7 @@ def _candidates(cfg: dict, start: datetime, end: datetime, min_pct: int) -> list
         if not c or c["est"] or c["ref"] < 100 or c["pct"] < min_pct or c["pct"] > 95:
             continue
         seen.add(r["url"])
-        r["comp"], r["ends"] = c, ends
+        r["comp"], r["ends"], r["wanted"] = c, ends, found
         out.append(r)
     return sorted(out, key=lambda r: r["ends"])
 
@@ -157,7 +184,9 @@ def _mark(urls, kind: str):
 
 def _line(r) -> str:
     c = r["comp"]
-    return (f"{r['title'][:70]} — bid {r['price']} (comp ~${c['ref']:,.0f}, {c['pct']}% under), "
+    ship = r.get("shipping")
+    ship_txt = "" if not isinstance(ship, (int, float)) else (" + free ship" if ship == 0 else f" + ${ship:,.0f} ship")
+    return (f"{r['title'][:70]} — bid {r['price']}{ship_txt} (comp ~${c['ref']:,.0f}, {c['pct']}% under), "
             f"ends {r['ends'].strftime('%-I:%M %p').lower()}")
 
 
@@ -176,7 +205,8 @@ def _send(cfg: dict, title: str, rows: list[dict], intro: str):
             f'<span style="color:#166534;font-weight:700;">bid {escape(r["price"])}</span>'
             f'<span style="color:#64748b;font-size:13px;"> · {escape(r["comp"]["label"])} ~${r["comp"]["ref"]:,.0f} · '
             f'{r["comp"]["pct"]}% under · ends {r["ends"].strftime("%a %-I:%M %p")} · '
-            f'{escape((r.get("source_name") or "").split(" — ")[0])}</span></div>' for r in rows)
+            f'{escape((r.get("source_name") or "").split(" — ")[0])}'
+            f' · 📋 {escape(", ".join(r.get("wanted") or []))}</span></div>' for r in rows)
         html = (f'<!DOCTYPE html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,sans-serif;">'
                 f'<div style="max-width:640px;margin:0 auto;padding:20px;"><div style="background:#1e3a5f;color:#fff;'
                 f'padding:16px 20px;border-radius:12px 12px 0 0;font-size:18px;font-weight:700;">🔨 {escape(title)}</div>'

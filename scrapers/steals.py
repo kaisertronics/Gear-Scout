@@ -1,6 +1,6 @@
 """
 Steals: listings priced far under what the gear really sells for used
-(60%+ off by default) — across everything Gear Scout has collected for your
+(50%+ off by default) — across everything Gear Scout has collected for your
 search terms and Telex List, still for sale.
 
 A discount that big is usually a mistake (wrong comp, a part, a pedal
@@ -18,27 +18,28 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-MIN_PCT = 60
+MIN_PCT = 50  # owner chose 50%+ (Oct 11)
 MIN_PRICE = 20.0   # under this it's a placeholder ("$1 — make an offer") or a part
-MIN_REF = 100.0    # 60% off a $60 item isn't a steal worth a page
+MIN_REF = 100.0    # 50% off a $60 item isn't a steal worth a page
 MAX_PCT = 92       # beyond this it's almost always the wrong comp
 
 # Parts and pieces that the general parts check lets through but that pull
 # in the whole unit's price ("Studer A80 headblock", "TLM67 internal
 # electronics", "Neumann case w/ TLM 103 foam").
 _PARTS = re.compile(
-    r"\b(?:head\s?(?:set\s)?block|headstack|assembly|electronics|internals?|pcb|circuit board|boards?|"
+    r"\b(?:head\s?(?:set\s)?block|headstack|assembly|(?:replacement |spare )electronics|electronics (?:only|for|assembly|board|kit)|internals?|pcb|circuit board|boards?|"
     r"option card|expansion card|card for|case(?: only)?\s+(?:w/|with|for)|foam|insert|faceplate|front panel|"
+    r"faders?|(?:box|unit|chassis|case|panel|frame) only|splitter box|"
     r"capsule only|socket|connection base|connectors?|pickups?|humbuckers?|power suppl(?:y|ies) only|psu only|cable only|shock ?mount only|manual|"
     r"(?:stand|mount|clip|cable|case|bag|cover|adapter|holder|cradle|grille)s?\s+for)\b", re.I)
 # Clones / "style" copies get compared with the real thing far too easily.
-_CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type)\b", re.I)
+_CLONE = re.compile(r"\b(?:clone|replica|copy|style|inspired|tribute|diy|kit|type(?!\s?-?\d))\b", re.I)
 
 
-def _terms(cfg: dict) -> tuple:
-    from scrapers.learning import keywords_with_learned
-    telex = [str(t).strip() for t in (cfg.get("telex_list") or []) if str(t).strip()]
-    return tuple(dict.fromkeys(list(keywords_with_learned(cfg)) + telex))
+def _terms(cfg: dict):
+    # Your Wanted list (Telex List) only — see scrapers/wanted.py.
+    from scrapers import wanted
+    return wanted.matchers(cfg)
 
 
 def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict:
@@ -52,7 +53,7 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
     from scrapers.store import _conn
     sql = ("SELECT * FROM seen WHERE url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND price IS NOT NULL"
-           " AND url NOT LIKE '%search/posts%'")
+           " AND url NOT LIKE '%search/posts%' AND (country IS NULL OR country IN ('US', 'CA'))")
     args: list = []
     if since:
         sql += " AND first_seen >= ?"
@@ -61,6 +62,10 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(sql + " ORDER BY first_seen DESC", args)]
     terms = _terms(cfg)
+    from scrapers.wanted import match as wanted_match
+    from scrapers import mic_focus
+    from scrapers.mic_focus import classify as mic_classify
+    focus = [t for t in mic_focus.settings(cfg)["targets"] if t["on"]] if mic_focus.enabled(cfg) else None
     exclude_words = cfg.get("exclude_words") or []
     pedals_ok = wants_pedals(cfg)
     market, index, similar = load_market(), price_index(), similar_index()
@@ -80,7 +85,19 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         form = item_form(title)
         if form == "plugin" or (form == "pedal" and not pedals_ok):
             continue
-        if not is_relevant(title, r.get("price"), terms):
+        mt = None
+        if focus is not None:
+            mt = mic_classify(title, focus)
+            if not mt:
+                continue  # Mic Focus: Deals / Steals are your mics
+            src = (r.get("source_name") or "").lower()
+            if r.get("country") == "CA" or "kijiji" in src or "mcquade" in src or "C$" in str(r.get("price") or ""):
+                continue  # US only, like the Mics page (tariffs on Canadian ones)
+            if mt.get("hide_over_limit") and value > mt["max_price"]:
+                continue  # e.g. Warm Audio over its limit isn't shown
+            if any(re.search(rx, title, re.I) and value > cap for rx, cap in mt.get("model_limits") or []):
+                continue  # WA-14 over $300
+        elif not wanted_match(title, r.get("price"), terms, r.get("source_name")):
             continue
         c = evaluate(title, r.get("price"), r.get("description"), r["url"], market, index, similar)
         if not c or c["ref"] < MIN_REF or c["pct"] < min_pct:
@@ -97,6 +114,8 @@ def find(cfg: dict, since: Optional[str] = None, min_pct: int = MIN_PCT) -> dict
         unit = c["value"]  # per piece when an ad sells several
         ref = min(c["ref"], peer) if peer else c["ref"]
         pct = round((1 - unit / ref) * 100)
+        if focus is not None and (mt or {}).get("deal_pct") and pct < mt["deal_pct"]:
+            continue  # Neumann / AKG: only 30%+ under used
         if ref < MIN_REF or not (min_pct <= pct <= MAX_PCT):
             continue
         ad = (title.lower().strip(), round(value))
@@ -141,12 +160,16 @@ def _ensure(conn):
 
 
 def alert_new(cfg: dict) -> int:
-    """Push + email for new steals (found in the last 3 hours, trusted comp
-    only), once per listing. Runs hourly in the scraper."""
+    """Push + email for new steals (found in the last 3 hours), once per
+    listing. Ones with only one price source are sent marked "double-check".
+    Runs every 30 minutes in the scraper."""
     from scrapers.lowest import notify_new_lowest
     from scrapers.store import _conn
     since = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
-    found = find(cfg, since=since)["trusted"]
+    res = find(cfg, since=since)
+    for r in res["rough"]:
+        r["_check"] = True
+    found = res["trusted"] + res["rough"]
     if not found:
         return 0
     with _conn() as conn:
@@ -160,7 +183,13 @@ def alert_new(cfg: dict) -> int:
         alert = {"title": r["title"], "price": r["price"], "url": r["url"], "image_url": r.get("image_url"),
                  "source_name": r.get("source_name") or "", "location": (r.get("location") or "").split(" @")[0]}
         try:
-            notify_new_lowest(cfg, f"Steal — {s['pct']}% under {s['label']} ~${s['ref']:,.0f}", alert, None,
+            from scrapers.deal_checks import offers_note
+            alert["offers"] = offers_note(r, s["unit"], s["ref"])
+        except Exception:
+            pass
+        try:
+            check = " (double-check)" if r.get("_check") else ""
+            notify_new_lowest(cfg, f"Steal{check} — {s['pct']}% under {s['label']} ~${s['ref']:,.0f}", alert, None,
                               from_telex=True)
             sent += 1
         except Exception:

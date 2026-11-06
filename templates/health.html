@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Gear Scout — Health{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h2>🩺 Is everything being searched?</h2>
+    <ul class="health-summary">
+      <li><strong>Every site's feed</strong> re-read: {{ refresh.ago if refresh else 'not yet' }}{% if refresh %} ({{ refresh.new }} new){% endif %} — hourly.</li>
+      <li><strong>Your Wanted terms</strong> searched directly: {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} —
+        Reverb, Craigslist &amp; other quick sites every {{ fast_every }} min, eBay every {{ ebay_every // 60 }} h, Facebook in rotation.</li>
+      <li><strong>How fast new ads reach you</strong> (ads posted in the last 3 days):
+        {% if lag.n %}half within {{ lag.median }} h of being posted · {{ lag.within_1h }} of {{ lag.n }} within an hour · {{ lag.within_6h }} within 6 h{% else %}no data yet{% endif %}.</li>
+      <li><strong>Still for sale?</strong> {{ checks.fresh }} of the top {{ checks.total }} Feed listings re-checked in the last 6 hours.</li>
+      {% if silent %}<li><strong>⚠️ Gone quiet:</strong> {{ silent[:5]|join(', ') }}{% if silent|length > 5 %} and {{ silent|length - 5 }} more{% endif %} used to find ads but found none in the last 6 searches, so the search may be broken.</li>{% endif %}
+      {% if noisy %}<li><strong>Noisy terms:</strong> {{ noisy[:5]|join(', ') }}{% if noisy|length > 5 %} and {{ noisy|length - 5 }} more{% endif %} matched plenty of ads in the last 30 days but almost none were starred or alerted (starred or alerted of matched). Just a report; nothing was changed.</li>{% endif %}
+      {% if email %}<li><strong>Emails</strong> (digest, alerts):
+        {% if email.failing_ago %}⚠️ not going out — failing since {{ email.failing_ago }} ({{ email.why }}){% if email.ok_ago %}; last one sent {{ email.ok_ago }}{% endif %}. Phone alerts still work.
+        {% else %}last one sent {{ email.ok_ago }}.{% endif %}</li>{% endif %}
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Your Wanted terms</h2>
+    <p class="muted">When each term was last searched on each kind of site (and how many new ads that search found). Facebook takes a couple of terms every half hour (none 1–7 AM), so each term comes round about once a day; connector part numbers, which almost never show up there, every 3 days.</p>
+    <div class="table-scroll">
+    <table class="health-table">
+      <tr><th>Term</th><th>Quick sites</th><th>eBay</th><th>Facebook</th></tr>
+      {% for r in term_rows %}
+      <tr>
+        <td>{{ r.term }}</td>
+        <td>{{ r.fast or '—' }}{% if r.fast_new %} · <strong>{{ r.fast_new }} new</strong>{% endif %}</td>
+        <td>{{ r.ebay or '—' }}{% if r.ebay_new %} · <strong>{{ r.ebay_new }} new</strong>{% endif %}</td>
+        <td>{{ r.fb or '—' }}{% if r.fb_new %} · <strong>{{ r.fb_new }} new</strong>{% endif %}{% if r.fb_slow %} <span class="muted">· every 3 days</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Sites (last full scrape)</h2>
+    <div class="table-scroll">
+    <table class="health-table">
+      <tr><th>Site</th><th>Status</th><th>Read</th><th>New today</th><th>Last new ad</th></tr>
+      {% for s in sites %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{% if s.ok %}✅{% elif s.blocked %}🚫 blocks robots{% else %}❌ {{ s.error or 'failed' }}{% endif %}</td>
+        <td>{{ s.count if s.count is not none else '—' }}</td>
+        <td>{{ s.new_24h }}</td>
+        <td>{{ s.last_new or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </section>
+{% endblock %}

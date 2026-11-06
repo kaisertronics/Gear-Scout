@@ -140,7 +140,11 @@ def skip_on_light_runs(sources: list[dict]) -> tuple[list[dict], list[str]]:
     keep, skipped = [], []
     for s in sources:
         b = board.get(s["name"])
-        if b and (b["fail_streak"] >= 5 or (b["sched_runs"] >= 12 and b["sched_found"] == 0)):
+        # Marketplace regions are kept: their browse feed is still worth
+        # reading even when Facebook's search side comes back empty.
+        never_matching = b and b["sched_runs"] >= 12 and b["sched_found"] == 0 \
+            and s.get("type") != "facebook_marketplace_region"
+        if b and (b["fail_streak"] >= 5 or never_matching):
             skipped.append(s["name"])
         elif s.get("type") in slow_types and (recent_ok.get(s["name"]) or "") > three_h_ago:
             skipped.append(s["name"])
@@ -234,13 +238,33 @@ def update_learned_terms(cfg: dict) -> list[str]:
 
 def keywords_with_learned(cfg: dict) -> list[str]:
     """Keyword list + Telex List terms + learned terms (no repeats)."""
+    import re
+    from scrapers.wanted import terms as wanted_terms
     base = list(cfg.get("keywords") or [])
     lower = {str(k).lower() for k in base}
-    for t in [str(t).strip() for t in cfg.get("telex_list") or []] + active_learned_terms():
+    # Keywords match as whole phrases, so Telex entries go in split on commas
+    # ("lexicon 300, lexicon 480"), and a long descriptive term also by its
+    # model number ("Warm audio WA-412 API 4 channel pre" → "WA-412") —
+    # otherwise the regular scrapes never collect them.
+    try:
+        from scrapers import base as scraper_base
+        from scrapers.telex import term_matcher
+        from scrapers.wanted import derived_terms
+        scraper_base.WANTED_MATCHERS[:] = [term_matcher(t) for t in wanted_terms(cfg) + derived_terms(cfg)]
+    except Exception:
+        pass
+    telex = []
+    for t in wanted_terms(cfg):
+        telex.append(t)
+        words = t.split()
+        if len(words) >= 4:
+            telex += [w for w in words[1:] if re.search(r"\d", w) and len(w) >= 4]
+    for t in telex + active_learned_terms():
         if t and t.lower() not in lower:
             base.append(t)
             lower.add(t.lower())
-    return base
+    from scrapers.base import ScrapeKeywords
+    return ScrapeKeywords(base)
 
 
 # ---------------------------------------------------------------------------

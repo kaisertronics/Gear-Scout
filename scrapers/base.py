@@ -11,6 +11,32 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+_GENERIC_SELLERS = {
+    "", "facebook", "facebook user", "unknown", "anonymous", "n/a", "na", "none", "null",
+    "seller", "private seller", "owner", "member", "user", "guest", "admin", "author",
+    "moderator", "top contributor", "rising contributor", "new member",
+}
+
+
+def seller_key(prefix: str, name: Optional[str]) -> Optional[str]:
+    """A source-prefixed seller key ('fb:Jane Doe'), or None when the name is
+    empty / generic / not plausibly a person or shop name."""
+    n = re.sub(r"\s+", " ", (name or "")).strip()
+    if not n or len(n) > 60 or n.lower() in _GENERIC_SELLERS or not re.search(r"[A-Za-z0-9]", n):
+        return None
+    return f"{prefix}:{n}"
+
+
+def usable_seller(key: Optional[str]) -> bool:
+    """True if a stored seller value should be counted (ignores generic names,
+    with or without a source prefix)."""
+    if not key:
+        return False
+    k = key.strip()
+    bare = k.split(":", 1)[1] if re.match(r"^[a-z]{2,4}:", k) else k
+    return bare.strip().lower() not in _GENERIC_SELLERS
+
+
 @dataclass
 class Listing:
     source_name: str
@@ -22,6 +48,10 @@ class Listing:
     posted_at: Optional[datetime] = None
     listing_id: Optional[str] = None  # unique ID within source
     location: Optional[str] = None  # "City, ST" or a town name, for local-pickup sources
+    shipping: Optional[float] = None  # US shipping in USD (0 = free); None = not known / local pickup
+    seller: Optional[str] = None      # seller / shop name where the site gives one (Reverb, eBay)
+    country: Optional[str] = None     # where it's sold from ("US", "CA", "GB", "JPY"…); None = not known
+    offers_ok: Optional[bool] = None  # the listing accepts offers (Reverb's offers_enabled); None = not known
 
     def __post_init__(self):
         if not self.listing_id:
@@ -113,8 +143,12 @@ _BRAND_FIXES = [(re.compile(p), r) for p, r in (
     (r"\b(?:gefel|gefelle|geffell)\b", "gefell"),
     (r"\b(?:royar|royer labs)\b", "royer"),
     (r"\b(?:universal audios|univeral audio|universial audio)\b", "universal audio"),
+    (r"\b(?:empractical|emperical|empiracal|imperical) labs?\b", "empirical labs"),
     (r"\b(?:akg's|a\.k\.g\.?)(?=\s)", "akg"),
     (r"\bu\.r\.e\.i\.?", "urei"),
+    (r"\b(?:vangaurd|vangard|vanguad|vangurd)\b", "vanguard"),
+    (r"\b(?:pelluso|peluzo|peleuso|pelusso)\b", "peluso"),
+    (r"\baudio scape\b", "audioscape"),
 )]
 
 
@@ -122,6 +156,30 @@ def fix_brand_spelling(text_lower: str) -> str:
     for pattern, right in _BRAND_FIXES:
         text_lower = pattern.sub(right, text_lower)
     return text_lower
+
+
+# Your Wanted list's own matchers (set by learning.keywords_with_learned):
+# a scrape keeps a listing when the keyword list OR the Wanted list matches,
+# so model variants the plain phrase misses ("Lexicon 960L" for the term
+# "lexicon 960", "Avalon VT-737sp" for "Avalon 737") are never thrown away.
+# Only for the scrape keyword list itself (a ScrapeKeywords) — never for
+# other word lists like exclude words.
+WANTED_MATCHERS: list = []
+
+
+class LooseTerm(list):
+    """A one-term live search whose trailing generic word ("dachman
+    microphone") is only for the site's search box: the title has to name the
+    brand and model, but needn't say "microphone" ("Dachman DA87", "Neumann
+    U87 Ai"). Used by Mic Focus."""
+
+
+_GENERIC_TAIL = {"microphone", "microphones"}
+
+
+class ScrapeKeywords(list):
+    """The scrape keyword list (keywords_with_learned): keyword_match also
+    accepts anything your Wanted list matches."""
 
 
 def keyword_match(text: str, keywords: list[str]) -> bool:
@@ -135,7 +193,9 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
         # 1,000+ search terms the loop made pages like Settings take seconds.
         # Same rule per keyword (whole word/phrase, optional plural "s").
         combined = _combined_pattern(keywords)
-        return bool(combined and combined.search(text_lower))
+        if combined and combined.search(text_lower):
+            return True
+        return isinstance(keywords, ScrapeKeywords) and any(m(text_lower) for m in WANTED_MATCHERS)
     for kw in keywords:
         pattern = _keyword_pattern(str(kw))
         if pattern and pattern.search(text_lower):
@@ -151,7 +211,13 @@ def keyword_match(text: str, keywords: list[str]) -> bool:
         # like the sites' own search boxes — not the exact phrase, so
         # "Sony C-38B" and "C38B mic by Sony" both match.
         words = [w for w in re.split(r'\s+', keywords[0].strip()) if re.search(r'[a-z0-9]', w, re.I)]
+        if (isinstance(keywords, LooseTerm) and len(words) > 1 and words[-1].lower() in _GENERIC_TAIL
+                and any(re.fullmatch(r"[a-z]{4,}", w, re.I) for w in words[:-1])):
+            words = words[:-1]  # only for a brand search; "47 microphone" / "c12 microphone" stay strict
         if words and all(_word_matches(w, text_lower) for w in words):
+            return True
+        from scrapers.cable_family import title_matches  # "Hosa DTP-802" also finds "HOSA 6 ft DB25 to 8 TRS cables"
+        if title_matches(keywords[0], text):
             return True
     return False
 

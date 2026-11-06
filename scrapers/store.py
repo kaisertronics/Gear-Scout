@@ -70,6 +70,13 @@ def _conn() -> sqlite3.Connection:
         ("sold", "INTEGER NOT NULL DEFAULT 0"),
         ("pending", "INTEGER NOT NULL DEFAULT 0"),
         ("sold_at", "TEXT"),
+        ("last_seen", "TEXT"),
+        ("sold_checked_at", "TEXT"),
+        ("confirmed_live_at", "TEXT"),
+        ("shipping", "REAL"),  # US shipping in USD (0 = free); NULL = not known / local pickup
+        ("country", "TEXT"),   # where it's sold from; NULL = not known (US/Canada sources)
+        ("seller", "TEXT"),    # seller / shop name (Reverb, eBay); NULL = not known
+        ("offers_ok", "INTEGER"),  # 1 = the listing accepts offers (Reverb); 0 = no; NULL = not known
     ):
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE seen ADD COLUMN {col} {ddl}")
@@ -78,7 +85,35 @@ def _conn() -> sqlite3.Connection:
     # The lookups every page and job makes: newest first, per site, favorites.
     conn.execute("CREATE INDEX IF NOT EXISTS seen_first_seen ON seen(first_seen)")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_source ON seen(source_name, first_seen)")
+    conn.execute("CREATE INDEX IF NOT EXISTS seen_seller ON seen(seller) WHERE seller IS NOT NULL")
     conn.execute("CREATE INDEX IF NOT EXISTS seen_favorite ON seen(favorite) WHERE favorite = 1")
+    # Ads you dismissed with ✕, remembered forever (they outlive the listing
+    # row, which is purged after 90 days unseen) by link, ID and title+price,
+    # so a repost or relist of the same ad stays hidden too.
+    conn.execute("CREATE TABLE IF NOT EXISTS hidden_keys (key TEXT PRIMARY KEY, title TEXT, created TEXT)")
+    if not conn.execute("SELECT 1 FROM hidden_keys LIMIT 1").fetchone():
+        for gid, url, key, title in conn.execute(
+                "SELECT global_id, url, dup_key, title FROM seen WHERE hidden = 1").fetchall():
+            _remember_hidden(conn, gid, url, key, title)
+    # Every price a listing has had, oldest first (for the price-cut sparkline).
+    conn.execute("CREATE TABLE IF NOT EXISTS price_history "
+                 "(global_id TEXT, price TEXT, value REAL, at TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS price_history_gid ON price_history(global_id)")
+    # Lazy, idempotent backfill from previous_price: only rows with no history yet.
+    conn.execute("""
+        INSERT INTO price_history (global_id, price, value, at)
+        SELECT global_id, previous_price, NULL, COALESCE(first_seen, price_dropped_at) FROM seen
+        WHERE previous_price IS NOT NULL AND price_dropped_at IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM price_history h WHERE h.global_id = seen.global_id)""")
+    conn.execute("""
+        INSERT INTO price_history (global_id, price, value, at)
+        SELECT global_id, price, NULL, price_dropped_at FROM seen
+        WHERE previous_price IS NOT NULL AND price_dropped_at IS NOT NULL AND price IS NOT NULL
+          AND (SELECT COUNT(*) FROM price_history h WHERE h.global_id = seen.global_id) = 1""")
+    if conn.execute("SELECT 1 FROM price_history WHERE value IS NULL LIMIT 1").fetchone():
+        from scrapers.enrich import parse_price
+        for rowid, p in conn.execute("SELECT rowid, price FROM price_history WHERE value IS NULL").fetchall():
+            conn.execute("UPDATE price_history SET value = ? WHERE rowid = ?", (parse_price(p), rowid))
     conn.execute("PRAGMA optimize")
     conn.commit()
     if "dup_key" not in existing_cols:
@@ -159,10 +194,67 @@ def set_posted_at(url: str, posted) -> None:
         conn.commit()
 
 
+HOME_COUNTRIES = ("US", "CA")  # anything else is overseas and kept out of your results
+HOME_SQL = "(country IS NULL OR country IN ('US', 'CA'))"  # SQL: not overseas
+
+
+def is_overseas(country) -> bool:
+    return bool(country) and country not in HOME_COUNTRIES
+
+
+def set_country(url: str, country) -> None:
+    if not country:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET country = ? WHERE url = ?", (country, url))
+        conn.commit()
+
+
+def set_shipping(url: str, shipping) -> None:
+    """Saves a listing's US shipping cost (USD, 0 = free), learned when its
+    page or API record is re-checked."""
+    if shipping is None:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE seen SET shipping = ? WHERE url = ?", (float(shipping), url))
+        conn.commit()
+
+
 def set_pending(url: str, pending: bool) -> None:
     with _conn() as conn:
         conn.execute("UPDATE seen SET pending = ? WHERE url = ?", (1 if pending else 0, url))
         conn.commit()
+
+
+def _record_price(conn, global_id: str, price, at: str) -> None:
+    """Appends a price to the listing's history unless it equals the last one."""
+    from scrapers.enrich import parse_price
+
+    value = parse_price(price)
+    if value is None:
+        return
+    last = conn.execute(
+        "SELECT value FROM price_history WHERE global_id = ? ORDER BY at DESC, rowid DESC LIMIT 1",
+        (global_id,)).fetchone()
+    if last and last[0] is not None and abs(last[0] - value) < 0.005:
+        return
+    conn.execute("INSERT INTO price_history (global_id, price, value, at) VALUES (?,?,?,?)",
+                 (global_id, price, value, at))
+
+
+def price_history_for(global_ids: list) -> dict:
+    """{global_id: [(at, value), ...]} oldest first, in one query."""
+    ids = list(dict.fromkeys(g for g in global_ids if g))
+    out: dict = {}
+    with _conn() as conn:
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            marks = ",".join("?" * len(chunk))
+            for gid, at, value in conn.execute(
+                    f"SELECT global_id, at, value FROM price_history WHERE global_id IN ({marks}) "
+                    "AND value IS NOT NULL ORDER BY at, rowid", chunk):
+                out.setdefault(gid, []).append((at, value))
+    return out
 
 
 def mark_seen(listing, live_only: bool = False) -> str:
@@ -178,6 +270,15 @@ def mark_seen(listing, live_only: bool = False) -> str:
         ).fetchone()
         if existing:
             status = "seen"
+            # Still in a site's results, so still up: remember that (old ads
+            # aren't purged while they're live), and undo a "sold" mark from a
+            # sold check that got it wrong. A sold label on the card itself is
+            # applied again just below (_record_status).
+            conn.execute("UPDATE seen SET last_seen = ?, confirmed_live_at = ? WHERE global_id = ?",
+                         (now, now, listing.global_id))
+            if not getattr(listing, "sold", None):
+                conn.execute("UPDATE seen SET sold = 0, sold_at = NULL WHERE global_id = ? AND sold = 1",
+                             (listing.global_id,))
             # Facebook picture links expire after a few days; a listing seen
             # again comes with a fresh one.
             if getattr(listing, "image_url", None):
@@ -188,6 +289,14 @@ def mark_seen(listing, live_only: bool = False) -> str:
                     "UPDATE seen SET location = ? WHERE global_id = ? AND location IS NULL",
                     (listing.location, listing.global_id),
                 )
+            if getattr(listing, "country", None):
+                conn.execute("UPDATE seen SET country = ? WHERE global_id = ?", (listing.country, listing.global_id))
+            if getattr(listing, "seller", None):
+                conn.execute("UPDATE seen SET seller = ? WHERE global_id = ?", (listing.seller, listing.global_id))
+            if getattr(listing, "shipping", None) is not None:
+                conn.execute("UPDATE seen SET shipping = ? WHERE global_id = ?", (listing.shipping, listing.global_id))
+            if getattr(listing, "offers_ok", None) is not None:
+                conn.execute("UPDATE seen SET offers_ok = ? WHERE global_id = ?", (int(listing.offers_ok), listing.global_id))
             old_value, new_value = parse_price(existing[0]), parse_price(listing.price)
             if old_value and new_value and new_value < old_value * 0.99:
                 conn.execute(
@@ -195,7 +304,15 @@ def mark_seen(listing, live_only: bool = False) -> str:
                        drop_notified = 0 WHERE global_id = ?""",
                     (listing.price, existing[0], now, listing.global_id),
                 )
+                _record_price(conn, listing.global_id, existing[0], now)
+                _record_price(conn, listing.global_id, listing.price, now)
                 status = "price_drop"
+            elif old_value and new_value and new_value > old_value * 1.01:
+                # Price went up: show the current price (no "was" price).
+                conn.execute("UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
+                             (listing.price, listing.global_id))
+                _record_price(conn, listing.global_id, existing[0], now)
+                _record_price(conn, listing.global_id, listing.price, now)
             _record_status(conn, listing)
             if not live_only:
                 # A standing-keyword scrape found something a live search
@@ -212,12 +329,14 @@ def mark_seen(listing, live_only: bool = False) -> str:
         duplicate = _find_original(
             conn, listing.global_id, listing.url, key, source_family(listing.url)
         )
+        # An ad you dismissed with ✕ (or a repost of it) stays dismissed.
+        hidden = is_hidden_ad(listing.global_id, listing.url, key, conn)
         conn.execute(
             """INSERT INTO seen
                (global_id, source_name, title, url, price, image_url,
                 description, posted_at, first_seen, live_only, dup_key, duplicate,
-                location)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                location, last_seen, shipping, country, hidden, seller, offers_ok)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 listing.global_id,
                 listing.source_name,
@@ -232,9 +351,24 @@ def mark_seen(listing, live_only: bool = False) -> str:
                 key,
                 1 if duplicate else 0,
                 getattr(listing, "location", None),
+                now,
+                getattr(listing, "shipping", None),
+                getattr(listing, "country", None),
+                1 if hidden else 0,
+                getattr(listing, "seller", None),
+                None if getattr(listing, "offers_ok", None) is None else int(listing.offers_ok),
             ),
         )
+        _record_price(conn, listing.global_id, listing.price, now)
         _record_status(conn, listing)
+        if hidden:
+            conn.commit()
+            return "seen"  # never "new": no push, no email, no Feed
+        if duplicate and listing.url:
+            # Seen again through another source (another Facebook region, a
+            # Telex search): the original row is what's shown, so it's the one
+            # that must count as still listed.
+            conn.execute("UPDATE seen SET last_seen = ? WHERE url = ? AND duplicate = 0", (now, listing.url))
         conn.commit()
         return "duplicate" if duplicate else "new"
 
@@ -265,11 +399,15 @@ def update_price(url: str, price: str) -> str:
                     (price, old, datetime.now(timezone.utc).isoformat(), gid),
                 )
                 result = "drop"
+                _record_price(conn, gid, old, datetime.now(timezone.utc).isoformat())
+                _record_price(conn, gid, price, datetime.now(timezone.utc).isoformat())
             else:
                 conn.execute(
                     "UPDATE seen SET price = ?, previous_price = NULL WHERE global_id = ?",
                     (price, gid),
                 )
+                _record_price(conn, gid, old, datetime.now(timezone.utc).isoformat())
+                _record_price(conn, gid, price, datetime.now(timezone.utc).isoformat())
                 result = "raise" if result == "same" else result
         conn.commit()
     return result
@@ -306,12 +444,76 @@ def mark_price_drops_notified(global_ids: list[str]):
         conn.commit()
 
 
+def norm_url(url) -> str:
+    """A listing's link without tracking bits (query string, #anchor,
+    trailing slash, http/www differences), so the same ad matches however
+    it was linked."""
+    u = (url or "").strip().lower()
+    u = re.sub(r"[?#].*$", "", u)
+    u = re.sub(r"^https?://(www\.|m\.)?", "", u)
+    return u.rstrip("/")
+
+
+def _hidden_keys_for(global_id, url, dup_key_value) -> list[str]:
+    keys = [f"gid:{global_id}"] if global_id else []
+    if norm_url(url):
+        keys.append(f"url:{norm_url(url)}")
+    # Title + price only for Facebook/Craigslist, where a repost gets a new
+    # link; on Reverb/eBay two dealers can list identical units that way.
+    if dup_key_value and _is_crosspost_site(url):
+        keys.append(f"dup:{dup_key_value}")
+    return keys
+
+
+def _is_crosspost_site(url) -> bool:
+    from scrapers.enrich import source_family
+    return source_family(url or "") in _CROSSPOST_FAMILIES
+
+
+def _remember_hidden(conn, global_id, url, dup_key_value, title) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executemany("INSERT OR IGNORE INTO hidden_keys (key, title, created) VALUES (?, ?, ?)",
+                     [(k, title, now) for k in _hidden_keys_for(global_id, url, dup_key_value)])
+
+
+def is_hidden_ad(global_id, url, dup_key_value, conn=None) -> bool:
+    """True if you dismissed this ad (or the same ad under another link or
+    another site) with ✕."""
+    keys = _hidden_keys_for(global_id, url, dup_key_value)
+    if not keys:
+        return False
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        q = "SELECT 1 FROM hidden_keys WHERE key IN (%s) LIMIT 1" % ",".join("?" * len(keys))
+        return conn.execute(q, keys).fetchone() is not None
+    finally:
+        if own:
+            conn.close()
+
+
 def set_hidden(global_id: str, hidden: bool):
+    """✕ on an ad: hides it now and for good, including every other stored
+    copy of it (same link, or same title + price) and any repost later."""
     with _conn() as conn:
-        conn.execute(
-            "UPDATE seen SET hidden = ? WHERE global_id = ?",
-            (1 if hidden else 0, global_id),
-        )
+        row = conn.execute("SELECT url, dup_key, title FROM seen WHERE global_id = ?", (global_id,)).fetchone()
+        url, key, title = row if row else (None, None, None)
+        keys = _hidden_keys_for(global_id, url, key)
+        if hidden:
+            _remember_hidden(conn, global_id, url, key, title)
+        else:
+            conn.executemany("DELETE FROM hidden_keys WHERE key = ?", [(k,) for k in keys])
+        conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, global_id))
+        # Other copies of the same ad.
+        if norm_url(url):
+            for (gid, other_url) in conn.execute("SELECT global_id, url FROM seen WHERE url LIKE ?",
+                                                 (f"%{norm_url(url).split('/')[-1]}%",)).fetchall():
+                if norm_url(other_url) == norm_url(url):
+                    conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, gid))
+        if key and _is_crosspost_site(url):
+            for (gid, other_url) in conn.execute("SELECT global_id, url FROM seen WHERE dup_key = ?", (key,)).fetchall():
+                if _is_crosspost_site(other_url):
+                    conn.execute("UPDATE seen SET hidden = ? WHERE global_id = ?", (1 if hidden else 0, gid))
         conn.commit()
 
 
@@ -324,6 +526,7 @@ def unhide_all() -> int:
     with _conn() as conn:
         n = conn.execute("SELECT COUNT(*) FROM seen WHERE hidden = 1").fetchone()[0]
         conn.execute("UPDATE seen SET hidden = 0 WHERE hidden = 1")
+        conn.execute("DELETE FROM hidden_keys")
         conn.commit()
     return n
 
@@ -338,11 +541,13 @@ def all_priced_rows() -> list[dict]:
         )]
 
 
-def purge_old(days: int = 30):
-    """Remove entries older than `days` to keep the DB small."""
+def purge_old(days: int = 90):
+    """Remove listings no site has shown for `days` days, to keep the DB
+    small. (By last sighting, not first: deleting a long-running ad that's
+    still up made it come back as "new" the next time it was scraped.)"""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
-        conn.execute("DELETE FROM seen WHERE first_seen < ? AND favorite = 0", (cutoff,))
+        conn.execute("DELETE FROM seen WHERE COALESCE(last_seen, first_seen) < ? AND favorite = 0", (cutoff,))
         conn.commit()
     logger.info("Purged seen entries older than %d days", days)
 

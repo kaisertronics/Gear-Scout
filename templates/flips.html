@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Flips · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .fl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .fl-table th, .fl-table td { text-align: left; padding: 5px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+  .fl-scroll { overflow-x: auto; }
+  .fl-draft { margin-top: 6px; padding: 8px; border: 1px dashed var(--border); border-radius: 6px; }
+  .fl-draft textarea { width: 100%; min-height: 150px; font: inherit; }
+  .fl-inline input[type=number] { width: 90px; }
+</style>
+
+<section class="panel" id="tracker">
+  <h2>🔁 Flips</h2>
+  <p class="muted">Suggestions only: Gear Scout never posts, lists, messages or contacts anyone. These are live listings priced low enough to buy and resell on Reverb for at least ${{ min_profit }} and {{ min_pct }}% profit after fees and shipping, with {{ min_comps }}+ comparable listings behind the resale value. Ads with scam signs are left out.</p>
+  <p><strong>${{ '{:,.0f}'.format(t.profit) }}</strong> realized profit from <strong>{{ t.sold }}</strong> sold flip{{ 's' if t.sold != 1 }} &middot; <strong>{{ t.open }}</strong> bought, not sold yet{% if t.open %} (${{ '{:,.0f}'.format(t.invested) }} tied up){% endif %}.</p>
+
+  {% if t.open_items %}
+  <h3>Bought, waiting to sell</h3>
+  <div class="fl-scroll"><table class="fl-table">
+    <tr><th>Item</th><th>Paid</th><th>Expected resale</th><th>Sold for / shipping you paid</th><th></th></tr>
+    {% for f in t.open_items %}
+    <tr>
+      <td>{% if f.url %}<a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.title or f.url }}</a>{% else %}{{ f.title }}{% endif %}<br><span class="muted">{{ f.source }} &middot; {{ f.at[:10] }}</span></td>
+      <td>${{ '{:,.0f}'.format(f.paid) }}</td>
+      <td>{% if f.expected %}${{ '{:,.0f}'.format(f.expected) }}{% else %}&ndash;{% endif %}</td>
+      <td><form class="fl-inline" method="post" action="{{ url_for('flips_sold') }}">
+        <input type="hidden" name="id" value="{{ f.id }}">
+        <input type="number" name="price" min="1" step="any" placeholder="sold $" required>
+        <input type="number" name="ship" min="0" step="any" placeholder="ship $">
+        <button class="btn btn-sm" type="submit">Mark sold</button></form></td>
+      <td><form method="post" action="{{ url_for('flips_remove') }}"><input type="hidden" name="id" value="{{ f.id }}"><button class="btn btn-sm" type="submit" onclick="return confirm('Remove this entry?')">Remove</button></form></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if t.sold_items %}
+  <h3>Sold</h3>
+  <p class="muted">Profit = sold price less ~8% Reverb fees and payment processing, less the shipping you paid, less what you paid for it.</p>
+  <div class="fl-scroll"><table class="fl-table">
+    <tr><th>Item</th><th>Paid</th><th>Sold</th><th>Shipping</th><th>Profit</th><th></th></tr>
+    {% for f in t.sold_items %}
+    <tr>
+      <td>{% if f.url %}<a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.title or f.url }}</a>{% else %}{{ f.title }}{% endif %}<br><span class="muted">{{ f.sold_at[:10] }}</span></td>
+      <td>${{ '{:,.0f}'.format(f.paid) }}</td>
+      <td>${{ '{:,.0f}'.format(f.sold_price) }}</td>
+      <td>${{ '{:,.0f}'.format(f.sold_ship or 0) }}</td>
+      <td><strong>{{ '-' if f.profit < 0 }}${{ '{:,.0f}'.format(f.profit|abs) }}</strong></td>
+      <td><form method="post" action="{{ url_for('flips_remove') }}"><input type="hidden" name="id" value="{{ f.id }}"><button class="btn btn-sm" type="submit" onclick="return confirm('Remove this entry?')">Remove</button></form></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h3>Suggestions{% if items %} ({{ items|length }}){% endif %}</h3>
+  {% if not items %}<p>No listings clear the bar right now.</p>{% else %}
+  <div class="fl-scroll"><table class="fl-table">
+    <tr><th>Listing</th><th>Buy</th><th>Expected resale</th><th>Profit</th><th>Comps</th><th></th></tr>
+    {% for r in items %}
+    <tr>
+      <td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }}</a><br><span class="muted">{{ (r.source_name or '').split(' — ')[0] }}{% if r.location %} &middot; {{ r.location }}{% endif %}</span></td>
+      <td>${{ '{:,.0f}'.format(r.flip.buy) }}{% if r.shipping %}<br><span class="muted">incl. ${{ '{:,.0f}'.format(r.shipping) }} ship</span>{% endif %}</td>
+      <td>${{ '{:,.0f}'.format(r.flip.resale) }}<br><span class="muted">${{ '{:,.0f}'.format(r.flip.net) }} after fees + ${{ r.flip.ship }} ship</span></td>
+      <td><strong>${{ '{:,.0f}'.format(r.flip.profit) }}</strong><br><span class="muted">{{ r.flip.pct }}%</span></td>
+      <td>{{ r.flip.n }}<br><span class="muted">{{ r.flip.basis }}</span></td>
+      <td>
+        <button class="btn btn-sm" type="button" onclick="var d=document.getElementById('fd-{{ loop.index }}');d.hidden=!d.hidden">Draft resale listing</button>
+        {% if r.owned %}<br><span class="muted">bought</span>{% else %}
+        <form class="fl-inline" method="post" action="{{ url_for('flips_bought') }}" style="margin-top:4px">
+          <input type="hidden" name="url" value="{{ r.url }}"><input type="hidden" name="title" value="{{ r.title }}"><input type="hidden" name="source" value="{{ r.source_name }}"><input type="hidden" name="expected" value="{{ r.flip.resale }}">
+          <input type="number" name="paid" value="{{ r.flip.buy|round|int }}" min="1" step="any" title="What you actually paid" required>
+          <button class="btn btn-sm" type="submit">I bought this</button></form>{% endif %}
+      </td>
+    </tr>
+    <tr id="fd-{{ loop.index }}" hidden><td colspan="6">
+      <div class="fl-draft">
+        <p class="muted"><strong>Draft only.</strong> Gear Scout does not post this anywhere. Edit the bracketed parts, then copy and paste it into your own listing by hand.</p>
+        <p><strong>Suggested price:</strong> ${{ r.draft.price }}</p>
+        <textarea readonly onclick="this.select()">{{ r.draft.title }}
+
+{{ r.draft.description }}</textarea>
+      </div>
+    </td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -26,6 +26,7 @@ def run_live_search(
     query: str,
     cfg: dict,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
+    skip_facebook: bool = False,
 ) -> list[ScrapeResult]:
     """Scrapes every enabled source live, filtering by `query` as if it were
     the only keyword. Matches are recorded via mark_seen(live_only=True) so
@@ -33,7 +34,12 @@ def run_live_search(
     phrase can match anything) and don't get re-notified by a future
     scheduled run's email — but ALL current matches are returned here, not
     just ones that are new."""
-    sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    from scrapers.liquidation import with_defaults as _liq_defaults
+    from scrapers.pawn_shops import with_defaults as _pawn_defaults
+    sources = [s for s in _pawn_defaults(_liq_defaults(cfg.get("sources", []))) if s.get("enabled", True)]
+    from scrapers.fb_posts_background import facebook_paused
+    if skip_facebook or facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
 
     # A live, on-demand search should mean "search everything right now" —
     # if the user has removed or disabled one of the 3 Craigslist regions

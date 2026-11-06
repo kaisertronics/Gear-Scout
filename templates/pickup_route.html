@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Pickup route · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .pr-stop { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border); font-size: 14px; }
+  .pr-stop a { flex: 1 1 260px; word-break: break-word; }
+  .pr-num { font-weight: 700; margin-right: 6px; }
+</style>
+
+<section class="panel">
+  <h2>🚗 Weekend pickup route</h2>
+  <p class="muted">Live Facebook Marketplace and Craigslist deals you pick up yourself, grouped by area. Stops are ordered nearest-first starting from home; drive miles are a rough round trip.</p>
+  {% if not p.home_set %}<p class="muted">Set your home zip in Settings to get distances and a stop order.</p>{% endif %}
+  {% if p.count %}
+  <p><strong>{{ p.count }}</strong> local deal{{ 's' if p.count != 1 }} in <strong>{{ p.clusters|length }}</strong> area{{ 's' if p.clusters|length != 1 }}{% if p.total_miles %} &middot; about <strong>{{ p.total_miles }} mi</strong> driving if you did every area{% endif %}.</p>
+  {% endif %}
+</section>
+
+{% if not p.count %}
+<section class="panel">
+  <p>No local-pickup deals right now. When a Facebook Marketplace or Craigslist deal shows up near you, it will appear here with a suggested route.</p>
+</section>
+{% endif %}
+
+{% for c in p.clusters %}
+<section class="panel">
+  <h3>{{ loop.index }}. {{ c.name or 'Area' }}
+    <span class="muted">&middot; {{ c.listings|length }} stop{{ 's' if c.listings|length != 1 }}{% if c.from_home is not none %} &middot; {{ c.from_home }} mi from home{% endif %}{% if c.miles %} &middot; ~{{ c.miles }} mi round trip{% endif %}</span></h3>
+  {% for l in c.stops %}
+  <div class="pr-stop">
+    <a href="{{ l.url }}" target="_blank" rel="noopener"><span class="pr-num">{{ loop.index }}.</span>{{ l.title }}</a>
+    <span><strong>{{ l.price }}</strong>{% if l.route_miles is not none %} &middot; {{ l.route_miles }} mi{% endif %} &middot; <span class="muted">{{ l.area }}</span></span>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+{% if p.unplaced %}
+<section class="panel">
+  <h3>Location unknown <span class="muted">&middot; {{ p.unplaced|length }}</span></h3>
+  {% for l in p.unplaced %}
+  <div class="pr-stop">
+    <a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.title }}</a>
+    <span><strong>{{ l.price }}</strong>{% if l.area %} &middot; <span class="muted">{{ l.area }}</span>{% endif %}</span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

@@ -18,6 +18,7 @@ from typing import Optional
 import requests
 
 from .base import Listing, ScrapeResult, keyword_match, truncate
+from .cable_family import in_description
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,128 @@ def _note_rate_limit() -> None:
     logger.warning("eBay daily request limit reached — pausing eBay until %s", reset.strftime("%b %d %I:%M %p PT"))
 
 
+# ---------------------------------------------------------------------------
+# Daily budget (Nov 3). Every Browse API call goes through ebay_get(), which
+# counts it per job in /data/ebay_calls.json (Pacific day) and refuses a job
+# that is running ahead of its share of the day. The limit ran out at ~3:43pm
+# PT and eBay then sat dark until midnight; the owner's Hosa deals were missed.
+# The fast lane (newest listings) is never held back by the other jobs: their
+# calls stop when only the fast lane's remaining need is left.
+# ---------------------------------------------------------------------------
+_CALLS_FILE = "/data/ebay_calls.json"
+DAILY_LIMIT = 4800          # eBay's allowance is about 5,000; keep a margin
+FAST_LANE_EVERY_S = 120
+# Share of the day's allowance each job may use (paced across the day, with
+# 10% available up front). Jobs not listed get OTHER_SHARE.
+JOB_SHARE = {
+    "priority_sweep": 0.30,   # the Telex List and shopping-list terms (owner's own)
+    "mic_sweep": 0.15,        # Mic Focus model terms
+    "sibling_sweep": 0.04,    # guessed sibling models
+    "mic_auctions": 0.08,
+    "ending_auctions": 0.04,
+    "lookups": 0.08,          # price lookups (market value, savings, lowest)
+    "sold_check": 0.05,
+    "backfill": 0.02,
+}
+OTHER_SHARE = 0.03
+NO_PACING = {"fast_lane", "live_search", "auction_recheck"}  # only the daily total limits these
+JOB_LABELS = {
+    "fast_lane": "Fast lane (newest listings)", "priority_sweep": "Your Telex List + shopping list",
+    "mic_sweep": "Mic model searches", "sibling_sweep": "Guessed sibling models",
+    "mic_auctions": "Mic auctions", "ending_auctions": "Auctions ending soon",
+    "lookups": "Price lookups", "sold_check": "Sold / gone checks", "backfill": "Shipping backfill",
+    "live_search": "Searches you ran", "auction_recheck": "Auction re-checks", "other": "Other",
+}
+# search term -> job, set by the Wanted sweep before it searches a term
+TERM_JOBS: dict[str, str] = {}
+
+
+class EbayBudgetError(RuntimeError):
+    """A job asked for more than its share of today's eBay allowance."""
+
+
+def _pt_now() -> datetime:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Los_Angeles"))
+
+
+def _load_calls(day: str) -> dict:
+    import json
+    try:
+        d = json.load(open(_CALLS_FILE))
+        if d.get("day") == day:
+            return d
+    except Exception:
+        pass
+    return {"day": day, "total": 0, "jobs": {}}
+
+
+def _count_call(job: str, n: int = 1) -> None:
+    """Adds n calls to the job's count (file lock: the scraper and the dashboard both call)."""
+    import fcntl
+    import json
+    day = _pt_now().strftime("%Y-%m-%d")
+    try:
+        with open(_CALLS_FILE + ".lock", "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            d = _load_calls(day)
+            d["total"] += n
+            d["jobs"][job] = d["jobs"].get(job, 0) + n
+            tmp = _CALLS_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(d, f)
+            import os
+            os.replace(tmp, _CALLS_FILE)
+    except Exception as e:
+        logger.debug("eBay call count not saved: %s", e)
+
+
+def budget_status(limit: int = DAILY_LIMIT) -> dict:
+    """What the Settings page shows: calls used and left today, per job."""
+    now = _pt_now()
+    d = _load_calls(now.strftime("%Y-%m-%d"))
+    paused = ebay_paused_until()
+    used = d["total"]
+    if paused:
+        used = max(used, limit)
+    return {
+        "limit": limit, "used": used, "left": max(0, limit - used),
+        "paused_until": paused.isoformat() if paused else None,
+        "jobs": sorted(((JOB_LABELS.get(j, j), n) for j, n in d["jobs"].items()), key=lambda x: -x[1]),
+    }
+
+
+def budget_allows(job: str, limit: int = DAILY_LIMIT) -> bool:
+    now = _pt_now()
+    d = _load_calls(now.strftime("%Y-%m-%d"))
+    frac = (now.hour * 3600 + now.minute * 60 + now.second) / 86400
+    if job != "fast_lane":
+        fast_left = int((1 - frac) * 86400 / FAST_LANE_EVERY_S)
+        if d["total"] + fast_left >= limit:
+            return False
+    elif d["total"] >= limit:
+        return False
+    if job in NO_PACING:
+        return True
+    cap = JOB_SHARE.get(job, OTHER_SHARE) * limit
+    return d["jobs"].get(job, 0) < cap * (0.10 + 0.90 * frac)
+
+
+def job_for_term(term: str, default: str = "live_search") -> str:
+    return TERM_JOBS.get((term or "").strip(), default)
+
+
+def ebay_get(url: str, *, job: str, **kwargs):
+    """requests.get for an eBay Browse API call: refused while paused or when
+    the job is ahead of its share of today's allowance; otherwise counted."""
+    if ebay_paused_until():
+        raise EbayBudgetError("eBay's daily request limit is used up — eBay resumes after midnight (Pacific).")
+    if not budget_allows(job):
+        raise EbayBudgetError(f"eBay budget for “{JOB_LABELS.get(job, job)}” is used for now — saved for fresher searches.")
+    _count_call(job)
+    return requests.get(url, **kwargs)
+
+
 def _check_response(resp) -> None:
     if resp.status_code == 429:
         _note_rate_limit()
@@ -93,6 +216,36 @@ def _get_token(client_id: str, client_secret: str) -> str:
     return token
 
 
+def shipping_of(item: dict) -> Optional[float]:
+    """Cheapest US shipping in USD on an eBay item (0 = free), None if not shown."""
+    costs = []
+    for o in item.get("shippingOptions") or []:
+        c = (o.get("shippingCost") or {})
+        if c.get("currency", "USD") == "USD":
+            try:
+                costs.append(float(c.get("value")))
+            except (TypeError, ValueError):
+                pass
+    return min(costs) if costs else None
+
+
+def country_of(item: dict) -> Optional[str]:
+    return ((item.get("itemLocation") or {}).get("country") or "").upper() or None
+
+
+def _headers(token: str) -> dict:
+    """Browse API headers, with your zip code so shipping costs are to you."""
+    h = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}
+    try:
+        import yaml
+        z = str((yaml.safe_load(open("/config/config.yaml")) or {}).get("home_zip") or "").strip()
+        if z:
+            h["X-EBAY-C-ENDUSERCTX"] = f"contextualLocation=country%3DUS%2Czip%3D{z}"
+    except Exception:
+        pass
+    return h
+
+
 def _format_price(price: Optional[dict]) -> Optional[str]:
     if not price or "value" not in price:
         return None
@@ -104,29 +257,54 @@ def _format_price(price: Optional[dict]) -> Optional[str]:
     return f"{symbol}{amount:,.0f}" if amount == int(amount) else f"{symbol}{amount:,.2f}"
 
 
-def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeResult:
+def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict, newest: int = 0) -> ScrapeResult:
     name = source["name"]
     start = time.time()
     # A single term (live search) goes to eBay's own search; the full keyword
     # list (scheduled runs) fetches the newest listings in the category and
     # filters locally — one API call per run instead of one per keyword.
-    is_live_search = len(keywords) == 1 and keywords[0].strip()
+    # newest=N (the fast lane): just the N newest Buy It Now listings, no keyword filter.
+    is_live_search = not newest and len(keywords) == 1 and keywords[0].strip()
     params = {
         "category_ids": PRO_AUDIO_CATEGORY,
         "filter": CONDITION_FILTER,
         "sort": "newlyListed",
         "limit": "200",
     }
+    if newest:
+        params["limit"] = str(newest)
+        params["filter"] += ",buyingOptions:{FIXED_PRICE}"
     if is_live_search:
         params["q"] = keywords[0].strip()
+        # A specific model ("Avalon 737", "V76") is searched on all of eBay:
+        # gear is often listed outside Pro Audio (vintage electronics,
+        # collectibles, other instruments). A broad term ("ssl", "maag") stays
+        # in Pro Audio, or it brings back football jerseys and water skis.
+        from scrapers.board import _is_specific
+        if _is_specific(keywords[0].strip()):
+            del params["category_ids"]
     manual_url = (
         "https://www.ebay.com/sch/i.html?_sacat=180014"
         "&LH_ItemCondition=1500%7C2500%7C3000&_sop=10"
         + (f"&_nkw={requests.utils.quote(keywords[0].strip())}" if is_live_search else "")
     )
 
+    def web_backup():
+        # API paused / budget spent: eBay's plain web search (see scrapers/ebay_web.py)
+        try:
+            from scrapers import ebay_web
+            return ebay_web.fallback(name, manual_url, newest=newest,
+                                     term=keywords[0].strip() if is_live_search else "",
+                                     job=job_for_term(keywords[0]) if is_live_search else "")
+        except Exception:
+            logger.exception("eBay web search backup failed")
+            return None
+
     paused = ebay_paused_until()
     if paused:
+        backup = web_backup()
+        if backup:
+            return backup
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, blocked=True,
             error="eBay's daily request limit is used up for today.",
@@ -135,19 +313,33 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         )
     try:
         token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-        resp = requests.get(
-            SEARCH_URL,
-            params=params,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-            },
-            timeout=30,
-        )
+        if is_live_search:
+            params["fieldgroups"] = "EXTENDED"  # adds each listing's short description
+        job = "fast_lane" if newest else job_for_term(keywords[0] if is_live_search else "")
+        resp = ebay_get(SEARCH_URL, job=job, params=params, headers=_headers(token), timeout=30)
         _check_response(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"eBay search failed (HTTP {resp.status_code}): {resp.text[:200]}")
         items = resp.json().get("itemSummaries", []) or []
+        if is_live_search:
+            # A part number ("Hosa DTP-802") is often in neither title nor description
+            # ("HOSA 6 ft DB25 to 8 TRS cables"): also search by brand + connectors.
+            from scrapers.cable_family import alt_query
+            alt = alt_query(keywords[0])
+            if alt:
+                resp2 = ebay_get(SEARCH_URL, job=job, params={**params, "q": alt, "category_ids": PRO_AUDIO_CATEGORY},
+                                 headers=_headers(token), timeout=30)
+                if resp2.status_code == 200:
+                    have = {i.get("itemId") for i in items}
+                    items += [i for i in resp2.json().get("itemSummaries", []) or [] if i.get("itemId") not in have]
+    except EbayBudgetError as e:
+        backup = web_backup()
+        if backup:
+            return backup
+        return ScrapeResult(
+            source_name=name, source_url=manual_url, success=False, blocked=True, error=str(e),
+            fix_hint="Resumes on its own; nothing to fix.", duration_seconds=time.time() - start,
+        )
     except PermissionError as e:
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, error=str(e),
@@ -156,6 +348,10 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         )
     except Exception as e:
         logger.warning("eBay API error for %s: %s", name, e)
+        if "daily request limit" in str(e):
+            backup = web_backup()  # a 429 just paused the API
+            if backup:
+                return backup
         return ScrapeResult(
             source_name=name, source_url=manual_url, success=False, error=str(e),
             fix_hint="Usually temporary — it should work again next run.",
@@ -165,8 +361,11 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
     listings = []
     for item in items:
         title = item.get("title") or ""
-        if not title or not keyword_match(title, keywords):
-            continue
+        from scrapers.store import is_overseas
+        if not title or not (newest or keyword_match(title, keywords)
+                             or (is_live_search and in_description(keywords[0], item.get("shortDescription")))) \
+                or is_overseas(country_of(item)):
+            continue  # overseas sellers are left out
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         posted_at = None
         if item.get("itemCreationDate"):
@@ -179,9 +378,15 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
         auction = ebay_auction_listing(item, name)
         if auction:
             auction.posted_at = posted_at
+            auction.shipping = shipping_of(item)
+            auction.country = country_of(item)
+            auction.seller = (item.get("seller") or {}).get("username")
             listings.append(auction)
             continue
         condition = item.get("condition")
+        if is_live_search and item.get("shortDescription") and not keyword_match(title, keywords):
+            # Found through its description: keep the start of it (the Shopping page matches the model there too).
+            condition = f"{condition or ''} · {re.sub(r'<[^>]+>', ' ', item['shortDescription'])[:300]}".strip(" ·")
         listings.append(Listing(
             source_name=name,
             title=truncate(title, 120),
@@ -191,12 +396,25 @@ def scrape_ebay_api(source: dict, keywords: list[str], api_cfg: dict) -> ScrapeR
             image_url=(item.get("image") or {}).get("imageUrl"),
             posted_at=posted_at,
             listing_id=item_id,
+            shipping=shipping_of(item),
+            country=country_of(item),
+            seller=(item.get("seller") or {}).get("username"),
+            offers_ok=best_offer_of(item),
         ))
 
     return ScrapeResult(
         source_name=name, source_url=manual_url, success=True,
         listings=listings, duration_seconds=time.time() - start,
     )
+
+
+def best_offer_of(item) -> Optional[bool]:
+    """True if the eBay item takes Best Offer, False if it lists buying
+    options without it, None if eBay didn't say."""
+    bo = item.get("buyingOptions")
+    if not bo:
+        return None
+    return "BEST_OFFER" in bo
 
 
 def ebay_manual_lowest_url(query: str) -> str:
@@ -214,8 +432,8 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
     if ebay_paused_until():
         return []
     token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-    resp = requests.get(
-        SEARCH_URL,
+    resp = ebay_get(
+        SEARCH_URL, job="lookups",
         params={"q": query.strip(), "sort": "price", "limit": "200",
                 "filter": f"{CONDITION_FILTER},buyingOptions:{{FIXED_PRICE}},priceCurrency:USD"},
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
@@ -226,8 +444,9 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
     out = []
     for item in resp.json().get("itemSummaries", []) or []:
         title = item.get("title") or ""
-        if not title or not keyword_match(title, [query]):
-            continue
+        from scrapers.store import is_overseas
+        if not title or not keyword_match(title, [query]) or is_overseas(country_of(item)):
+            continue  # overseas sellers are left out, like every other eBay search
         item_id = item.get("legacyItemId") or re.sub(r"\W", "", item.get("itemId", ""))
         loc = item.get("itemLocation") or {}
         location = ", ".join(p for p in (loc.get("city"), loc.get("stateOrProvince")) if p) or None
@@ -236,6 +455,8 @@ def ebay_lowest(query: str, api_cfg: dict, name: str = "eBay") -> list[Listing]:
             url=item.get("itemWebUrl") or f"https://www.ebay.com/itm/{item_id}",
             price=_format_price(item.get("price")), description=item.get("condition"),
             image_url=(item.get("image") or {}).get("imageUrl"), listing_id=item_id,
-            location=location,
+            location=location, shipping=shipping_of(item), country=country_of(item),
+            seller=(item.get("seller") or {}).get("username"),
+            offers_ok=best_offer_of(item),
         ))
     return out

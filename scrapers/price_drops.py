@@ -28,12 +28,17 @@ def recent_drops(cfg: dict, hours: int = 24, min_pct: int = MIN_PCT) -> list[dic
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             "SELECT * FROM seen WHERE price_dropped_at >= ? AND hidden = 0 AND duplicate = 0"
-            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND previous_price IS NOT NULL", (since,))]
+            " AND COALESCE(sold, 0) = 0 AND COALESCE(pending, 0) = 0 AND previous_price IS NOT NULL"
+            " AND (country IS NULL OR country IN ('US', 'CA'))", (since,))]
     exclude = cfg.get("exclude_words") or []
     market, index, similar = load_market(), price_index(), similar_index()
+    from scrapers import wanted
+    ms = wanted.matchers(cfg)
     out, seen = [], set()
     for r in rows:
         title = r.get("title") or ""
+        if not wanted.match(title, r.get("price"), ms, r.get("source_name")):
+            continue  # your Wanted list (Telex List) only
         if r["url"] in seen or exclude_match(title, exclude) or is_not_audio(title) or is_accessory_only(title) \
                 or is_partial(title) or title_says_sold(title) or item_form(title) in ("pedal", "plugin") \
                 or needs_repair(title, r.get("description")) or (r.get("description") or "").startswith("Auction"):
@@ -61,7 +66,9 @@ def alert(cfg: dict) -> int:
     from scrapers.emailer import send_html_email
     from scrapers.notify import push_enabled, send_push
     email_cfg = cfg.get("email") or {}
-    line = lambda r: (f"{r['title'][:60]} — now {r['price']} (was {r['previous_price']}), "
+    ship_txt = lambda r: ("" if not isinstance(r.get("shipping"), (int, float)) else
+                          (" + free ship" if r["shipping"] == 0 else f" + ${r['shipping']:,.0f} ship"))
+    line = lambda r: (f"{r['title'][:60]} — now {r['price']}{ship_txt(r)} (was {r['previous_price']}), "
                       f"{r['comp']['pct']}% under ~${r['comp']['ref']:,.0f}")
     title = f"Price drop{'s' if len(rows) > 1 else ''}: {len(rows)} now a deal"
     if push_enabled(cfg):

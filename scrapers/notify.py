@@ -20,7 +20,8 @@ def push_enabled(cfg: dict) -> bool:
 
 
 def send_push(cfg: dict, title: str, message: str, url: Optional[str] = None,
-              tags: Optional[list[str]] = None) -> bool:
+              tags: Optional[list[str]] = None, image: Optional[str] = None,
+              actions: Optional[list] = None) -> bool:
     ncfg = cfg.get("notifications") or {}
     topic = (ncfg.get("ntfy_topic") or "").strip()
     if not topic:
@@ -31,6 +32,10 @@ def send_push(cfg: dict, title: str, message: str, url: Optional[str] = None,
         payload["click"] = url
     if tags:
         payload["tags"] = tags
+    if actions:
+        payload["actions"] = actions  # tap-buttons, e.g. the one-tap offer page
+    if image and image.startswith("http"):
+        payload["attach"] = image  # the listing's photo, shown in the notification
     try:
         # JSON publishing (POST to the server root) keeps titles/messages
         # UTF-8 safe — header-based publishing can't carry "—" or emoji.

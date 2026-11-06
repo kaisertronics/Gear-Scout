@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% from "_listing_card.html" import listing_card %}
+{% block title %}Gear Scout{% endblock %}
+{% block content %}
+
+  <section class="panel" id="new">
+    <h2>🆕 New since you last looked <span class="muted">— {{ new|length }}{% if since %} since {{ since }}{% endif %}, newest first · Telex List and mics</span></h2>
+    <p class="muted">Last sweep {{ sweep.ago if sweep else 'not yet' }}{% if sweep %} ({{ sweep.new }} new){% endif %} · mic list updated {{ built or 'not yet' }}</p>
+    {% if new %}
+      <div class="listing-grid">{% for l in new[:24] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if new|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(new[24:])) }}">
+          <summary>Show all {{ new|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">Nothing new since your last visit.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" id="deals">
+    <h2>🔥 Smokin' hot deals <span class="muted">— {{ hot|length }} · Telex List and mics, 50%+ under used value (United and Dachman: in your price range and 20%+ under used), best deal score first</span></h2>
+    <p class="muted">Used value = the middle of what single, used, US listings of that exact model asked over the last year
+      (3+ listings needed; pairs, bundles, new-in-box ads and parts left out). More than 75% under usually means a scam or a
+      mix-up, so those aren't shown. Sorted by a deal score: the discount, plus a little for a fresh ad, a price cut or
+      pickup within 150 miles. The AI looks at each deal's photo, and ads that sat 3+ weeks or cut their price get a
+      suggested offer you can copy. Telex List deals go back 150 days; mic deals are what's for sale now.</p>
+    {% if hot %}
+      <div class="listing-grid">{% for l in hot[:24] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if hot|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(hot[24:])) }}">
+          <summary>Show all {{ hot|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">No 50%+ deals right now. Every new one goes to your phone the moment a sweep finds it.</p>
+    {% endif %}
+    {% if deals_warn %}
+      <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(deals_warn)) }}">
+        <summary>⚠️ {{ deals_warn|length }} more that look like deals but show warning signs (scam wording, a reused or wrong photo, far too cheap for a local ad)</summary>
+        <div class="listing-grid"></div>
+      </details>
+    {% endif %}
+  </section>
+
+  {% if quiet %}
+  <section class="panel" id="quiet-auctions">
+    <h2>🔔 Quiet auctions: bid now <span class="muted">— {{ quiet|length }} mic auction{{ '' if quiet|length == 1 else 's' }} ending within 6 hours with 0 bids, 40%+ under used value · soonest first</span></h2>
+    <div class="listing-grid">{% for l in quiet[:8] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if clones %}
+  <section class="panel" id="clone-makers">
+    <h2>🧬 Clone makers, newest <span class="muted">— {{ clones|length }} ad{{ '' if clones|length == 1 else 's' }} from Vanguard, sE, Peluso, AudioScape, Advanced Audio, United, Serrano and Silent-Arts across every site, last 3 days{% if posting and posting.hot_now %} · busy posting hour: fast sites checked every 15 minutes{% endif %}</span></h2>
+    <div class="listing-grid">{% for l in clones[:8] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if pairs %}
+  <section class="panel" id="pair-ups">
+    <h2>👯 Pair-ups <span class="muted">— {{ pairs|length }} model{{ '' if pairs|length == 1 else 's' }} where two separate single ads together cost 12%+ under a used pair · biggest saving first · each card has a message for its seller</span></h2>
+    {% for p in pairs %}
+    <h3 style="margin:.6em 0 .2em">${{ '{:,}'.format(p.total) }} for the two <span class="muted">vs ~${{ '{:,}'.format(p.used_pair) }} used pair · {{ p.pct }}% under{% if p.same_seller %} · same seller (one shipment){% endif %}</span></h3>
+    <div class="listing-grid">{{ listing_card(p.a) }}{{ listing_card(p.b) }}</div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if lots %}
+  <section class="panel" id="lot-hunter">
+    <h2>📦 Lot hunter <span class="muted">— {{ lots|length }} lot{{ '' if lots|length == 1 else 's' }} asking 25%+ under the used value of the parts (a lot, bundle or "8x" of one model) · biggest dollar saving first · unrecognised extras not counted</span></h2>
+    <div class="listing-grid">{% for l in lots[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if wanted_ads %}
+  <section class="panel" id="wanted-sniper">
+    <h2>🎯 Wanted-ad sniper <span class="muted">— {{ wanted_ads|length }} Facebook / Craigslist / OfferUp / Kijiji ad{{ '' if wanted_ads|length == 1 else 's' }} with no price (or a $1 stand-in), buy-list gear first · ask the price with the message on each card</span></h2>
+    <div class="listing-grid">{% for l in wanted_ads %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if fixers %}
+  <section class="panel" id="fixer-uppers">
+    <h2>🔧 Fixer-uppers <span class="muted">— {{ fixers|length }} for-parts / not-working / needs-tubes ad{{ '' if fixers|length == 1 else 's' }} on gear worth $400+ working · profit if fixed = working value − ask − a typical repair cost (an estimate) · biggest profit first</span></h2>
+    <div class="listing-grid">{% for l in fixers[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if mods %}
+  <section class="panel" id="modded-mics">
+    <h2>🔩 Modded mics <span class="muted">— {{ mods|length }} ad{{ '' if mods|length == 1 else 's' }} with a capsule / transformer upgrade priced under stock body + parts (part values are estimates) · biggest gap first</span></h2>
+    <div class="listing-grid">{% for l in mods[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if parts_radar %}
+  <section class="panel" id="parts-radar">
+    <h2>🔧 Parts radar <span class="muted">— {{ parts_radar|length }} LA-2A / clone part{{ '' if parts_radar|length == 1 else 's' }} (UTC, Sowter and similar transformers, T4B cells, NOS tubes) 25%+ under that part's usual asking price · biggest saving first</span></h2>
+    <div class="listing-grid">{% for l in parts_radar[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if windows %}
+  <section class="panel" id="price-windows">
+    <h2>📉 Buying windows <span class="muted">— {{ windows|length }} model{{ '' if windows|length == 1 else 's' }} whose asking prices fell 10%+ across several sellers in the last 14 days · each card is the cheapest live ad · biggest drop first</span></h2>
+    <div class="listing-grid">{% for l in windows[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if motivated %}
+  <section class="panel" id="motivated-sellers">
+    <h2>🤝 Motivated sellers <span class="muted">— {{ motivated|length }} live ad{{ '' if motivated|length == 1 else 's' }} saying moving, estate, divorce, studio closing, must sell or similar, 10%+ under used value · best discount first</span></h2>
+    <div class="listing-grid">{% for l in motivated[:6] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% if mislabeled %}
+  <section class="panel" id="mislabeled">
+    <h2>🕵️ Possible mislabeled bargains <span class="muted">— {{ mislabeled|length }} · vague titles where the AI named the gear from the photo; 50%+ under its used value, $300+ (double-check the photo)</span></h2>
+    <div class="listing-grid">{% for l in mislabeled[:12] %}{{ listing_card(l) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  {% for o in outboard %}
+  <section class="panel" id="o-{{ o.key }}">
+    <h2>{{ o.name }} <span class="muted">— {{ o.rows|length }} deal{{ '' if o.rows|length == 1 else 's' }}{% if o.note %} · {{ o.note }}{% endif %}{{ '' if o.on else ' (off)' }}, newest first</span></h2>
+    {% if o.rows %}
+      <div class="listing-grid">{% for l in o.rows[:24] %}{{ listing_card(l) }}{% endfor %}</div>
+      {% if o.rows|length > 24 %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(o.rows[24:])) }}">
+          <summary>Show all {{ o.rows|length }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% else %}
+      <p class="muted">None at your price right now. A new one goes to your phone the moment a sweep finds it.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <details class="panel" id="mics">
+    <summary><h2 style="display:inline">🎤 Mics <span class="muted">— {{ mic_count }} for sale, {{ hits|length }} deal{{ '' if hits|length == 1 else 's' }} (also above) · tap to open</span></h2></summary>
+    <p class="muted">Lowest price per model for each brand. <a href="{{ url_for('mics_page') }}">Open the full Mics page</a> for
+      settings, auctions and Mercari alerts.</p>
+    {% for t in mic_targets %}
+      {% set ls = by.get(t.key) or [] %}
+      <h3 id="t-{{ t.key }}">{{ t.name }} <span class="muted">— {% if t.key in pct_keys %}{{ ls|length }} at 50%+ under used{% else %}{{ ls|length }} for sale{% endif %}{{ '' if t.on else ' (off)' }}</span></h3>
+      {% if ls %}
+        {% set ms = models.get(t.key) or [] %}
+        {% if ms|length > 0 %}
+          <table class="mic-models">
+            <thead><tr><th>Model</th><th>Lowest</th><th>For sale</th></tr></thead>
+            <tbody>
+            {% for g in ms %}
+              <tr><td>{{ g.label }}</td>
+                  <td><a href="{{ g.best.url }}" target="_blank" rel="noopener">${{ '{:,.0f}'.format(g.price) }}</a>
+                    <span class="muted">{{ (g.best.source_name or '').split(' — ')[0] }}</span></td>
+                  <td>{{ g.n }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(ls)) }}">
+          <summary>Show the {{ ls|length }} listing{{ '' if ls|length == 1 else 's' }}</summary><div class="listing-grid"></div>
+        </details>
+      {% endif %}
+    {% endfor %}
+  </details>
+
+  <section class="panel" id="proposals">
+    <h2>💡 Coming next <span class="muted">— Gear Scout builds these on its own, about one an hour; tap Skip on any you don't want</span></h2>
+    {% if proposals.open %}
+      <ul class="proposal-list">
+      {% for p in proposals.open %}
+        <li><strong>{{ p.title }}</strong> — {{ p.why }}
+          <form method="post" action="{{ url_for('proposal_decide', pid=p.id) }}" style="display:inline">
+            <button class="btn btn-sm btn-primary" name="action" value="approved">Do this first</button>
+            <button class="btn btn-sm" name="action" value="skipped">Skip</button>
+          </form></li>
+      {% endfor %}
+      </ul>
+    {% else %}<p class="muted">Nothing queued: the next hourly update picks its own improvement.</p>{% endif %}
+    {% if proposals.approved %}<p class="muted">Up first: {% for p in proposals.approved %}{{ p.title }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if proposals.built %}<p class="muted">Recently shipped: {% for p in proposals.built %}{{ p.title }}{% if p.note %} ({{ p.note }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+  </section>
+
+  {% if check %}
+  <details class="panel" id="check">
+    <summary><h2 style="display:inline">🔎 Check these <span class="muted">— {{ check|length }} with no solid used value yet, a price too good to be true, or a warning sign</span></h2></summary>
+    <p class="muted">Fewer than 3 other single, used listings of these models have turned up in the last year, so Gear Scout
+      can't tell whether they're a deal. Grouped by brand, cheapest first. They don't push.</p>
+    <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(check)) }}">
+      <summary>Show them</summary><div class="listing-grid"></div>
+    </details>
+  </details>
+  {% endif %}
+  <script>
+    // Stay current: reload after each new sweep (not while typing).
+    (function () {
+      const built = {{ (built_iso or '')|tojson }};
+      const check = () => fetch('{{ url_for("mics_built") }}', {cache: 'no-store'}).then(r => r.json())
+        .then(r => { if (r.built && r.built !== built) location.reload(); }).catch(() => {});
+      setInterval(() => { if (!document.hidden && !(document.activeElement && document.activeElement.tagName === 'INPUT')) check(); }, 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    })();
+  </script>
+  <script>
+    // Sections that start open load their listings now.
+    document.querySelectorAll('details.more-listings[open][data-lazy]').forEach(async d => {
+      if (d.dataset.loaded) return;
+      d.dataset.loaded = '1';
+      const grid = d.querySelector('.listing-grid');
+      grid.innerHTML = '<p class="muted">Loading…</p>';
+      try { grid.innerHTML = await (await fetch(d.dataset.lazy)).text(); }
+      catch (err) { grid.innerHTML = '<p class="muted">Couldn’t load — reload the page.</p>'; delete d.dataset.loaded; }
+    });
+  </script>
+{% endblock %}

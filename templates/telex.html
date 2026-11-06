@@ -5,28 +5,28 @@
 {% block content %}
 
   <section class="panel">
-    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · {{ total }} listing{{ "" if total == 1 else "s" }} 10%+ under their comp</span></h2>
+    <h2>📋 Telex List <span class="muted">— {{ terms|length }} term{{ '' if terms|length == 1 else 's' }} · your Wanted list</span></h2>
     <p class="muted">
-      Listings still for sale that match one of these terms <strong>and are at least 10% under their comp</strong> — what the model sold for, its Reverb/eBay used price, Gear Scout's price history, or similar past listings (marked est.), cheapest
-      first (every
-      word, any order — “Apollo X8P” also finds “Universal Audio Apollo x8p”). The terms are also
-      added to every scrape and the background Facebook post search, and every hour Gear Scout
-      searches the next few terms directly on Facebook Marketplace (all regions), your Facebook
-      groups, OfferUp, Craigslist, Kijiji, ShopGoodwill, Reverb, eBay and Long &amp; McQuade — so the whole
-      list is searched every few hours. New terms go first.
+      These terms are your Wanted list: they decide what's on the <a href="{{ url_for('feed') }}">Feed</a> (every
+      match, any price), which new ads are pushed to your phone, and what the digest, steal, price-drop and auction
+      alerts cover. Each term is searched directly on Reverb, Craigslist, Kijiji, ShopGoodwill, Long &amp; McQuade and
+      OfferUp every 30 minutes, on eBay every 2 hours, and on Facebook Marketplace, your groups and group posts in
+      rotation all day (see <a href="{{ url_for('health') }}">Health</a>). New terms go first.
+      Below each term: every listing for sale that matches it, at any price — newest post first (or cheapest
+      first) — with deals marked. Same listings as the Feed.
     </p>
     <div class="telex-actions">
       <form method="post" action="{{ url_for('telex_scrape') }}">
         <button type="submit" id="telex-scrape-btn" class="btn btn-primary">🔄 Search all terms now</button>
       </form>
       <span class="muted">eBay, Reverb, OfferUp, Craigslist, Kijiji, ShopGoodwill and Long &amp; McQuade — about 2 minutes.
-        For Facebook, use “Search everywhere” on a term (about 2–3 minutes each); the hourly rotation covers Facebook too.</span>
+        For Facebook, use “Search everywhere” on a term (about 2–3 minutes each); the all-day rotation covers Facebook too.</span>
     </div>
     {{ last_searched(['telex', 'auto']) }}
     <div class="steal-levels">
       <span class="muted">Inside each term:</span>
       <a href="{{ url_for('telex') }}" class="btn btn-sm{{ ' btn-primary' if sort == 'new' else '' }}">Newest posts first</a>
-      <a href="{{ url_for('telex', sort='cheap') }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">Cheapest first</a>
+      <a href="{{ url_for('telex', sort='cheap') }}" class="btn btn-sm{{ ' btn-primary' if sort == 'cheap' else '' }}">💲 Cheapest first (any age)</a>
     </div>
     <div id="telex-status" class="live-status-banner" style="display:none;"></div>
     <form method="post" action="{{ url_for('telex_add') }}" class="telex-add">
@@ -44,6 +44,19 @@
             </form>
           </span>
         {% endfor %}
+      </div>
+    {% endif %}
+    {% if sharper %}
+      <div class="sharper-terms">
+        <p class="muted">🎯 Sharper terms — from gear you starred, instead of the broad word:</p>
+        <div class="telex-terms">
+          {% for s in sharper %}
+            <form method="post" action="{{ url_for('telex_add_from_listing') }}" class="listing-telex-form" style="position:static;display:inline-block;">
+              <input type="hidden" name="title" value="{{ s.title }}">
+              <button type="submit" class="btn btn-sm" title="Add “{{ s.term }}” (you have “{{ s.broad }}”)">+ {{ s.term }} <span class="muted">({{ s.broad }})</span></button>
+            </form>
+          {% endfor %}
+        </div>
       </div>
     {% endif %}
     {% if model_groups %}
@@ -70,10 +83,15 @@
   </section>
   {% endif %}
 
+  {% if view %}<div class="telex-expand-all">
+    <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('details.telex-term-body').forEach(d => d.open = true)">▾ Expand all terms</button>
+    <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('details.telex-term-body').forEach(d => d.open = false)">▸ Collapse all</button>
+  </div>{% endif %}
   {% for v in view %}{% set term, items, unpriced = v.term, v.all_items, v.unpriced %}
   <section class="panel" id="t-{{ loop.index }}">
     <h2>{{ term }} <span class="muted">— {{ items|length }} ·
-      {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within the hour{% endif %} ·
+      {% if sweep.get(term) %}searched {{ sweep[term].searched_at|local }}{% else %}not searched yet — coming up within 30 minutes{% endif %} ·
+      <a href="{{ url_for('feed', term=term) }}">all {{ feed_counts.get(term, 0) }} on the Feed →</a> ·
       <a href="{{ url_for('search', q=term) }}">live search →</a></span>
       <form method="post" action="{{ url_for('telex_scrape') }}" class="telex-term-search">
         <input type="hidden" name="term" value="{{ term }}">
@@ -82,12 +100,19 @@
     <p class="search-yourself muted">Search it yourself:
       {% for label, url in search_links(term) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
     {% set fresh, old = v.fresh, v.old %}
+    {% if items or unpriced %}
+    <details class="telex-term-body">
+      <summary class="btn btn-sm telex-expand">
+        <span class="when-closed">▸ Show {{ items|length + (unpriced|length if unpriced else 0) }} listing{{ '' if items|length + (unpriced|length if unpriced else 0) == 1 else 's' }}</span>
+        <span class="when-open">▾ Hide listings</span>
+      </summary>
+    {% endif %}
     {% if items %}
       {% if fresh %}
       <div class="listing-grid">
         {% for l in fresh[:24] %}{{ listing_card(l) }}{% endfor %}
       </div>
-      {% else %}<p class="muted">Nothing posted in the last week that's 10%+ under its comp.</p>{% endif %}
+      {% else %}<p class="muted">Nothing posted in the last week.</p>{% endif %}
       {% if fresh|length > 24 %}
         <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(fresh[24:])) }}">
           <summary>Show all {{ fresh|length }} ({{ 'newest' if sort == 'new' else 'cheapest' }} first)</summary>
@@ -101,7 +126,7 @@
         </details>
       {% endif %}
     {% else %}
-      <p class="muted">Nothing 10%+ under its comp right now.</p>
+      <p class="muted">Nothing for sale right now.</p>
     {% endif %}
     {% if unpriced %}
       <details class="more-listings" data-lazy="{{ url_for('lazy_cards', token=lazy_token(unpriced)) }}">
@@ -109,6 +134,7 @@
         <div class="listing-grid"></div>
       </details>
     {% endif %}
+    {% if items or unpriced %}</details>{% endif %}
   </section>
   {% endfor %}
 
@@ -125,9 +151,10 @@
           <input type="hidden" name="name" value="{{ g.name }}">
           <button type="submit" class="btn btn-sm">Remove group</button>
         </form></h2>
-      <p class="muted">Every listing matching one of these {{ g.terms|length }} models (brand + exact model number), cheapest first.
-        These models are searched about 10 an hour on eBay, Reverb, OfferUp, Craigslist, Kijiji, ShopGoodwill and Long &amp; McQuade,
-        so the whole group comes around every couple of days. They aren't added to every scrape, to keep scrapes fast.</p>
+      <p class="muted">For reference only: these imported models are <strong>not</strong> on your Wanted list — they aren't
+        searched, don't appear on the Feed and don't send alerts. Listed here: what Gear Scout happens to have collected
+        that matches one of them (brand + exact model number), 10%+ under comp, cheapest first. To watch a model for real,
+        add it as a term above.</p>
       <details class="more-listings"><summary class="muted">See all {{ g.terms|length }} models</summary>
         <p class="muted">{{ g.terms|join(' · ') }}</p></details>
       {% if g.good %}

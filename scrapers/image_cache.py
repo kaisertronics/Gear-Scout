@@ -65,10 +65,12 @@ def cache_images(urls: list[str], workers: int = 6) -> int:
 def cache_recent(days: int = 3, limit: int = 3000) -> int:
     """Saves pictures for recent listings that don't have a local copy yet
     (their links are still fresh)."""
+    from datetime import datetime, timedelta, timezone
     from scrapers.store import _conn
+    cut = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()  # ISO, like first_seen
     with _conn() as conn:
         urls = [u for (u,) in conn.execute(
             "SELECT image_url FROM seen WHERE image_url IS NOT NULL AND hidden = 0 AND sold = 0"
-            " AND first_seen >= datetime('now', ?) ORDER BY first_seen DESC LIMIT ?",
-            (f"-{days} days", limit))]
+            " AND first_seen >= ? ORDER BY first_seen DESC LIMIT ?",
+            (cut, limit))]
     return cache_images(urls)

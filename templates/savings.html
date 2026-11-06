@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+@font-face{font-family:Fraunces;font-style:italic;font-weight:800;src:url({{ url_for('static', filename='fonts/fraunces-800i.woff2') }}) format('woff2')}
+.sv-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 18px}
+.sv-tile{border-radius:14px;padding:14px 16px;background:#161512;color:#EFE6D2}
+.sv-tile b{display:block;font-size:2rem;line-height:1.1;font-weight:800;font-family:Fraunces,Georgia,serif;font-style:italic}
+.sv-tile span{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:#A39A8A}
+.sv-tile.big b{color:#E0892B;font-size:2.6rem}
+.sv-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.sv-form input[type=url]{flex:1 1 320px;min-width:0;padding:8px 10px}
+.sv-table{width:100%;border-collapse:collapse;font-size:.95rem}
+.sv-table th,.sv-table td{padding:7px 8px;border-bottom:1px solid #e3e6ea;text-align:left;vertical-align:middle}
+.sv-table td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sv-bar{height:8px;border-radius:4px;background:#e3e6ea;position:relative;min-width:120px}
+.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#E0892B}
+.sv-save{color:#1f8a55;font-weight:700}
+.sv-slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:10px}
+.sv-slide img{width:100%;height:auto;border-radius:10px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.sv-slide button{margin-top:6px;width:100%}
+.sv-help{font-size:.9rem;color:#5d6872;max-width:70ch}
+.sv-an{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:6px 0 22px}
+.sv-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.sv-card h3{margin:0 0 4px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sv-card .big{font-family:'GS Fraunces',Fraunces,Georgia,serif;font-style:italic;font-weight:800;font-size:2rem;line-height:1.15}
+.sv-card ul{margin:8px 0 0;padding-left:18px;line-height:1.55;font-size:.92rem}
+.sv-pos{color:#1f7a4a}.sv-neg{color:#b3261e}
+.sv-table tr.over td{background:#fdf0ee}
+.sv-resale{margin:6px 0 22px}
+.sv-resale summary{cursor:pointer;font-weight:700}
+.sv-resale textarea{width:100%;max-width:70ch;margin-top:8px;font:inherit;padding:8px 10px}
+.sv-err{background:#fdecea;border-left:4px solid #b8322a;padding:8px 12px;border-radius:0 6px 6px 0}
+</style>
+<h1>💰 Saved</h1>
+<p class="sv-help">What you saved on your gear vs. buying it new, how you did against the used market, and where you overpaid. Keep a Google Sheet with one row per item:
+<b>column A = the gear</b>, <b>column B = what you paid</b>. No headers needed. Put a new price in column C only if you want to override the lookup.
+Each piece gets today's new price (Reverb Brand New + eBay New) and its going used price (your Telex List prices, then listings Gear Scout has found, then Reverb). When no new price can be found (vintage gear, or gear sold only direct by its maker) it's compared to the used price. "x 2", "pair" or a plural name counts two; split a row with " / " to price two different things. A price in column C always wins. In Sheets choose <b>Share → Anyone with the link → Viewer</b>, then paste the link here.</p>
+
+<form class="sv-form" method="post" action="{{ url_for('savings_sheet') }}">
+  <input type="url" name="sheet_url" value="{{ sheet_url }}" placeholder="https://docs.google.com/spreadsheets/d/…" aria-label="Google Sheet link">
+  <button type="submit">Save sheet</button>
+  {% if sheet_url %}<button type="submit" formaction="{{ url_for('savings_refresh') }}">Re-read sheet + prices</button>{% endif %}
+</form>
+
+{% if d and d.error %}<div class="sv-err">{{ d.error }}</div>{% endif %}
+
+{% if d and d['items'] %}
+<div class="sv-hero">
+  <div class="sv-tile big"><span>Total saved</span><b>${{ '{:,.0f}'.format(d.total_saved) }}</b></div>
+  <div class="sv-tile"><span>Under new</span><b>{{ d.pct }}%</b></div>
+  <div class="sv-tile"><span>Paid</span><b>${{ '{:,.0f}'.format(d.total_paid) }}</b></div>
+  <div class="sv-tile"><span>New would be</span><b>${{ '{:,.0f}'.format(d.total_new) }}</b></div>
+</div>
+
+<h2>Analytics</h2>
+<div class="sv-an">
+  <div class="sv-card"><h3>1 · Saved vs buying new</h3>
+    <div class="big sv-pos">${{ '{:,.0f}'.format(d.total_saved) }}</div>
+    {{ d.pct }}% under new across {{ d.count }} pieces (${{ '{:,.0f}'.format(d.total_paid) }} paid vs ${{ '{:,.0f}'.format(d.total_new) }} new).
+    {% if d.not_new %}<br><small>{{ d.not_new|length }} piece{{ '' if d.not_new|length == 1 else 's' }} have no new price to be found, so they're compared to the going used price.</small>{% endif %}</div>
+  <div class="sv-card"><h3>2 · Saved vs the used market</h3>
+    <div class="big {{ 'sv-pos' if d.vs_market >= 0 else 'sv-neg' }}">{{ '-' if d.vs_market < 0 else '' }}${{ '{:,.0f}'.format(d.vs_market|abs) }}</div>
+    {{ d.vs_market_pct|abs }}% {{ 'under' if d.vs_market >= 0 else 'over' }} what the same pieces sell for used today, across {{ d.market_count }} pieces.
+    <br><small>Your gear would sell for about <b>${{ '{:,.0f}'.format(d.market_value) }}</b> used today vs ${{ '{:,.0f}'.format(d.market_paid) }} paid.</small></div>
+  <div class="sv-card"><h3>3 · Where you overpaid</h3>
+    {% if d.overpaid %}<div class="big sv-neg">${{ '{:,.0f}'.format(d.overpaid_total) }}</div>over the going used price on {{ d.overpaid|length }} piece{{ '' if d.overpaid|length == 1 else 's' }}:
+    <ul>{% for i in d.overpaid %}<li><b>{{ i.item }}</b>: paid ${{ '{:,.0f}'.format(i.paid) }}, goes for ${{ '{:,.0f}'.format(i.used) }} used ({{ i.vs_market_pct|abs }}% over)</li>{% endfor %}</ul>
+    {% else %}<div class="big sv-pos">None</div>You paid at or under the going used price for everything.{% endif %}
+    <br><small>Within 5% of the going rate counts as fair.</small></div>
+  <div class="sv-card"><h3>Best buys vs the market</h3>
+    <ul>{% for i in d.best_buys %}<li><b>{{ i.item }}</b>: {{ i.vs_market_pct }}% under used (${{ '{:,.0f}'.format(i.vs_market) }})</li>{% else %}<li>None yet</li>{% endfor %}</ul>
+    {% if d.best %}<small>Biggest save vs new: <b>{{ d.best.item }}</b>, ${{ '{:,.0f}'.format(d.best.saved) }}.
+    Average save per piece vs new: ${{ '{:,.0f}'.format(d.total_saved / d.count) }}.</small>{% endif %}</div>
+  {% if calib %}<div class="sv-card"><h3>Deal calibration</h3>
+    <b>{{ calib.text }}</b>
+    <ul>{% for r in calib.rows %}<li><b>{{ r.item }}</b>: paid ${{ '{:,.0f}'.format(r.paid) }}{% if r.lead_h is not none %}, seen {{ r.lead_h }} h before you bought{% else %}, not seen first{% endif %}{% if r.discount_pct is not none %}, {{ r.discount_pct }}% {{ 'under' if r.discount_pct >= 0 else 'over' }} used value{% endif %}</li>{% endfor %}</ul>
+    <small>Matched on model words in the title, asking price within 15% of what you paid, first seen before the purchase date.</small></div>{% endif %}
+  {% if d.rough or d.unpriced %}<div class="sv-card"><h3>Check these prices</h3>
+    {% if d.rough %}Only one listing to go on (rough):<ul>{% for i in d.rough %}<li>{{ i.item }}</li>{% endfor %}</ul>{% endif %}
+    {% if d.unpriced %}No price found:<ul>{% for i in d.unpriced %}<li>{{ i.item }}</li>{% endfor %}</ul>{% endif %}
+    <small>Type the right new price in column C of your sheet to override, or rename the item the way listings say it (e.g. "CAPI VP28 x 8").</small></div>{% endif %}
+</div>
+
+<h2>Slides for your feed</h2>
+<p class="sv-help">1080 × 1080, ready for Instagram/Facebook. Tap a slide's button to save it as an image{% if slides|length > 1 %}, or save them all{% endif %}.</p>
+<button type="button" id="sv-all">⬇ Save all {{ slides|length }} slides</button>
+<div class="sv-slides">
+  {% for s in slides %}
+  <div class="sv-slide"><img src="{{ url_for('savings_slide', n=loop.index) }}?v={{ version }}" alt="Slide {{ loop.index }}" loading="lazy">
+    <button type="button" data-n="{{ loop.index }}">⬇ Save slide {{ loop.index }}</button></div>
+  {% endfor %}
+</div>
+
+{% if resale %}
+<details class="sv-resale">
+  <summary>Draft a resale listing</summary>
+  <p class="sv-help">Pick a piece you bought. You get a title and description built from the original ad's condition and extras, with a suggested price. Read it over and fix anything in [brackets] before you post.</p>
+  <select id="rs-pick" aria-label="Piece to sell">
+    {% for name, r in resale.items() %}<option value="{{ loop.index0 }}">{{ name }}</option>{% endfor %}
+  </select>
+  {% for name, r in resale.items() %}
+  <div class="rs-draft" data-i="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}>
+    <textarea readonly rows="12" aria-label="Draft for {{ name }}">{{ r.text }}</textarea>
+    <p class="sv-help">{% if r.ask %}Suggested ask <b>${{ '{:,.0f}'.format(r.ask) }}</b> ({{ r.basis }}){% if r.floor %}; break-even after fees about ${{ '{:,.0f}'.format(r.floor) }}{% endif %}.{% endif %}
+      {% if not r.found_ad %}Gear Scout never saw the original ad, so condition and extras are left for you to fill in.{% endif %}</p>
+    {% if r.trade_in %}<p class="sv-help">Trade-in check: {{ r.trade_in.line }}</p>{% endif %}
+    <button type="button" class="rs-copy">Copy listing</button>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+
+<h2>Every item</h2>
+<div style="overflow-x:auto">
+<table class="sv-table">
+  <thead><tr><th>Item</th><th>Paid</th><th>New</th><th>Used market</th><th>Saved vs new</th><th>vs used market</th><th></th><th>Running total</th></tr></thead>
+  <tbody>
+  {% for i in d['items'] %}
+  <tr class="{{ 'over' if i.overpaid else '' }}">
+    <td><b>{{ i.item }}</b>{% if i.where or i.date %}<br><small>{{ i.where }}{% if i.where and i.date %} · {% endif %}{{ i.date }}</small>{% endif %}</td>
+    <td class="n">${{ '{:,.0f}'.format(i.paid) }}</td>
+    <td class="n">{% if i.new_only %}${{ '{:,.0f}'.format(i.new_only) }}<br><small>{{ i.new_basis }}</small>{% else %}<small>{{ i.new_basis }}</small>{% endif %}</td>
+    <td class="n">{% if i.used %}${{ '{:,.0f}'.format(i.used) }}<br><small>{{ i.used_basis }}</small>{% else %}<small>{{ i.used_basis }}</small>{% endif %}</td>
+    <td class="n sv-save">{% if i.saved is not none %}{{ '-' if i.saved < 0 else '' }}${{ '{:,.0f}'.format(i.saved|abs) }} · {{ i.pct }}%{% if i.against == 'used' %}<br><small>vs used (no new price found)</small>{% endif %}{% else %}—{% endif %}</td>
+    <td class="n {{ 'sv-neg' if i.overpaid else 'sv-pos' }}">{% if i.vs_market is not none %}{{ '-' if i.vs_market < 0 else '' }}${{ '{:,.0f}'.format(i.vs_market|abs) }} · {{ i.vs_market_pct }}%{% if i.overpaid %}<br><small>overpaid</small>{% endif %}{% else %}—{% endif %}</td>
+    <td>{% if i.new and i.paid <= i.new %}<div class="sv-bar" title="paid vs new"><i style="width:{{ [100, (100 * i.paid / i.new)|round]|min }}%"></i></div>{% endif %}</td>
+    <td class="n">${{ '{:,.0f}'.format(i.running) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% elif sheet_url and not (d and d.error) %}
+<p>No rows yet: put the gear in column A and what you paid in column B.</p>
+{% endif %}
+
+<script>
+(function () {
+  function save(n) {
+    return new Promise(function (done) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas'); c.width = 1080; c.height = 1080;
+        c.getContext('2d').drawImage(img, 0, 0, 1080, 1080);
+        c.toBlob(function (b) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(b); a.download = 'gear-savings-' + n + '.png';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(done, 400);
+        }, 'image/png');
+      };
+      img.src = '{{ url_for("savings_slide", n=0) }}'.replace('/0', '/' + n) + '?v={{ version }}';
+    });
+  }
+  document.querySelectorAll('.sv-slide button').forEach(function (b) {
+    b.addEventListener('click', function () { save(b.dataset.n); });
+  });
+  var pick = document.getElementById('rs-pick');
+  if (pick) pick.addEventListener('change', function () {
+    document.querySelectorAll('.rs-draft').forEach(function (d) { d.hidden = d.dataset.i !== pick.value; });
+  });
+  document.querySelectorAll('.rs-copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var ta = b.parentNode.querySelector('textarea');
+      ta.select();
+      var ok = navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.resolve(document.execCommand('copy'));
+      Promise.resolve(ok).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy listing'; }, 1500); });
+    });
+  });
+  var all = document.getElementById('sv-all');
+  if (all) all.addEventListener('click', async function () {
+    for (var n = 1; n <= {{ slides|length }}; n++) { await save(n); }
+  });
+})();
+</script>
+{% endblock %}

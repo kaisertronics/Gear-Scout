@@ -12,6 +12,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus
 
@@ -38,7 +39,7 @@ _ACCESSORY = re.compile(
 )
 # Clones/replicas stay in the results (the user wants them) but are tagged,
 # so a $400 "U87 replica" isn't mistaken for a Neumann.
-_CLONE = re.compile(r"\b(?:replica|clone|copy|tribute|inspired|style|type|kit|diy|based on)\b", re.I)
+_CLONE = re.compile(r"\b(?:replica|clone|copy|tribute|inspired|style|type(?!\s?-?\d)|kit|diy|based on)\b", re.I)
 REPAIR_FLOOR = 0.1      # needs-repair units can legitimately be very cheap
 WORKING_FLOOR = 0.25    # below this share of typical it's an accessory/placeholder
 
@@ -161,6 +162,47 @@ def _candidates(listings, index, market, typical: Optional[float] = None,
     return sorted(out, key=lambda c: c["value"])
 
 
+TRACKER_FB_EVERY_HOURS = 6
+_TRACKER_FB = Path("/data/lowest_fb.json")
+
+
+def _fb_due(q: str) -> bool:
+    try:
+        last = json.loads(_TRACKER_FB.read_text()).get(q)
+        return not last or (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() \
+            >= TRACKER_FB_EVERY_HOURS * 3600
+    except Exception:
+        return True
+
+
+def _fb_mark(q: str) -> None:
+    try:
+        d = json.loads(_TRACKER_FB.read_text())
+    except Exception:
+        d = {}
+    d[q] = datetime.now(timezone.utc).isoformat()
+    try:
+        _TRACKER_FB.write_text(json.dumps(d))
+    except OSError:
+        pass
+
+
+def _carry_facebook(q: str, have: set) -> list[dict]:
+    prev = get_state(q)
+    out = []
+    with _conn() as conn:
+        for c in (prev or {}).get("top") or []:
+            url = c.get("url") or ""
+            if "facebook.com" not in url or url in have or c.get("value") is None:
+                continue
+            row = conn.execute("SELECT hidden, sold, pending FROM seen WHERE url = ? ORDER BY sold DESC LIMIT 1",
+                               (url,)).fetchone()
+            if row and (row[0] or row[1] or row[2]):
+                continue
+            out.append(c)
+    return out
+
+
 def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     """Runs the search, updates the stored top 10 and returns
     {'top': [...], 'alert': candidate-or-None, 'previous_lowest': float|None}.
@@ -172,7 +214,16 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     from scrapers.store import all_priced_rows
 
     q = normalize(query)
-    results = run_live_search(q, cfg, on_progress=on_progress)
+    # Background checks every 30 minutes search Facebook only every 6 hours
+    # (Facebook throttles an account that searches Marketplace constantly;
+    # your Telex sweep and the regional feeds cover it in between). A check
+    # you start yourself (on_progress set) always includes Facebook. Nothing
+    # in the background overnight or while Facebook has paused the account.
+    from scrapers.fb_posts_background import facebook_paused, marketplace_quiet_hours
+    skip_fb = on_progress is None and (not _fb_due(q) or marketplace_quiet_hours(cfg))
+    results = run_live_search(q, cfg, on_progress=on_progress, skip_facebook=skip_fb)
+    if not skip_fb and not facebook_paused():
+        _fb_mark(q)
     listings = [l for r in results for l in r.listings]
     # eBay by lowest price first (the regular eBay source reads the newest
     # listings, which can miss the cheapest). Needs the free eBay API keys.
@@ -186,6 +237,11 @@ def check_lowest(query: str, cfg: dict, on_progress=None) -> dict:
     index, market = build_price_index(all_priced_rows()), load_market()
     typical = item_typical(q, index, market, api_cfg)
     cands = _candidates(listings, index, market, typical, q)
+    if skip_fb or facebook_paused():
+        # Facebook wasn't searched this time: its ads from the last check
+        # stay in the running (unless sold, pending or hidden since), so the
+        # lowest doesn't jump up and a pricier ad isn't announced as a new low.
+        cands = sorted(cands + _carry_facebook(q, {c["url"] for c in cands}), key=lambda c: c["value"])
     top = cands[:TOP_N]
 
     alert = None
@@ -256,7 +312,8 @@ def notify_new_lowest(cfg: dict, query: str, alert: dict, previous_lowest: Optio
     if push_enabled(cfg):
         send_push(
             cfg, f"New lowest price: {query}",
-            f"{alert['title'][:90]}{repair}\n{alert['price']} (was lowest {was}) · {alert['source_name']}",
+            f"{alert['title'][:90]}{repair}\n{alert['price']} (was lowest {was}) · {alert['source_name']}"
+            + (f"\n{alert['offers']}" if alert.get("offers") else ""),
             url=alert["url"], tags=["moneybag"],
         )
     email_cfg = cfg.get("email") or {}

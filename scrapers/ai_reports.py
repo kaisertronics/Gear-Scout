@@ -78,11 +78,16 @@ def daily_briefing(cfg: dict) -> bool:
         conn.row_factory = sqlite3.Row
         rows = [dict(r) for r in conn.execute(
             "SELECT * FROM seen WHERE first_seen >= ? AND hidden = 0 AND duplicate = 0 AND COALESCE(sold, 0) = 0"
-            " AND COALESCE(live_only, 0) = 0 AND price IS NOT NULL", (since,))]
+            " AND COALESCE(live_only, 0) = 0 AND price IS NOT NULL"
+            " AND (country IS NULL OR country IN ('US', 'CA'))", (since,))]
     market, index, similar, t = load_market(), price_index(), similar_index(), taste()
+    from scrapers import wanted
+    ms = wanted.matchers(cfg)
     cands = []
     for r in rows:
         title = r["title"] or ""
+        if not wanted.match(title, r.get("price"), ms, r.get("source_name")):
+            continue  # your Wanted list (Telex List) only
         if is_not_audio(title) or is_accessory_only(title) or item_form(title) == "pedal" \
                 or (r.get("description") or "").startswith("Auction"):
             continue

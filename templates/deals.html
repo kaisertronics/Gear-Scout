@@ -7,7 +7,7 @@
   <section class="panel">
     <h2>💸 Deals <span class="muted">— {{ trusted|length }} listing{{ '' if trusted|length == 1 else 's' }} 10%+ under used prices</span></h2>
     <p class="muted">
-      Every listing Gear Scout has collected for your search terms and Telex List that's still for sale and at least
+      Every listing Gear Scout has collected for your Wanted list (Telex List) that's still for sale and at least
       10% under what the gear goes for used. The price is checked against its comp <strong>and</strong> against what
       other listings of the same gear ask, and the lower of the two counts. Newest posts first. Ages are from when the
       seller posted the ad (a "~" means the site doesn't say, so it's when Gear Scout found it). Gear Scout reads deep into Reverb and eBay, so many ads it finds today have
@@ -18,7 +18,7 @@
         <input type="hidden" name="next" value="{{ request.full_path }}">
         <button type="submit" id="scrape-now-btn" class="btn btn-primary">🔄 Scrape now</button>
       </form>
-      <span class="muted">Quick scrape of every source right now (about 5 minutes); this page refreshes with any new deals when it's done.</span>
+      <span class="muted">Re-reads every site, then searches each of your terms (about 5–8 minutes); this page refreshes with any new deals when it's done.</span>
     </div>
     <div id="scrape-status-banner" class="live-status-banner" style="display:none;"></div>
     {{ last_searched(['manual', 'auto']) }}
@@ -82,7 +82,7 @@
         gsProgress(banner, data.total ? 'Scraping every source…' : 'Starting scrape…', data);
         setTimeout(poll, 1000);
       } else if (data.state === 'done' && sawRunning) {
-        gsProgress(banner, `Scrape done — ${data.new_count} new listing(s). Checking them for deals…`, null);
+        gsProgress(banner, `Scrape done — ${data.wanted_new || 0} new on your Wanted list (${data.new_count} in all). Checking them for deals…`, null);
         const ready = async () => {
           try {
             const st = await (await fetch("{{ url_for('steals_status') }}")).json();

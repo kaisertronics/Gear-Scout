@@ -128,6 +128,12 @@ def dispatch_scrape(source: dict, keywords: list[str], cfg: dict):
     elif stype == "shopgoodwill":
         from scrapers.shopgoodwill import scrape_shopgoodwill
         return scrape_shopgoodwill(source, keywords)
+    elif stype == "hibid":
+        from scrapers.hibid import scrape_hibid
+        return scrape_hibid(source, keywords)
+    elif stype == "municibid":
+        from scrapers.municibid import scrape_municibid
+        return scrape_municibid(source, keywords)
     elif stype == "craigslist":
         return scrape_craigslist(source, keywords)
     elif stype == "craigslist_region":

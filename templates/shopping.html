@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Shopping list · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .shop-item { border-top: 1px solid var(--border); padding: 12px 0; }
+  .shop-item.done { opacity: .5; }
+  .shop-head { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  .shop-head label { font-weight: 600; flex: 1 1 260px; }
+  .shop-head input[type=number] { width: 56px; }
+  .shop-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+  .shop-row a { flex: 1 1 240px; word-break: break-word; }
+  .shop-over { color: var(--red-text); font-weight: 700; }
+  .shop-under { color: #15803d; font-weight: 700; }
+</style>
+
+<section class="panel">
+  <h2>Studio shopping list</h2>
+  <p style="font-size:20px;margin:6px 0"><strong>Still to buy: ${{ '%.2f'|format(s.total) }}</strong>
+    <span class="muted">(est. with WA tax, cheapest used listing for sale now, or the new price if there is none)</span></p>
+  <p>
+    <label>Your budget: $ <input type="text" id="budget" inputmode="decimal" value="{{ s.budget if s.budget is not none else '' }}" style="width:100px"></label>
+    <button class="btn btn-primary btn-sm" id="budget-save">Save</button>
+    <span id="msg" class="muted"></span>
+  </p>
+  {% if s.budget is not none %}
+    <p class="{{ 'shop-over' if s.over else 'shop-under' }}">
+      {% if s.over %}Over budget by ${{ '%.2f'|format(s.diff) }}{% else %}Under budget by ${{ '%.2f'|format(s.diff) }}{% endif %}
+    </p>
+  {% endif %}
+  <p class="muted">Ticked items are left out of the total. Prices are per piece and include shipping and 10.7% tax. Listings refresh every 10 minutes.</p>
+</section>
+
+<section class="panel" id="week-plan">
+  <h2>This week's plan <span class="muted">&mdash; budget remaining ~${{ '{:,.0f}'.format(plan.budget_left) }} (your price targets, else used value, for items not yet bought)</span></h2>
+  {% for r in plan['items'] if r.status != 'Watching' %}
+  <div class="shop-row"><strong>{{ r.status }}</strong>
+    <span style="flex:1 1 240px">{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %} &times; {{ r.left }}<br><span class="muted">{{ r.why }}</span></span></div>
+  {% endfor %}
+  <p class="muted">Watching: {{ plan.counts.get('Watching', 0) }} item{{ '' if plan.counts.get('Watching', 0) == 1 else 's' }} with no deal or price signal yet.</p>
+</section>
+
+{% if ship_groups %}
+<section class="panel" id="bundle-shipping">
+  <h2>Same seller: buy together &amp; save shipping <span class="muted">&mdash; 2+ things you still need from one seller (estimate only)</span></h2>
+  {% for g in ship_groups %}
+  <div class="shop-item">
+    <div class="shop-head"><strong>{{ g.seller }}</strong> <span class="muted">on {{ g.source }}</span></div>
+    {% for l in g.lines %}
+    <div class="shop-row"><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.pieces }} &times; {{ l.title }}</a><span class="muted">{{ l.name }}</span><span>${{ '%.2f'|format(l.cost) }}</span></div>
+    {% endfor %}
+    <div class="shop-row"><span>Combined <strong>${{ '%.2f'|format(g.total) }}</strong></span><span class="shop-under">Could save about ${{ '%.0f'|format(g.saved) }} shipping if combined</span></div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if s.bundles %}
+<section class="panel" id="bundle-offers">
+  <h2>🧺 Bundle offers <span class="muted">— one seller has 3+ things you still need; one lot offer 15% under their combined used value (nothing is sent for you)</span></h2>
+  {% for b in s.bundles %}
+  <div class="shop-item">
+    <div class="shop-head"><strong>{{ b.seller }}</strong> <span class="muted">on {{ b.source }}</span></div>
+    {% for l in b.lines %}
+    <div class="shop-row"><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.pieces }} &times; {{ l.title }}</a><span class="muted">{{ l.name }}</span><span>${{ '%.2f'|format(l.cost) }}</span></div>
+    {% endfor %}
+    <div class="shop-row"><span>Their ask with shipping <strong>${{ '%.2f'|format(b.ask) }}</strong> &middot; combined used value ~${{ '%.0f'|format(b.value) }} (an estimate)</span>
+      <span class="shop-under">Offer ${{ '{:,}'.format(b.offer) }} ({{ b.pct_under_value }}% under value, {{ b.pct_under_ask }}% under ask)</span></div>
+    <div class="shop-row"><button type="button" class="btn btn-sm" data-msg="{{ b.message }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.msg); this.textContent='Copied'">Copy message to seller</button></div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="panel">
+  {% for it in s['items'] %}
+  <div class="shop-item {{ 'done' if not it.left }}">
+    <div class="shop-head">
+      <label><input type="checkbox" class="bought-tick" data-key="{{ it.key }}" data-qty="{{ it.qty }}" {{ 'checked' if not it.left }}>
+        {{ it.name }}</label>
+      <span>Need <strong>{{ it.qty }}</strong> &middot; bought
+        <input type="number" class="bought-n" data-key="{{ it.key }}" min="0" max="{{ it.qty }}" value="{{ it.got }}"></span>
+    </div>
+    <div class="muted">For: {{ it.need }}</div>
+    {% if it.note %}<div class="muted">{{ it.note }}</div>{% endif %}
+    {% for m in it.matches %}
+    <div class="shop-row">
+      <a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a>
+      <span class="muted">{{ m.source }}{% if m.auction %} (auction){% endif %}</span>
+      <span>${{ '%.2f'|format(m.unit) }} each + ${{ '%.2f'|format(m.ship) }} shipping
+        = <strong>${{ '%.2f'|format(m.delivered) }}</strong> each, est. with WA tax</span>
+    </div>
+    {% else %}
+    <div class="shop-row muted">No used listings for sale right now.</div>
+    {% endfor %}
+    <div class="shop-row">
+      <a href="{{ it.nurl }}" target="_blank" rel="noopener">Buy new: {{ it.nsrc }}</a>
+      <span>${{ '%.2f'|format(it.new) }} each (${{ '%.2f'|format(it.new_taxed) }} est. with WA tax, shipping not included)</span>
+    </div>
+    {% if it.saving is not none %}
+    <div class="shop-row"><span>
+      {% if it.saving > 0 %}Buying the cheapest used one saves <strong>${{ '%.2f'|format(it.saving) }}</strong> each{% if it.left %} (${{ '%.2f'|format(it.saving * it.left) }} on the {{ it.left }} still needed){% endif %}.
+      {% else %}The cheapest used one costs ${{ '%.2f'|format(-it.saving) }} more than new each.{% endif %}
+    </span></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<script>
+(function () {
+  var msg = document.getElementById('msg');
+  function save(body) {
+    msg.textContent = 'Saving...';
+    fetch({{ url_for('shopping_state')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j.ok) { location.reload(); } else { msg.textContent = j.error || 'Could not save.'; } })
+      .catch(function () { msg.textContent = 'Could not save. Check your connection.'; });
+  }
+  document.querySelectorAll('.bought-tick').forEach(function (b) {
+    b.addEventListener('change', function () { save({key: b.dataset.key, bought: b.checked ? +b.dataset.qty : 0}); });
+  });
+  document.querySelectorAll('.bought-n').forEach(function (n) {
+    n.addEventListener('change', function () { save({key: n.dataset.key, bought: +n.value || 0}); });
+  });
+  document.getElementById('budget-save').addEventListener('click', function () {
+    save({budget: document.getElementById('budget').value});
+  });
+})();
+</script>
+{% endblock %}

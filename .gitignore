@@ -1,6 +1,7 @@
 # Your real config and secrets — never commit these. Copy the .example
 # versions instead (see INSTALL.md).
 config.yaml
+config.yaml.saving
 .env
 
 # Local data (SQLite DB, Facebook session, run status) lives in a Docker

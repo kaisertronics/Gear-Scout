@@ -64,6 +64,8 @@ def _model_tokens(text: str) -> set[str]:
     """Distinct model numbers in a piece of text ("VT-737SP", "18i20", "5150"),
     reduced to their digits so "VT-737SP" and "737 SP" count once."""
     out = set()
+    # Serial numbers ("Serial #1295", "SN 4411", "S/N: 889", "#1261Vintage") aren't models.
+    text = re.sub(r"(?:\b(?:serial(?:\s*(?:no\.?|number|num))?|s/n|sn|ser|no\.)\s*[:#]?\s*|#\s*)\d+", " ", text.lower())
     for m in re.finditer(r"\b(?=[a-z0-9-]*\d)[a-z0-9]+(?:-[a-z0-9]+)*\b", text.lower()):
         tok = m.group(0)
         digits = re.sub(r"\D", "", tok)
@@ -268,12 +270,17 @@ _JUNK = re.compile(
     r"guitar hero|gaming (?:headset|mic|microphone)|webcam|for (?:iphone|android|phone|ipad|laptop|pc)|"
     r"phone (?:mic|microphone)|ham radio|cb radio|two[\s-]way radio|walkie|antennas?|scanner radio|"
     r"(?:reel to reel|cassette|vinyl|8[\s-]?track) (?:tapes?|music|records?)|records? lot|vinyl records?|"
-    r"lp records?|album collection|cd collection|dvds?|blu-?ray|costume|halloween|party speaker|"
+    r"lp records?|album collection|cd collection|vinyl lp|lp(?=[)\]])|albums?|compact discs?|cd single|"
+    r"soundtrack|dvds?|blu-?ray|costume|halloween|party speaker|"
     r"bluetooth speaker|boombox|echo dot|alexa|smart speaker|vase|ceramic|pottery|figurine|microscopes?|"
     r"telescope|jewelry|necklace|earrings|bracelet|hair (?:ribbon|bow)|ribbon (?:bow|trim|spool)|"
     r"gift wrap|scrapbook|sewing|craft ribbon|decor|decoration|ornament|prop microphone|"
     # wireless systems that don't say "wireless", car audio, test gear
     r"wms[\s-]?\d+\w*|ism\d?|uhf|vhf|bodypack|phoenix gold|\d+(?:\.\d)?\s?(?:watts? )?rms|tube tester|"
+    # Sound Storm Laboratories car amps sold as "SSL EVO 5000", "SSL Evolution EV2.1000"
+    r"sound ?storm|ssl (?:evo\w*|ev\d+\w*)|ssl force|mb ?quart|stair ?lifts?|harmar|"
+    # Wi-Fi routers / range extenders ("N300 RE1000") and cameras sold with a Rode mic
+    r"wi-?fi|routers?|range extenders?|mirrorless|dslr|camcorders?|vlog(?:ging)?|"
     r"multimeter|oscilloscope|signal generator|bass trainer|metronome|"
     # hi-fi turntable parts ("Audio-Technica AT-ART9XI moving coil cartridge")
     r"phono cartridges?|cartridges?|stylus|styli|tonearms?|"
@@ -295,7 +302,7 @@ _ACCESSORY_ONLY = re.compile(
     r"\b(?:cables?|cords?|snake|stands?|boom arms?|mic arms?|arms?|pop filters?|windscreens?|wind ?shields?|"
     r"blimp|dead ?cat|shock ?mounts?|clips?|cases?|road case|flight case|gig bag|bags?|covers?|"
     r"isolation pads?|foam|acoustic panels?|adapters?|holders?|straps?|mounts?|brackets?|rack ears|"
-    r"rack rails|rack shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
+    r"rack rails|rack ?shelf|shelf|rack trays?|trays?|patch cables?|batteries|battery|pouch(?:es)?|"
     r"suspensions?|desktop enclosure|(?:usb|adat|dante|madi|option|expansion)(?:\s*/\s*\w+)?\s+cards?|"
     r"goosenecks?|gooseneck module|(?<!sub )(?<!sub-)woofers?|tweeters?|compression drivers?|speaker drivers?|speaker cones?|re-?cone kits?|diaphragm kits?)\b", re.I)
 _MAIN_GEAR = re.compile(
@@ -359,6 +366,30 @@ def is_accessory_only(title: Optional[str]) -> bool:
     return not gear_after
 
 
+_OFF_TOPIC = re.compile(
+    r"\b(?:tractors?|backhoes?|skid[\s-]?steers?|track loaders?|loaders?|excavators?|mulchers?|bulldozers?|"
+    r"forklifts?|trailers?|semi[\s-]?trucks?|pickup trucks?|4wd|awd|\d+\s?hrs|mowers?|(?<![\w-])(?:atvs?|utvs?)(?![\w-])|snowmobiles?|"
+    r"kubota|john deere|bobcat|caterpillar|great dane|forestry|tillers?|stump grinders?|wood chippers?|"
+    r"brush cutters?|(?<![\w-])fae(?![\w-])|camcorders?|video cameras?|xdcam|"
+    r"anhydrous|trek|bikes?|bicycles?|double[\s-]?din|backup camera|comics?|comic books?|"
+    r"stratocaster|telecaster|jazzmaster|jazz bass|precision bass|les paul|(?<![\w-])strat(?![\w-])|"
+    r"(?:guitar |bass |strat(?:ocaster)? |tele(?:caster)? |single[\s-]?coil |humbucker )?pick-?ups? set|"
+    r"strat(?:ocaster)? pickups?|tele(?:caster)? pickups?|(?:acoustic )?guitar pickups?|pickups? set|seymour duncan|dimarzio|lr baggs|pickguards?|"
+    r"t-?shirts?|shirts?|hoodies?|sweatshirts?|(?<!new )jerseys?|hats?|caps? \(clothing\)|"
+    # furniture ("Mart Stam S34 dining chairs")
+    r"dining|chairs?|armchairs?|sofas?|couch(?:es)?|dressers?|nightstands?|ottomans?|"
+    # more clothing and records ("Harley-Davidson Women's … Short Sleeve",
+    # "Whirr – Distressor EP … Records 2020", "Tri Coloured Vinyl")
+    r"short sleeve|long sleeve|women'?s|men'?s (?:tee|shirt)|(?<![\w-])ep(?![\w-])|records \d{4}|"
+    r"colou?red vinyl|vinyl (?:lp|record|ep|album|single|7\"|12\")|"
+    # postcards, prints and flowers ("Flowerpower No.1 Tulips Art Unlimited
+    # Amsterdam Holland Postcard P16" matched the "ART P16" term)
+    r"post ?cards?|greeting cards?|art prints?|posters?|lithographs?|flowers?|floral|bouquets?|tulips?|"
+    # race scanners and test gear sharing a model number ("Racing Electronics
+    # RE1000 Scanner NASCAR", "Voltech PM1000 AC Power Analyzer")
+    r"nascar|racing electronics|race scanners?|scanners?|power analy[sz]ers?|voltech)\b", re.I)
+
+
 @functools.lru_cache(maxsize=100_000)
 def is_not_audio(title: Optional[str]) -> bool:
     """True for listings that only share a word with audio gear (air
@@ -368,6 +399,11 @@ def is_not_audio(title: Optional[str]) -> bool:
         return True
     # "Viair compressors", "aAir Compressor": "air compressor" even inside a word.
     if _NOT_AUDIO.search(t) or re.search(r"air[\s-]?compressor|air tank|viair", t, re.I):
+        return True
+    # Farm / construction / vehicles ("Kubota … Loader, SSL attach", a
+    # "7411T-SSL trailer"), guitar pickups and pickguards (Seymour Duncan
+    # SSL-1), and clothing — they share letters with studio gear names.
+    if _OFF_TOPIC.search(t):
         return True
     # Guitars themselves ("Vintage V72 Reissued Electric Guitar") — but not a
     # mic or preamp that mentions recording guitar.
@@ -450,6 +486,9 @@ def is_relevant(title: Optional[str], price: Optional[str], terms: tuple) -> boo
     specific = _specific_terms(terms)
     if specific and keyword_match(t, specific):
         return True
+    from scrapers.base import WANTED_MATCHERS, fix_brand_spelling
+    if WANTED_MATCHERS and any(m(fix_brand_spelling(t.lower())) for m in WANTED_MATCHERS):
+        return True  # on your Wanted list (Telex List)
     if _HIFI.search(t):
         return False
     brand = canonical_brand(t)
@@ -466,16 +505,19 @@ def wants_pedals(cfg: dict) -> bool:
     return any("pedal" in str(t).lower() for t in terms)
 
 
-def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None) -> list:
+def drop_excluded(listings: list, cfg: dict, terms: Optional[list] = None, keep_accessories: bool = False) -> list:
     """Drops non-audio items, accessory-only listings (setting), exclude
     words — and, when the run's search terms are given (scheduled/hourly/
     manual scrapes, not a live search), listings found only through a broad
-    word that don't look like studio gear (see is_relevant)."""
+    word that don't look like studio gear (see is_relevant). keep_accessories:
+    the search was for a cable / connector, so cables are what's wanted."""
     words = cfg.get("exclude_words") or []
-    hide_acc = cfg.get("hide_accessories", True)
+    hide_acc = cfg.get("hide_accessories", True) and not keep_accessories
     term_key = tuple(terms) if terms and len(terms) > 1 and cfg.get("relevance_check", True) else None
     hide_pedals = not wants_pedals(cfg)
+    from scrapers.collision_guard import collision_ok
     return [l for l in listings if not is_not_audio(l.title)
+            and collision_ok(l.title, getattr(l, "description", None))
             and not (hide_pedals and item_form(l.title) == "pedal")
             and not (hide_acc and is_accessory_only(l.title))
             and not (words and exclude_match(l.title, words))
@@ -493,7 +535,7 @@ _FORMS = (
     # "Golden Reverberator", "Lion '68"…
     ("pedal", re.compile(
         r"\b(?:pedal|stomp ?box|uafx|(?:la-?2a|1176|teletronix)\b.{0,30}\bstudio compressor|"
-        r"golden reverberator|starlight echo|galaxy '?74|astra modulation|max preamp|"
+        r"golden reverberator|starlight echo|mary cries|galaxy '?74|astra modulation|max preamp|"
         r"(?:lion|ruby|dream|woodrow|enigmatic|anti|evermore|knuckles)\s*'?\d{2}|orange \w+ amp emulat\w*|"
         # Guitar/bass effects, named by type or by a pedal maker.
         r"overdrive|fuzz|distortion|wah|chorus|flanger|phaser|looper|tremolo|octaver|tube ?screamer|"
@@ -501,7 +543,7 @@ _FORMS = (
         r"mxr|electro-?harmonix|ehx|jhs|keeley|walrus audio|strymon|earthquaker|wampler|fulltone|"
         r"chase bliss|meris|source audio|xotic|catalinbread|dunlop|zvex|jackson audio|"
         r"boss\s+(?!br|dr|sp|mc|tr|ad|rc-?505|gt-?1000)[a-z]{2,3}-?\d{1,3}[a-z]*)\b", re.I)),
-    ("plugin", re.compile(r"\b(?:plug-?ins?|software|licen[sc]e|vst|aax|download code|"
+    ("plugin", re.compile(r"\b(?:plug[\s-]?ins?\b(?! power)|software|licen[sc]e|vst|aax|download code|"
                           r"uad-?2 (?:plug|powered plug))\b|\(download\)|\bdigital download\b", re.I)),
     ("kit", re.compile(r"\b(?:diy|pcb|bare boards?|unbuilt|unassembled|(?:partial|build|clone|diy|project) kit|kit (?:build|form|only))\b", re.I)),
     ("500", re.compile(r"\b500[\s-]?series\b|\bapi[\s-]?500\b|\b500 (?:module|format)\b|\(500\)|\b(?:lunchbox|vpr)\b", re.I)),
@@ -720,7 +762,7 @@ def model_key(title: Optional[str]) -> Optional[str]:
     return f"{key}|{form}" if form else key
 
 
-_VARIANT = re.compile(r"[\s-]+(vr|xls|xlii|xl|eb|ai|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
+_VARIANT = re.compile(r"[\s-]+[\"“”']?(fet|vr|xls|xlii|xl|eb|ai|jr|junior|reissue|mk\s?(?:i{1,3}|[2-5])|mark\s?(?:i{1,3}|[2-5])|ii|iii)\b", re.I)
 
 
 def _model_variant(title: Optional[str], query: str) -> Optional[str]:
@@ -740,7 +782,9 @@ def _model_variant(title: Optional[str], query: str) -> Optional[str]:
     if not m:
         return None
     v = re.sub(r"\W|mark|mk", "", m.group(1).lower())
-    v = {"2": "ii", "3": "iii", "4": "iv", "5": "v"}.get(v, v)
+    # "WA-47 Jr" is the cheaper FET mic, not the WA-47 tube (Oct 23: hiding Jr
+    # ads had disputed the tube WA-47's price, so no WA-47 was ever a deal).
+    v = {"2": "ii", "3": "iii", "4": "iv", "5": "v", "junior": "jr"}.get(v, v)
     return v
 
 
@@ -1050,7 +1094,8 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
 
     Local history (listings Gear Scout has seen) comes first, then the
     Reverb/eBay asking-price cache — asking prices run higher than sale
-    prices, so a deal against them needs 35%+ under instead of 25%.
+    prices, so a deal against them needs 40%+ under instead of 30% (25% against
+    what a model actually sold for).
     Multi-piece ads are compared per piece. Ads with no price still get
     the market value (just no comparison); parts are valued as parts."""
     value = parse_price(price)
@@ -1102,8 +1147,8 @@ def price_context(title: Optional[str], price: Optional[str], index: dict[str, f
     ctx.update({
         "typical": format_price(typical),
         "rough": rough,
-        # A real deal: 30%+ under what this model goes for (40%+ under
-        # Reverb/eBay asking prices) — but more than 85% under is almost
+        # A real deal: 30%+ under what this model goes for locally (25%+ under
+        # what it sold for, 40%+ under Reverb/eBay asking prices) — but more than 85% under is almost
         # always a comparison with the wrong thing (a reissue vs. a vintage
         # original, a part vs. the whole unit), not a deal.
         "deal": (bool(unit) and not rough and not partial and unit >= 20

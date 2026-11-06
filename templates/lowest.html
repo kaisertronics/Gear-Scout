@@ -33,7 +33,7 @@
       <span class="lowest-title">{{ c.title }}</span>
       <span class="muted">{{ c.source }}{% if c.location %} · 📍 {{ c.location }}{% endif %}{% if c.age_days is not none %} · {{ '' if c.age_known else '~' }}{% if c.age_days < 1 %}today{% else %}{{ c.age_days|int }}d ago{% endif %}{% endif %}</span>
     </span>
-    <span class="lowest-price">${{ '{:,.0f}'.format(c.unit) }}{% if c.qty > 1 %}<span class="listing-each">each ({{ c.qty }})</span>{% endif %}{{ extra|safe }}</span>
+    <span class="lowest-price">${{ '{:,.0f}'.format(c.unit) }}{% if c.qty > 1 %}<span class="listing-each">each ({{ c.qty }})</span>{% endif %}{% if c.shipping is number %}<span class="listing-each">{% if c.shipping == 0 %}free shipping{% else %}+ ${{ '{:,.0f}'.format(c.shipping) }} ship{% if c.total is number %} · ${{ '{:,.0f}'.format(c.total) }} delivered{% endif %}{% endif %}</span>{% endif %}{{ extra|safe }}</span>
   </a>
 {% endmacro %}
 {% from "_last_searched.html" import last_searched with context %}
@@ -41,7 +41,7 @@
   <section class="panel">
     <h2>📊 Price Board <span class="muted">— your Telex List and tracked items, updated hourly{% if board_built %} · {{ board_built|local }}{% endif %}</span></h2>
     <p class="muted">For each term: the <strong>best deal posted this week</strong> (biggest discount against what that gear
-      usually sells for used) and, for specific models, the <strong>cheapest one for sale anywhere</strong>. Price per piece;
+      usually sells for used) and the <strong>cheapest working one still for sale anywhere</strong> (any age). Price per piece;
       parts, accessories, auctions and placeholder prices are left out. Best deals first. You get a push + email when a
       new lowest shows up <em>and</em> it's 10%+ under the usual used price.</p>
   </section>

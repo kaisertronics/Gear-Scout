@@ -13,3 +13,4 @@ change how you use Gear Scout). Smaller improvements just get done.
 
 - **Guitar Center / Sweetwater used gear** — both block automated visits (Akamai “Access Denied”, PerimeterX captcha). If you sign up for their own used-gear email alerts, those emails could be fed into Gear Scout.
 - **Fewer, sharper Telex terms** — brand-only terms (stam, ssl, drawmer, daking, maag, phoenix audio, link audio) still match hundreds of listings; specific models would make the Price Board and New section sharper.
+- ~~"SSL style" listings under the "ssl" term~~ — decided 2026-10-22: leave as is (owner doesn't mind them).

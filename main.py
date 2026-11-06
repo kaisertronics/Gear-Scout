@@ -95,28 +95,44 @@ def _found_since_last_digest(exclude: set[str]) -> list:
             source_name=r["source_name"], title=r["title"], url=r["url"], price=r["price"],
             description=r["description"], image_url=r["image_url"], posted_at=posted,
             listing_id=r["global_id"].split("::", 1)[-1], location=r["location"],
+            shipping=r["shipping"] if "shipping" in r.keys() else None,
+            country=r["country"] if "country" in r.keys() else None,
         ))
     return out
 
 
-def _worth_only(listings: list) -> tuple[list, int]:
-    from scrapers.comps import evaluate, price_index, similar_index
-    from scrapers.market import load_market
-    market, index, similar = load_market(), price_index(), similar_index()
-    keep, no_comp = [], 0
+def _wanted_only(listings: list, cfg: dict) -> list:
+    """The digest lists what the Feed shows: new listings matching your
+    Wanted list (Telex List), at any price — with "N% under" when the
+    listing is 10%+ under its comp. Auctions have their own alerts."""
+    from datetime import timedelta
+    from scrapers import wanted
+    from scrapers.enrich import exclude_match, is_not_audio, title_says_sold
+    from scrapers.steals import find
+    ms, exclude = wanted.matchers(cfg), cfg.get("exclude_words") or []
+    # "% under" from the same check as the Feed, the Deals/Steals pages and
+    # the steal alerts, so the email never disagrees with them.
+    since = (_last_digest_time() - timedelta(hours=1)).isoformat()
+    deals = {r["url"]: r["steal"] for r in find(cfg, since=since, min_pct=10)["trusted"]}
+    keep, seen = [], set()
     for l in listings:
-        if (l.description or "").startswith("Auction"):
-            no_comp += 1
+        from scrapers.store import is_overseas
+        if is_overseas(getattr(l, "country", None)):
+            continue  # overseas sellers are left out
+        if (l.description or "").startswith("Auction") or exclude_match(l.title, exclude) \
+                or is_not_audio(l.title) or title_says_sold(l.title) or not wanted.match(l.title, l.price, ms, l.source_name):
             continue
-        c = evaluate(l.title, l.price, l.description, l.url, market, index, similar)
-        if not c:
-            no_comp += 1
-        elif c["worth"]:
-            l.comp = c
-            keep.append(l)
-    logger.info("Digest: %d of %d new listings are 10%%+ under their comp (%d without a comp)",
-                len(keep), len(listings), no_comp)
-    return keep, no_comp
+        ad = ((l.title or "").lower().strip(), l.price)
+        if ad in seen:
+            continue
+        seen.add(ad)
+        s = deals.get(l.url)
+        l.comp = {"pct": s["pct"], "ref": s["ref"], "label": s["label"], "est": s["est"]} if s else None
+        keep.append(l)
+    logger.info("Digest: %d of %d new listings match your Wanted list", len(keep), len(listings))
+    # Deals first (biggest discount first): the email shows at most ~40.
+    keep.sort(key=lambda l: -(l.comp["pct"] if l.comp else -1))
+    return keep
 
 
 def run_refresh_cycle(cfg: dict):
@@ -127,11 +143,21 @@ def run_refresh_cycle(cfg: dict):
     scheduled runs. New finds go into the next digest email."""
     from scrapers.learning import keywords_with_learned, skip_on_light_runs
     keywords = keywords_with_learned(cfg)
+    from scrapers.liquidation import with_defaults as _liq_defaults
+    from scrapers.pawn_shops import with_defaults as _pawn_defaults
+
+    def with_defaults(srcs):
+        return _pawn_defaults(_liq_defaults(srcs))
     sources = [
-        {**s, "_light": True} for s in cfg.get("sources", [])
+        {**s, "_light": True} for s in with_defaults(cfg.get("sources", []))
         if s.get("enabled", True) and s.get("type") != "facebook_posts"
     ]
     sources, skipped = skip_on_light_runs(sources)
+    from scrapers.fb_posts_background import facebook_paused, marketplace_quiet_hours
+    if facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
+    elif marketplace_quiet_hours(cfg):  # overnight: leave Marketplace alone
+        sources = [s for s in sources if s.get("type") != "facebook_marketplace_region"]
     if skipped:
         logger.info("Background refresh skipping (failing or never matching lately): %s", ", ".join(skipped))
     start = time.time()
@@ -140,6 +166,14 @@ def run_refresh_cycle(cfg: dict):
     new_listings = filter_new(all_listings)
     logger.info("Background refresh: %d new listings from %d sources in %.0fs",
                 len(new_listings), len(results), time.time() - start)
+    try:
+        # New Wanted matches to your phone now, not after the sold check below
+        # (not in Mic Focus: mic alerts only — see run_watch_cycle).
+        if not _mic_focus_on(cfg):
+            from scrapers.wanted import alert_new
+            alert_new(cfg)
+    except Exception:
+        logger.exception("Wanted alert failed")
     try:
         Path("/data/last_refresh.json").write_text(json.dumps({
             "finished": datetime.now(timezone.utc).isoformat(), "new_count": len(new_listings)}))
@@ -155,11 +189,15 @@ def run_refresh_cycle(cfg: dict):
     def market_job():
         # New finds first, then this run's other listings, then anything from
         # the last few days (live searches, Telex matches) still without a value.
+        from datetime import timedelta
         from scrapers.store import _conn
+        # ISO cutoff: first_seen is "2026-10-06T10:00…", which compares wrong
+        # against SQLite's datetime('now', …) ("2026-10-06 10:00").
+        cut = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         with _conn() as conn:
             recent = [t for (t,) in conn.execute(
-                "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= datetime('now', '-3 days')"
-                " ORDER BY first_seen DESC LIMIT 1500")]
+                "SELECT title FROM seen WHERE hidden = 0 AND sold = 0 AND first_seen >= ?"
+                " ORDER BY first_seen DESC LIMIT 1500", (cut,))]
         try:
             nocomp = [t for t in Path("/data/nocomp_titles.txt").read_text().split("\n") if t.strip()]
         except OSError:
@@ -184,8 +222,14 @@ def run_refresh_cycle(cfg: dict):
         cache_images([l.image_url for l in all_listings if l.image_url])
         cache_recent(days=2)
 
+    def mislabeled_job():
+        # Vague-title ads: the AI names the gear from the photo (a few per hour).
+        from scrapers import mislabeled
+        mislabeled.run(cfg)
+
     jobs = [threading.Thread(target=timed, args=(n, f), daemon=True)
-            for n, f in (("sold check", sold_job), ("price lookups", market_job), ("pictures", picture_job))]
+            for n, f in (("sold check", sold_job), ("price lookups", market_job), ("pictures", picture_job),
+                         ("mislabeled", mislabeled_job))]
     for j in jobs:
         j.start()
     for j in jobs:
@@ -200,7 +244,8 @@ def run_scrape_cycle():
         _run_scrape_cycle()
         try:
             from scrapers.telex import check_telex_lowest
-            check_telex_lowest(load_config())
+            if not _mic_focus_on():  # Mic Focus: mic alerts only
+                check_telex_lowest(load_config())
         except Exception:
             logger.exception("Telex lowest-price check failed")
     # Recorded only once a run finishes, so a run cut short by a restart is
@@ -243,12 +288,17 @@ def _run_scrape_cycle():
     except Exception:
         logger.exception("Couldn't update learned search terms")
     keywords = keywords_with_learned(cfg)
-    sources = [s for s in cfg.get("sources", []) if s.get("enabled", True)]
+    from scrapers.liquidation import with_defaults as _liq_defaults
+    from scrapers.pawn_shops import with_defaults as _pawn_defaults
+    sources = [s for s in _pawn_defaults(_liq_defaults(cfg.get("sources", []))) if s.get("enabled", True)]
     from scrapers.fb_posts_background import settings as fb_bg_settings
     if fb_bg_settings(cfg)["enabled"]:
         # Facebook post search runs all day in the background instead, with
         # its own afternoon roundup email.
         sources = [s for s in sources if s.get("type") != "facebook_posts"]
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
+        sources = [s for s in sources if not str(s.get("type", "")).startswith("facebook")]
     email_cfg = cfg["email"]
 
     logger.info("=" * 60)
@@ -293,7 +343,7 @@ def _run_scrape_cycle():
                               max_lookups=60, pause=0.2, cfg=cfg)
     except Exception:
         logger.exception("Market price lookup for new listings failed")
-    new_listings, no_comp_count = _worth_only(new_listings)
+    new_listings, no_comp_count = _wanted_only(new_listings, cfg), 0
 
     # Sites known to block automated access (shown as "check manually") and
     # eBay pausing for its daily limit are expected, not errors.
@@ -400,6 +450,17 @@ def _dashboard_job_running() -> bool:
     return False
 
 
+REFRESH_EVERY_MINUTES = 55
+
+
+def _refresh_due() -> bool:
+    try:
+        last = datetime.fromisoformat(json.loads(Path("/data/last_refresh.json").read_text())["finished"])
+    except Exception:
+        return True
+    return (datetime.now(timezone.utc) - last).total_seconds() >= REFRESH_EVERY_MINUTES * 60
+
+
 def run_watch_cycle():
     if _dashboard_job_running():
         logger.info("Hourly refresh skipped — a search from the dashboard is running.")
@@ -411,29 +472,86 @@ def run_watch_cycle():
         from scrapers.lowest import run_trackers, tracked_queries
         from scrapers.watches import get_watches, notify_watch_hits, run_watches
         cfg = load_config()
-        if (cfg.get("schedule") or {}).get("background_refresh", True):
+        from scrapers import mic_focus
+        cycle_start = time.time()
+        if mic_focus.enabled(cfg):
+            # Mic Focus (Oct 22): every cycle searches only the focus mics and
+            # pushes the ones that clear their discount; the other alerts
+            # (Telex matches, steals, price drops, auctions, trackers) rest.
+            if (cfg.get("schedule") or {}).get("background_refresh", True) and _refresh_due():
+                try:
+                    run_refresh_cycle(cfg)
+                except Exception:
+                    logger.exception("Background refresh failed")
+            try:
+                from scrapers.telex import run_wanted_sweep
+                mic_focus.alert(cfg)  # what the refresh found, without waiting for the sweep
+                run_wanted_sweep(cfg, cycle_start)
+                mic_focus.alert(cfg)
+            except Exception:
+                logger.exception("Mic Focus sweep / alerts failed")
+            try:
+                if time.time() - cycle_start < 600:  # ~4 min: a cycle already past 10 min leaves it for the next one
+                    mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
+                mic_focus.fetch_auctions(cfg)  # hourly
+                mic_focus.alert_auctions(cfg)
+            except Exception:
+                logger.exception("Mic auctions failed")
+            try:
+                from scrapers.assistant import check_alerts
+                check_alerts(cfg)
+            except Exception:
+                logger.exception("AI alert check failed")
+            return
+        # This cycle runs every 30 minutes; re-reading every site's feed is
+        # heavier, so it happens on every other one (hourly).
+        if (cfg.get("schedule") or {}).get("background_refresh", True) and _refresh_due():
             try:
                 run_refresh_cycle(cfg)
             except Exception:
                 logger.exception("Background refresh failed")
-        # Actively search the next few Telex List terms on search-based sites,
-        # then alert on any listing below the lowest price for its term.
+        # Search every Wanted (Telex List) term directly — fast sites every
+        # 30 min, eBay every 2 h, Facebook in rotation — then push anything
+        # new that matches, and alert on new lowest prices.
         try:
-            from scrapers.telex import check_telex_lowest, run_sweep
-            run_sweep(cfg)
+            from scrapers.telex import check_telex_lowest, run_wanted_sweep
+            from scrapers.wanted import alert_new
+            alert_new(cfg)  # what the refresh found, without waiting for the sweep
+            run_wanted_sweep(cfg, cycle_start)  # the Telex List and the mic terms, one shared rotation
+            alert_new(cfg)
             check_telex_lowest(cfg)
         except Exception:
-            logger.exception("Telex sweep / lowest-price check failed")
+            logger.exception("Wanted sweep / alerts failed")
+        # Mic deals keep their own rules and pushes (and the Distressor's) with Mic Focus off.
+        try:
+            mic_focus.alert(cfg)
+        except Exception:
+            logger.exception("Mic alerts failed")
+        try:
+            if time.time() - cycle_start < 600:  # ~4 min: a cycle already past 10 min leaves it for the next one
+                mic_focus.deep_crawl(cfg)  # every 2 hours: all the older Reverb ads too
+            mic_focus.fetch_auctions(cfg)  # hourly
+            mic_focus.alert_auctions(cfg)
+        except Exception:
+            logger.exception("Mic auctions failed")
         try:
             from scrapers import board
-            board.build(cfg)
+            built = board.load().get("built")
+            if not built or (datetime.now(timezone.utc) - datetime.fromisoformat(built)).total_seconds() > 55 * 60:
+                board.build(cfg)  # hourly: it takes most of a minute
+            board.verify_cheapest(cfg)  # each term's cheapest really still for sale
         except Exception:
             logger.exception("Price Board build failed")
         # Auctions: eBay's ending-soonest pro-audio auctions, then daytime
         # "ending soon" alerts and the 9 PM overnight-auctions list.
         try:
             from scrapers import auctions
-            auctions.fetch_ebay_ending(cfg)
+            try:
+                auctions.fetch_ebay_ending(cfg)
+            except RuntimeError as e:
+                if "daily request limit" not in str(e) and "eBay budget" not in str(e):
+                    raise
+                logger.info("eBay ending-auctions fetch skipped: %s", e)
             auctions.check(cfg)
         except Exception:
             logger.exception("Auction check failed")
@@ -443,7 +561,49 @@ def run_watch_cycle():
             price_drops.alert(cfg)
         except Exception:
             logger.exception("Price-drop check failed")
-        # New steals (60%+ under used prices): push + email right away.
+        # An older ad whose price cut makes it a mic deal under the usual rules: one push.
+        try:
+            from scrapers import price_cut_sniper
+            price_cut_sniper.alert(cfg)
+        except Exception:
+            logger.exception("Price-cut sniper failed")
+        # Listings at/under the max price you set for a model (Price targets on Mics): push + email.
+        try:
+            from scrapers import price_targets
+            price_targets.alert(cfg)
+        except Exception:
+            logger.exception("Price-target check failed")
+        # New listings that match your studio shopping list at a deal price: one push.
+        try:
+            from scrapers import shoplist_alerts
+            shoplist_alerts.alert(cfg)
+        except Exception:
+            logger.exception("Shopping-list deal check failed")
+        # A starred listing that just sold or vanished: one push + email.
+        try:
+            from scrapers import sold_alerts
+            sold_alerts.alert(cfg)
+        except Exception:
+            logger.exception("Sold-favorite alert failed")
+        # A shop's mic you want, sold out and now back in stock: one push per restock.
+        try:
+            from scrapers import restock_watch
+            restock_watch.alert(cfg)
+        except Exception:
+            logger.exception("Restock watch failed")
+        # A starred ad still up after 24h+: one gentle nudge (max 2/day, daytime only).
+        try:
+            from scrapers import star_nudge
+            star_nudge.alert(cfg)
+        except Exception:
+            logger.exception("Starred-ad nudge failed")
+        # New listings from sellers you watch (reads the database only): one push each.
+        try:
+            from scrapers import seller_watch
+            seller_watch.alert(cfg)
+        except Exception:
+            logger.exception("Watched-seller alert failed")
+        # New steals (steals.MIN_PCT, 50%+ under used prices): push + email right away.
         try:
             from scrapers.steals import alert_new
             alert_new(cfg)
@@ -466,6 +626,24 @@ def run_watch_cycle():
         _run_lock.release()
 
 
+def _mic_focus_on(cfg=None) -> bool:
+    try:
+        from scrapers import mic_focus
+        return mic_focus.enabled(cfg if cfg is not None else load_config())
+    except Exception:
+        return False
+
+
+def run_fast_lane():
+    """Every 2 minutes: newest Reverb / eBay mic listings (always, Mic Focus or not)."""
+    try:
+        cfg = load_config()
+        from scrapers import fast_lane
+        fast_lane.tick(cfg)
+    except Exception:
+        logger.exception("Fast lane failed")
+
+
 def run_fb_posts_batch():
     # Leaves the machine to a scrape that's already running (CPU, memory
     # and the Facebook account) — the next batch is 15 minutes away.
@@ -478,7 +656,36 @@ def run_fb_posts_batch():
         logger.exception("Background Facebook post search failed")
 
 
+def run_routine_watch():
+    """Alerts when the nightly update or the code review stops finishing."""
+    try:
+        from scrapers import routine_watch
+        routine_watch.check(load_config())
+    except Exception:
+        logger.exception("Routine watchdog failed")
+
+
+def run_best_deals_email():
+    """8 AM email: today's best deals from the Home page."""
+    try:
+        from scrapers import mic_focus
+        mic_focus.daily_email(load_config())
+    except Exception:
+        logger.exception("Best deals email failed")
+
+
+def run_weekly_report():
+    """Sunday 8:30 AM email: the week's buyer's report."""
+    try:
+        from scrapers import weekly_report
+        weekly_report.send_weekly(load_config())
+    except Exception:
+        logger.exception("Weekly buyer's report failed")
+
+
 def run_ai_briefing():
+    if _mic_focus_on():
+        return  # Mic Focus: mic alerts only
     try:
         from scrapers.ai_reports import daily_briefing
         daily_briefing(load_config())
@@ -487,6 +694,8 @@ def run_ai_briefing():
 
 
 def run_ai_weekly():
+    if _mic_focus_on():
+        return  # Mic Focus: mic alerts only
     try:
         from scrapers.ai_reports import weekly_notes
         weekly_notes(load_config())
@@ -500,7 +709,7 @@ def run_fb_posts_roundup():
         from scrapers.fb_posts_background import _local_now, send_roundup, settings
         cfg = load_config()
         s = settings(cfg)
-        if not s["enabled"] or _local_now(cfg).hour != s["roundup_hour"]:
+        if _mic_focus_on(cfg) or not s["enabled"] or _local_now(cfg).hour != s["roundup_hour"]:
             return
         send_roundup(cfg)
     except Exception:
@@ -539,7 +748,7 @@ def run_schedule():
 
     # Saved searches run on their own, more frequent timer so a hit can be
     # pushed to the phone within the hour instead of waiting for the digest.
-    interval = int((cfg.get("notifications") or {}).get("watch_interval_minutes", 60) or 60)
+    interval = int((cfg.get("notifications") or {}).get("watch_interval_minutes", 30) or 30)
     interval = max(15, interval)
     scheduler.add_job(
         run_watch_cycle,
@@ -550,6 +759,10 @@ def run_schedule():
         misfire_grace_time=600,
     )
 
+    # Fast lane (Nov 1): the newest Reverb / eBay mics every 2 minutes, deals pushed at once.
+    scheduler.add_job(run_fast_lane, IntervalTrigger(minutes=2, timezone=tz_name),
+                      name="fast lane", max_instances=1, coalesce=True, misfire_grace_time=60)
+
     # Both jobs always run and re-read their settings each time, so changes
     # made on the FB Posts page apply without restarting anything.
     from scrapers import fb_posts_background as fbbg
@@ -557,6 +770,13 @@ def run_schedule():
                       name="gear_scout_fb_posts", max_instances=1, coalesce=True, misfire_grace_time=300)
     scheduler.add_job(run_fb_posts_roundup, CronTrigger(minute=0, timezone=tz_name),
                       name="gear_scout_fb_roundup", misfire_grace_time=1800)
+    # Every 3 hours: has the nightly update / code review stopped finishing?
+    scheduler.add_job(run_routine_watch, IntervalTrigger(hours=3, timezone=tz_name),
+                      name="gear_scout_routine_watch", max_instances=1, coalesce=True, misfire_grace_time=1800)
+    scheduler.add_job(run_best_deals_email, CronTrigger(hour=8, minute=0, timezone=tz_name),
+                      name="gear_scout_best_deals_email", misfire_grace_time=3600)
+    scheduler.add_job(run_weekly_report, CronTrigger(day_of_week="sun", hour=8, minute=30, timezone=tz_name),
+                      name="gear_scout_weekly_report", misfire_grace_time=3600)
     # AI emails (only when a Gemini key is set): daily briefing and weekly notes.
     scheduler.add_job(run_ai_briefing, CronTrigger(hour=8, minute=0, timezone=tz_name),
                       name="gear_scout_ai_briefing", misfire_grace_time=3600)

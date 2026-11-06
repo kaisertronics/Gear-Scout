@@ -97,7 +97,10 @@ def check_favorite_prices() -> int:
         except Exception as e:
             logger.warning("Price check failed for %s: %s", url, e)
 
-    if fb:
+    from scrapers.fb_posts_background import facebook_paused
+    if fb and facebook_paused():  # Facebook asked the account to slow down
+        logger.info("Facebook favorite price check skipped: Facebook searching is paused")
+    elif fb:
         try:
             from playwright.sync_api import sync_playwright
             from scrapers.facebook_scraper import SESSION_FILE, _get_browser, _new_context

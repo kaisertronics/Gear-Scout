@@ -16,6 +16,7 @@ import os
 import re
 from collections import OrderedDict
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -247,7 +248,7 @@ yaml_rt.width = 100
 yaml_rt.indent(mapping=2, sequence=4, offset=2)
 
 SOURCE_TYPES = ["html", "rss", "craigslist", "craigslist_region", "facebook", "facebook_marketplace_region",
-                "shopgoodwill", "kijiji", "offerup", "shopify", "long_mcquade", "facebook_posts", "reddit"]
+                "shopgoodwill", "hibid", "kijiji", "offerup", "shopify", "long_mcquade", "facebook_posts", "reddit"]
 
 
 _config_cache: dict = {"stamp": None, "data": None}
@@ -265,7 +266,10 @@ def load_config_raw():
     with _config_cache_lock:
         if _config_cache["stamp"] != stamp:
             with open(CONFIG_PATH) as f:
-                _config_cache["data"] = yaml_rt.load(f)
+                data = yaml_rt.load(f)
+            if not isinstance(data, dict) and _config_cache["data"] is not None:
+                return _config_cache["data"]  # caught mid-save: keep the last good copy, re-read next time
+            _config_cache["data"] = data
             _config_cache["stamp"] = stamp
         return _config_cache["data"]
 
@@ -277,8 +281,18 @@ def load_config_for_edit():
 
 
 def save_config_raw(data):
-    with open(CONFIG_PATH, "w") as f:
+    # Written to a temporary file and swapped in at once: writing in place
+    # left config.yaml empty or half-written for a moment, and a page or the
+    # scraper reading it then got nothing (a Telex removal crashed the
+    # deals-for-you box on Oct 22).
+    tmp = f"{CONFIG_PATH}.saving"
+    with open(tmp, "w") as f:
         yaml_rt.dump(data, f)
+    try:
+        shutil.copymode(CONFIG_PATH, tmp)
+    except OSError:
+        pass
+    os.replace(tmp, CONFIG_PATH)
 
 
 def load_run_status():
@@ -387,27 +401,16 @@ def _write_manual_scrape_status(status: dict):
 
 
 def _run_manual_scrape_job():
-    from scrapers.manual_scrape import run_manual_scrape
-    started = time.time()
-
-    def on_progress(done, total, current_source):
-        _write_manual_scrape_status({
-            "state": "running", "started": started,
-            "done": done,
-            "total": total,
-            "current_source": current_source,
-        })
-
+    """"Scrape now" runs as its own lower-priority process (nice 10), not
+    inside the web server: it uses several CPUs for minutes, and in the same
+    process it starved the pages (the site hung). This thread just waits for
+    it; the process writes the progress file itself."""
+    import subprocess
     try:
-        cfg = load_config_raw()
-        results, new_listings = run_manual_scrape(cfg, on_progress=on_progress)
-        Path("/data/manual_scrape_finished").touch()  # pages rebuild once, now
-        _write_manual_scrape_status({
-            "state": "done",
-            "new_count": len(new_listings),
-            "sources_ok": sum(1 for r in results if r.success or r.blocked),
-            "sources_total": len(results),
-        })
+        proc = subprocess.run(["nice", "-n", "10", sys.executable, "-m", "scrapers.manual_scrape"],
+                              cwd=str(Path(__file__).parent), timeout=3600)
+        if proc.returncode != 0 and _load_manual_scrape_status().get("state") == "running":
+            _write_manual_scrape_status({"state": "failed", "reason": f"scrape process exited ({proc.returncode})"})
     except Exception as e:
         logging.exception("Manual scrape failed")
         _write_manual_scrape_status({"state": "failed", "reason": str(e)})
@@ -424,8 +427,32 @@ def require_login():
     if request.endpoint in ("login", "static"):
         return None
     if not session.get("authenticated"):
-        return redirect(url_for("login", next=request.path))
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
     return None
+
+
+def _ensure_login_password():
+    """Gear Scout's sign-in used to share the email app password, so making
+    a new app password for email changed your sign-in (and the sign-in page,
+    reachable through the phone link, guarded your Gmail credential). Now
+    the sign-in has its own password, kept only as a hash: the first time,
+    it's set to the password you sign in with today, so nothing changes."""
+    try:
+        cfg = load_config_raw()
+        if (cfg.get("login") or {}).get("password_hash"):
+            return
+        current = str((cfg.get("email") or {}).get("password") or "")
+        if not current:
+            return
+        from werkzeug.security import generate_password_hash
+        cfg["login"] = {"password_hash": generate_password_hash(current)}
+        save_config_raw(cfg)
+        logging.info("Gear Scout sign-in now has its own password (kept as a hash)")
+    except Exception:
+        logging.exception("Couldn't set up the separate sign-in password")
+
+
+_ensure_login_password()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -438,11 +465,16 @@ def login():
         real_password = str(email_cfg.get("password", ""))
         given_email = request.form.get("email", "")
         given_password = request.form.get("password", "")
-        email_ok = bool(real_email) and secrets.compare_digest(given_email, real_email)
-        password_ok = bool(real_password) and secrets.compare_digest(given_password, real_password)
+        email_ok = bool(real_email) and secrets.compare_digest(given_email.strip().lower(), real_email.strip().lower())
+        login_hash = (cfg.get("login") or {}).get("password_hash")
+        if login_hash:
+            from werkzeug.security import check_password_hash
+            password_ok = check_password_hash(login_hash, given_password)
+        else:  # before Gear Scout had its own sign-in password
+            password_ok = bool(real_password) and secrets.compare_digest(given_password, real_password)
         if email_ok and password_ok:
             session["authenticated"] = True
-            return redirect(request.args.get("next") or url_for("index"))
+            return redirect(request.args.get("next") or url_for("feed"))
         error = "Wrong email or password."
     return render_template("login.html", error=error)
 
@@ -459,6 +491,14 @@ def service_worker():
     js = "self.addEventListener('fetch', () => {});"
     return app.response_class(js, mimetype="application/javascript",
                               headers={"Cache-Control": "no-cache"})
+
+
+@app.context_processor
+def _inject_mic_focus():
+    try:
+        return {"mic_focus_on": bool((load_config_raw().get("mic_focus") or {}).get("enabled"))}
+    except Exception:
+        return {"mic_focus_on": False}
 
 
 @app.context_processor
@@ -482,6 +522,47 @@ def _price_index() -> dict:
     forced = _price_index_cache["at"] == 0  # the cache warmer asks for a fresh one
     _price_index_cache["at"] = time.time()
     return price_index(force=forced)
+
+
+def auction_countdown(description, now=None) -> Optional[dict]:
+    """Countdown for an auction description ("... ends YYYY-MM-DD HH:MM", Pacific)."""
+    m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", description or "")
+    if not m:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        end = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+    except ValueError:
+        return None
+    ts = int(end.timestamp())
+    secs = ts - int(now if now is not None else time.time())
+    if secs <= 0:
+        return {"label": "ended", "urgent": False, "ts": ts}
+    mins = secs // 60
+    if mins < 60:
+        label = f"{max(mins, 1)} min left"
+    elif mins < 24 * 60:
+        label = f"{mins // 60}h {mins % 60:02d}m left"
+    else:
+        d = mins // 1440
+        label = f"{d} day{'s' if d != 1 else ''} left"
+    return {"label": label, "urgent": mins < 60, "ts": ts}
+
+
+def _collision_ok(title, description=None) -> bool:
+    """Display-time twin of the ingest check: hides records/non-gear that were
+    stored before the guard existed. Never deletes rows; fails open."""
+    try:
+        from scrapers.collision_guard import collision_ok
+        return collision_ok(title, description)
+    except Exception:
+        return True
+
+
+def _cable_wanted(l: dict) -> bool:
+    """Matches a cable / connector term on the Telex List: a cable is what was asked for, not an accessory."""
+    from scrapers.wanted import is_cable_term
+    return any(is_cable_term(t) for t in l.get("wanted") or [])
 
 
 def _decorate(listings: list[dict]) -> list[dict]:
@@ -518,11 +599,37 @@ def _decorate(listings: list[dict]) -> list[dict]:
         sales, FAST_SALE_DAYS = {}, 0
     from scrapers.enrich import model_key, parse_price
     now = datetime.now(timezone.utc)
+    from scrapers import price_band as _pb
+    _band = _pb.band() if request.endpoint in ("index", "mics_page") else None  # Home and Mics only
+    # How many ads each seller has (per site) in the last 90 days: one query.
+    seller_counts = {}
+    try:
+        from scrapers.store import _conn
+        _c = _conn()
+        try:
+            _cut = (now - timedelta(days=90)).isoformat()
+            for _src, _sel, _n in _c.execute(
+                    "SELECT source_name, seller, COUNT(*) FROM seen WHERE seller IS NOT NULL "
+                    "AND hidden = 0 AND duplicate = 0 AND first_seen >= ? GROUP BY source_name, seller", (_cut,)):
+                seller_counts[(_src, _sel)] = _n
+        finally:
+            _c.close()
+    except Exception:
+        logging.exception("Couldn't load seller counts")
+    try:
+        from scrapers import hidden_sellers as _hs
+        hidden_sel = _hs.hidden_set()  # display filter only; empty (free) when none hidden
+    except Exception:
+        logging.exception("Couldn't load hidden sellers")
+        _hs, hidden_sel = None, frozenset()
     out = []
     for l in listings:
+        if hidden_sel and _hs.is_hidden(l, hidden_sel):
+            continue
         if (exclude_match(l.get("title"), exclude_words) or is_not_audio(l.get("title")) or title_says_sold(l.get("title"))
-                or (hide_acc and is_accessory_only(l.get("title")))
-                or (hide_pedals and item_form(l.get("title")) == "pedal")):
+                or (hide_acc and is_accessory_only(l.get("title")) and not _cable_wanted(l))
+                or (hide_pedals and item_form(l.get("title")) == "pedal")
+                or not _collision_ok(l.get("title"), l.get("description"))):
             continue
         # Learned from listings that sold: how fast this model goes, and at what price.
         sale = sales.get(model_key(l.get("title")) or "")
@@ -530,6 +637,12 @@ def _decorate(listings: list[dict]) -> list[dict]:
                       "price": f"${sale['price']:,.0f}", "n": sale["n"]} if sale else None)
         # Days on market: a listing that has sat for weeks usually has a
         # seller open to an offer.
+        try:
+            from scrapers.base import usable_seller
+            l["seller_other"] = (max(0, seller_counts.get((l.get("source_name"), l.get("seller")), 0) - 1)
+                                 if usable_seller(l.get("seller")) else 0)
+        except Exception:
+            l["seller_other"] = 0
         l["stale"] = None
         try:
             since = datetime.fromisoformat(l.get("posted_at") or l.get("first_seen"))
@@ -541,6 +654,16 @@ def _decorate(listings: list[dict]) -> list[dict]:
                 l["stale"] = {"days": days, "offer": f"${max(5, round(value * 0.85 / 5) * 5):,}"}
         except (TypeError, ValueError):
             pass
+        try:
+            from scrapers.motivated import reason as motivated_reason
+            l["motivated"] = motivated_reason(l)
+        except Exception:
+            l["motivated"] = None
+        try:
+            from scrapers.closeout import label as closeout_label
+            l["closeout"] = closeout_label(l)
+        except Exception:
+            l["closeout"] = None
         l["age_days"] = _age_days(l)
         l["age_known"] = bool(l.get("posted_at"))
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
@@ -548,9 +671,60 @@ def _decorate(listings: list[dict]) -> list[dict]:
                                        description=l.get("description"))
         # A current auction bid isn't a sale price, so it's never a "deal".
         l["is_auction"] = (l.get("description") or "").startswith("Auction")
+        l["auction_left"] = auction_countdown(l.get("description")) if l["is_auction"] else None
+        # Auction from a followed seller ending within a day: badge on the card.
+        l["watched_auction"] = None
+        _al = l["auction_left"]
+        if _al and _al["label"] != "ended" and _al["ts"] - time.time() < 24 * 3600:
+            try:
+                if l.get("seller") and l.get("source_name") and _seller_watched(l["source_name"], l["seller"]):
+                    l["watched_auction"] = _al
+            except Exception:
+                pass
         if (l.get("sold") or l.get("pending") or l["is_auction"]) and l["price_ctx"]:
             l["price_ctx"]["deal"] = False
             l["price_ctx"]["worth"] = False  # a current bid isn't a price
+        l["bundle"] = None
+        if not (l.get("sold") or l["is_auction"]):
+            from scrapers.bundle_breakdown import breakdown
+            l["bundle"] = breakdown(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["lot"] = None
+        if not (l.get("sold") or l["is_auction"] or l["bundle"]):
+            from scrapers.lot_splitter import lot_chip
+            l["lot"] = lot_chip(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["resale"] = None
+        if l["price_ctx"] and l["price_ctx"].get("deal"):
+            from scrapers.resale_profit import estimate as resale_estimate
+            l["resale"] = resale_estimate(l.get("title"), l.get("description"), parse_price(l.get("price")))
+        l["ship_warn"] = None
+        try:
+            if not (l.get("sold") or l["is_auction"]):
+                from scrapers.shipping_check import check as ship_check, label as ship_label
+                _sp, _ss = parse_price(l.get("price")), l.get("shipping")
+                if _sp and isinstance(_ss, (int, float)) and _ss > 0:
+                    from scrapers import market_value as _mv
+                    _uv = _mv.value(l.get("title"), l.get("description"))[0]
+                    l["ship_warn"] = ship_label(ship_check(_sp, _ss, _uv))
+        except Exception:
+            l["ship_warn"] = None
+        l["no_acc"] = None
+        if not l.get("sold"):
+            from scrapers.accessory_check import check as accessory_check
+            l["no_acc"] = accessory_check(l.get("title"), l.get("description"))
+        try:
+            from scrapers.mic_extras import check as mic_extras_check
+            l["mic_case"] = None if l.get("sold") else mic_extras_check(l.get("title"), l.get("description"), l.get("category"))
+        except Exception:
+            l["mic_case"] = None
+        l["serial_note"] = None
+        try:
+            if not l.get("sold"):
+                from scrapers.serial_check import check as serial_check
+                l["serial_note"] = serial_check(l.get("title"), l.get("description"))
+        except Exception:
+            l["serial_note"] = None
+        from scrapers.condition_grade import grade as condition_grade
+        l["cond_grade"] = condition_grade(l.get("title"), l.get("description"))
         l["distance"] = distance_miles(home_zip, l.get("location")) if home_zip else None
         # Listings with no known distance (shipped-item sites, older rows)
         # stay visible — the radius only filters what can be measured.
@@ -559,12 +733,54 @@ def _decorate(listings: list[dict]) -> list[dict]:
         l["is_deal"] = bool(l["price_ctx"] and l["price_ctx"].get("deal"))
         if deals_only and not l["is_deal"]:
             continue
+        # Display only: dim (never hide) cards priced far outside what you star.
+        # Starred ads, deals, Best deals (50%+ under used) and Telex deals stay bright.
+        _m = l.get("mic") or {}
+        l["price_dim"] = bool(
+            _band and not l.get("favorite") and not l["is_deal"] and not l.get("deal")
+            and not ((_m.get("pct") or 0) >= 50) and not ((l.get("comp") or {}).get("pct", 0) >= 50)
+            and _pb.is_outside(parse_price(l.get("price")), _band))
         # "Worth it only": 10%+ under B-stock value (or a solid used value for
         # vintage gear); listings without a comp yet are left out.
         if worth_only and not (l["price_ctx"] or {}).get("worth"):
             continue
         out.append(l)
+    _attach_sparklines(out)
     return out
+
+
+def _attach_sparklines(listings: list[dict]) -> None:
+    """Adds l["spark"] (tiny SVG price-history line) to listings with 2+
+    recorded prices. One database query for the whole page."""
+    try:
+        from scrapers.store import price_history_for
+        history = price_history_for([l.get("global_id") for l in listings])
+    except Exception:
+        logging.exception("Couldn't load price history")
+        return
+    w, h, pad = 80, 20, 3
+    for l in listings:
+        pts = history.get(l.get("global_id")) or []
+        if len(pts) < 2:
+            continue
+        # Stubborn seller: price cut 2+ times (consecutive drops > $0.50).
+        cuts = sum(1 for (_, a), (_, b) in zip(pts, pts[1:]) if a - b > 0.5)
+        if cuts >= 2:
+            l["cuts"] = cuts
+        pts = pts[-12:]
+        vals = [v for _, v in pts]
+        lo, hi = min(vals), max(vals)
+        span = (hi - lo) or 1
+        step = (w - 2 * pad) / (len(vals) - 1)
+        xy = [(pad + i * step, pad + (h - 2 * pad) * (1 - (v - lo) / span) if hi != lo else h / 2)
+              for i, v in enumerate(vals)]
+        l["spark"] = {
+            "w": w, "h": h,
+            "points": " ".join(f"{x:.1f},{y:.1f}" for x, y in xy),
+            "cx": round(xy[-1][0], 1), "cy": round(xy[-1][1], 1),
+            "color": "var(--green-text)" if vals[-1] < vals[0] else ("var(--red)" if vals[-1] > vals[0] else "var(--muted)"),
+            "title": " → ".join(f"${v:,.0f}" for v in vals),
+        }
 
 
 def _last_scraped_by_site() -> dict[str, str]:
@@ -706,7 +922,8 @@ def _for_you(grouped: list[tuple], n: int = 12) -> list[dict]:
             rows = [dict(r) for r in conn.execute(
                 """SELECT * FROM seen WHERE url IS NOT NULL AND url != '' AND hidden = 0 AND duplicate = 0
                    AND sold = 0 AND COALESCE(pending, 0) = 0 AND favorite = 0
-                   AND first_seen >= datetime('now', '-7 days') ORDER BY first_seen DESC LIMIT 4000""")]
+                   AND first_seen >= ? ORDER BY first_seen DESC LIMIT 4000""",
+                ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),))]
         # Taste first (cheap), then full price context only for those.
         rows = [r for r in rows if t.score(r.get("title") or "") >= 1.0
                 and is_relevant(r.get("title"), r.get("price"), terms)]
@@ -746,7 +963,7 @@ _SOURCE_TAGS = [
     ("FB Posts", "FB post", "fb"), ("FB Marketplace", "Facebook", "fb"), ("FB —", "FB group", "fb"),
     ("eBay", "eBay", "ebay"), ("Reverb", "Reverb", "reverb"), ("Craigslist", "Craigslist", "cl"),
     ("OfferUp", "OfferUp", "offerup"), ("Kijiji", "Kijiji", "kijiji"), ("ShopGoodwill", "ShopGoodwill", "sgw"),
-    ("Vintage King", "Vintage King", "store"), ("Long & McQuade", "L&M", "store"), ("Alto Music", "Alto", "store"),
+    ("HiBid", "HiBid", "sgw"), ("Vintage King", "Vintage King", "store"), ("Long & McQuade", "L&M", "store"), ("Alto Music", "Alto", "store"),
     ("Rudy", "Rudy's", "store"), ("GroupDIY", "GroupDIY", "forum"), ("The Gear Page", "Gear Page", "forum"),
     ("AudioKarma", "AudioKarma", "forum"), ("Gearspace", "Gearspace", "forum"),
 ]
@@ -760,6 +977,128 @@ def cached_image(name):
     from scrapers.image_cache import IMAGE_DIR
     resp = send_from_directory(IMAGE_DIR, name, mimetype="image/jpeg", max_age=86400 * 30)
     return resp
+
+
+@app.template_filter("delivered")
+def _delivered(l) -> Optional[str]:
+    """Price + listed US shipping for the whole ad ("$1,706"), or None when
+    the site doesn't list shipping (or it's free / local pickup)."""
+    from scrapers.enrich import parse_price
+    ship = l.get("shipping") if hasattr(l, "get") else None
+    value = parse_price(l.get("price")) if hasattr(l, "get") else None
+    if not isinstance(ship, (int, float)) or ship <= 0 or not value:
+        return None
+    total = value + ship
+    return f"${total:,.0f}" if total >= 100 else f"${total:,.2f}"
+
+
+@app.template_filter("per_channel")
+def _per_channel(l):
+    """'$X per channel' info for multi-channel gear, or None (see scrapers/price_per_channel.py)."""
+    from scrapers import price_per_channel
+    return price_per_channel.per_channel(l.get("price"), l.get("title")) if hasattr(l, "get") else None
+
+
+@app.template_filter("rare_find")
+def _rare_find(l):
+    """'Rare find' label for rare/vintage models, or None (see scrapers/rare_finds.py)."""
+    from scrapers import rare_finds
+    return rare_finds.rare_find(l.get("title"), l.get("brand")) if hasattr(l, "get") else None
+
+
+@app.template_filter("fair_range")
+def _fair_range(l):
+    """('$X–$Y', comps) fair-price range for a listing's model, or None (see market_value.fair_range)."""
+    try:
+        from scrapers import market_value
+        return market_value.fair_range(l.get("title")) if hasattr(l, "get") else None
+    except Exception:
+        return None
+
+
+@app.template_filter("scarcity")
+def _scarcity(l):
+    """Rare-model chip data or None (see scarcity.scarcity)."""
+    try:
+        from scrapers import scarcity
+        return scarcity.scarcity(l.get("title")) if hasattr(l, "get") else None
+    except Exception:
+        return None
+
+
+@app.template_filter("back_in_stock")
+def _back_in_stock(l):
+    """'Back in stock 2h ago' label for a shop listing that restocked in the last 48h, or None.
+    restock_watch.recent() is computed once per request (cached on flask.g)."""
+    try:
+        from flask import g
+        from datetime import datetime, timezone
+        if not hasattr(g, "_restock_recent"):
+            try:
+                from scrapers import restock_watch
+                g._restock_recent = restock_watch.recent() or {}
+            except Exception:
+                g._restock_recent = {}
+        at = g._restock_recent.get(l.get("url")) if hasattr(l, "get") else None
+        if not at:
+            return None
+        dt = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        mins = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
+        ago = f"{mins}m ago" if mins < 60 else (f"{mins // 60}h ago" if mins < 2880 else f"{mins // 1440}d ago")
+        return {"label": f"Back in stock {ago}"}
+    except Exception:
+        return None
+
+
+@app.template_filter("ribbon_note")
+def _ribbon_note(l):
+    """'Ribbon: no ribbon condition mentioned, ask' style note for a ribbon mic, or None (see scrapers/ribbon_note.py)."""
+    try:
+        from scrapers import ribbon_note
+        return ribbon_note.ribbon_note(l.get("title"), l.get("description")) if hasattr(l, "get") else None
+    except Exception:
+        return None
+
+
+@app.template_filter("unnamed_mic")
+def _unnamed_mic(l):
+    """'Might be ...' guesses for a generic-titled mic, or None (see scrapers/unnamed_mic.py)."""
+    from scrapers import unnamed_mic
+    return unnamed_mic.identify(l.get("title"), l.get("description")) if hasattr(l, "get") else None
+
+
+@app.template_filter("offer_odds")
+def _offer_odds(l):
+    """How often ~15% under-ask offers got accepted, or None (see scrapers/offer_odds.py)."""
+    from scrapers import offer_odds
+    return offer_odds.odds_chip(l.get("source_name")) if hasattr(l, "get") else None
+
+
+@app.template_filter("prebuy_questions")
+def _prebuy_questions(l):
+    """2-4 questions to ask the seller before buying, or [] (see scrapers/prebuy_questions.py)."""
+    from scrapers import prebuy_questions
+    if not hasattr(l, "get"):
+        return []
+    local = _is_local_pickup(l.get("source_name") or "")
+    return prebuy_questions.prebuy_questions(
+        l.get("title"), l.get("description"), l.get("category"),
+        has_shipping=not local, is_local=local)
+
+
+@app.template_filter("seller_reply")
+def _seller_reply(l):
+    """How often this seller answered your offers, or None (see scrapers/seller_reply.py)."""
+    from scrapers import seller_reply
+    return seller_reply.reply_chip(l.get("source_name"), l.get("seller")) if hasattr(l, "get") else None
+
+
+@app.template_test("local_pickup")
+def _is_local_pickup(source_name: str) -> bool:
+    """Sites where you pick the item up yourself (no shipping)."""
+    return bool(re.match(r"(?:FB |Facebook|Craigslist|OfferUp|Kijiji|seattle group)", source_name or ""))
 
 
 @app.template_filter("img")
@@ -1028,10 +1367,15 @@ def _patch_cached(global_id: str, favorite: Optional[bool] = None, hidden: bool 
     """Applies a star / hide to the cached Dashboard and Telex lists in
     place, so those pages stay instant instead of rebuilding."""
     def lists():
+        if _feed_cache.get("data") is not None:
+            yield _feed_cache["data"]
         d = _index_cache.get("data")
         if d:
             yield d["no_comp"]
             yield d.get("old", [])
+            yield d.get("usually_hidden", [])
+            for g in d.get("shop_folds", []):
+                yield g["items"]
             yield d["for_you"]
             yield d["deals"]
             for _, items in d["grouped"]:
@@ -1179,17 +1523,19 @@ def _all_deals(background: bool = False) -> dict:
 
 
 def _steals(min_pct: int, background: bool = False) -> dict:
-    """Listings 60%+ (or the chosen level) under used prices."""
+    """Listings 50%+ (or the chosen level) under used prices."""
     d = _all_deals(background)
     return {name: [l for l in d[name] if l["comp"]["pct"] >= min_pct] for name in ("trusted", "rough")}
 
 
 @app.route("/deals")
 def deals():
-    age = request.args.get("age") or "3"
-    age = age if age in dict(DEAL_AGES) else "3"
-    price = request.args.get("price") or "500-2000"
-    price = price if price in dict(DEAL_PRICES) else "500-2000"
+    # Opens on every deal, newest post first (the filters narrow it down).
+    # It used to open on "last 3 days, $500–$2,000", which was often empty.
+    age = request.args.get("age") or "all"
+    age = age if age in dict(DEAL_AGES) else "all"
+    price = request.args.get("price") or "any"
+    price = price if price in dict(DEAL_PRICES) else "any"
     sort = request.args.get("sort") or "new"
     d = _all_deals()
     lo, _, hi = price.partition("-")
@@ -1211,7 +1557,9 @@ def deals():
     order = {"new": _fresh_order,
              "discount": lambda l: -l["comp"]["pct"],
              "savings": lambda l: -l["steal"]["saved"],
-             "cheap": lambda l: l["steal"].get("unit") or 0}
+             # cheapest delivered: price + listed shipping (per piece)
+             "cheap": lambda l: (l["steal"].get("unit") or 0)
+             + ((l.get("shipping") or 0) / max(1, (l.get("price_ctx") or {}).get("qty") or 1))}
     trusted.sort(key=order.get(sort, order["new"]))
     rough.sort(key=order.get(sort, order["new"]))
     counts = {k: sum(1 for l in d["trusted"] if in_price(l) and (
@@ -1227,9 +1575,9 @@ def deals():
 def steals_status():
     """Whether the Steals list is up to date (kicks off a rebuild if not)."""
     try:
-        min_pct = int(request.args.get("pct") or 60)
+        min_pct = int(request.args.get("pct") or 50)
     except ValueError:
-        min_pct = 60
+        min_pct = 50
     if _deals_cache["data"] is not None:
         _all_deals()
     return {"rebuilding": _deals_state["running"]}
@@ -1238,10 +1586,10 @@ def steals_status():
 @app.route("/steals")
 def steals():
     try:
-        min_pct = int(request.args.get("pct") or 60)
+        min_pct = int(request.args.get("pct") or 50)
     except ValueError:
-        min_pct = 60
-    min_pct = min_pct if min_pct in STEAL_LEVELS else 60
+        min_pct = 50
+    min_pct = min_pct if min_pct in STEAL_LEVELS else 50
     data = _steals(min_pct)
     _verify_top_listings()
     # Newest posts first; ads up 30+ days get their own section at the bottom.
@@ -1251,6 +1599,24 @@ def steals():
     rough = sorted(data["rough"], key=age)
     return render_template("steals.html", trusted=fresh, old=old, rough=rough,
                            min_pct=min_pct, levels=STEAL_LEVELS)
+
+
+@app.route("/outboard")
+def outboard_page():
+    """Outboard: classic comps / pres / EQs from the owner's buy list asking under used value."""
+    from scrapers import outboard
+    rows = []
+    try:
+        found = {r["url"]: r for r in _cached_find("outboard", outboard.find, load_config_raw())}
+        for l in _decorate(list(found.values())):
+            src = found.get(l.get("url")) or {}
+            l["outboard"], l["deal"] = src.get("outboard"), src.get("deal")
+            l["_when"] = src.get("_when", "")
+            rows.append(l)
+        rows.sort(key=lambda r: (str(r["_when"])[:10], (r.get("deal") or {}).get("pct") or 0), reverse=True)
+    except Exception:
+        app.logger.exception("outboard page")
+    return render_template("outboard.html", rows=rows, min_pct=outboard.MIN_PCT, days=outboard.DAYS)
 
 
 _group_cache: dict = {"key": None, "at": 0.0, "data": None, "running": False}
@@ -1318,85 +1684,170 @@ def telex_group_remove():
     return redirect(url_for("telex"))
 
 
+# ---------------------------------------------------------------------------
+# Sweetwater stepper: Sweetwater's used gear (Gear Exchange) blocks automated
+# browsers with a "press & hold" human check, so Gear Scout can't search it
+# itself. This page walks your Telex terms one at a time and opens each
+# search in a Sweetwater tab in YOUR browser (on a timer or with Next), and
+# remembers which terms you've checked and what you found.
+# ---------------------------------------------------------------------------
+
+SWEETWATER_FILE = Path("/data/sweetwater_stepper.json")
+SWEETWATER_URL = "https://www.sweetwater.com/used/listings?query={q}"
+
+
+def _sw_state() -> dict:
+    try:
+        return json.loads(SWEETWATER_FILE.read_text())
+    except Exception:
+        return {}
+
+
+# Sweetwater allows 25 saved searches with email alerts. These 25 cover 57 of
+# the Telex terms (one brand search catches several terms); "covers" is
+# matched against your current Telex List so the page stays accurate.
+SWEETWATER_SAVED = [
+    ("Golden Age", ["Golden age", "Ga-47", "Golden age premier", "Golden Age Project R1", "Golden Age Project R1 ST", "golden age r1 tube"]),
+    ("Neutrik", ["Neutrik NC3FXX", "Neutrik NC3MXX", "Neutrik NC3FD", "Neutrik NC3MD", "Neutrik NA3FDM", "Neutrik NP3X", "Neutrik NE8FDP", "Neutrik NYS-SPP-L1"]),
+    ("Audioscape", ["audioscape", "Audioscape SSL", "audioscape opto", "audioscape as-2a"]),
+    ("Hosa", ["Hosa DTP-805", "Hosa CSS-805", "Hosa STX-807F", "Hosa XLR-807"]),
+    ("snake", ["DB25 snake", "TRS snake", "XLR snake", "XLR to TRS snake"]),
+    ("United Studio Technologies", ["united audio mic", "United twin 48", "united fet 47"]),
+    ("Stam", ["stam", "stam sa-47"]),
+    ("Peluso", ["peluso", "peluso p24"]),
+    ("CAPI", ["CAPI BT-50", "CAPI VM28"]),
+    ("Voodoo VR2", ["se voodoo vr2", "Vr2 voodoo pair"]),
+    ("WA-19", ["Wa-19", "warm wa-19"]),
+    ("BeesNeez", ["beesneez", "beezneez"]),
+    ("Flickinger", ["flickinger", "flick 500"]),
+    ("ribbon microphone", ["Ribbon mic", "stereo ribbon mic"]),
+    ("Distressor", ["Distressor"]),
+    ("Avalon 737", ["Avalon 737"]),
+    ("HEDD Type 20", ["HEDD 20 MKII"]),
+    ("Neumann KH 310", ["KH 310 II"]),
+    ("Telefunken TF17", ["telefunken tf17"]),
+    ("Tonelux", ["tonelux jc37"]),
+    ("AKG D12", ["d12 akg"]),
+    ("Vanguard V13", ["Vanguard V13"]),
+    ("Seventh Circle Audio", ["seventh circle audio"]),
+    ("Sebatron", ["sebatron"]),
+    ("Cloudlifter", ["Cloudlifter cl-4"]),
+]
+
+
+@app.route("/sweetwater/setup", methods=["POST"])
+def sweetwater_setup():
+    """Ticks a saved search off the one-time Sweetwater alert setup list."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("search") or "")[:100]
+    if name:
+        st = _sw_state()
+        done = st.setdefault("setup", {})
+        if data.get("done"):
+            done[name] = datetime.now(timezone.utc).isoformat()
+        else:
+            done.pop(name, None)
+        try:
+            SWEETWATER_FILE.write_text(json.dumps(st))
+        except OSError:
+            pass
+    return jsonify(ok=True)
+
+
+@app.route("/sweetwater")
+def sweetwater():
+    from urllib.parse import quote_plus
+    from scrapers import wanted
+    st = _sw_state()
+    marks = st.get("terms") or {}
+    rows = []
+    for t in wanted.terms(load_config_raw()):
+        m = marks.get(t) or {}
+        rows.append({"term": t, "url": SWEETWATER_URL.format(q=quote_plus(t)), "checked": m.get("at"),
+                     "ago": _ago(m.get("at")), "result": m.get("result"), "note": m.get("note", "")})
+    # Least recently checked first, so each pass picks up where you left off.
+    rows.sort(key=lambda r: r["checked"] or "")
+    checked = sum(1 for r in rows if r["checked"])
+    have = {t.lower(): t for t in (r["term"] for r in rows)}
+    done = st.get("setup") or {}
+    saved = [{"search": s, "url": SWEETWATER_URL.format(q=quote_plus(s)), "done": s in done,
+              "covers": [have[c.lower()] for c in cov if c.lower() in have]} for s, cov in SWEETWATER_SAVED]
+    covered = {c.lower() for s in saved for c in s["covers"]}
+    uncovered = [r["term"] for r in rows if r["term"].lower() not in covered]
+    return render_template("sweetwater.html", rows=rows, checked=checked,
+                           found=sum(1 for r in rows if r["result"] == "found"),
+                           saved=saved, n_covered=len(covered), uncovered=sorted(uncovered, key=str.lower),
+                           n_setup=sum(1 for s in saved if s["done"]))
+
+
+@app.route("/sweetwater/mark", methods=["POST"])
+def sweetwater_mark():
+    data = request.get_json(silent=True) or request.form
+    term = str(data.get("term") or "").strip()[:200]
+    result = data.get("result") if data.get("result") in ("found", "none", "opened") else "opened"
+    if term:
+        st = _sw_state()
+        terms = st.setdefault("terms", {})
+        prev = terms.get(term) or {}
+        terms[term] = {"at": datetime.now(timezone.utc).isoformat(),
+                       # Just opening it doesn't undo an earlier "found".
+                       "result": prev.get("result") if result == "opened" and prev.get("result") == "found" else result,
+                       "note": str(data.get("note") if data.get("note") is not None else prev.get("note", ""))[:300]}
+        try:
+            SWEETWATER_FILE.write_text(json.dumps(st))
+        except OSError:
+            pass
+    return jsonify(ok=True)
+
+
 @app.route("/telex")
 def telex():
+    """Your Telex List (= Wanted list) term by term. Built from the same
+    listings as the Feed — every match at any price, newest post first (or
+    cheapest first), deals marked — so the two pages always agree."""
     cfg = load_config_raw()
-    terms = _telex_terms(cfg)
-    # Matching thousands of listings against every term takes a few seconds
-    # (much longer while a scrape runs); reuse it for 3 minutes unless
-    # something changed.
-    key = (tuple(terms), _data_version[0])  # ?sort= only changes the display
-    if _telex_cache["groups"] is None:
-        snap = _snapshot_load("telex")
-        if snap is not None:  # terms changed since? only the differences get worked out below
-            _telex_cache.update(key=None, at=0.0, groups=snap)
-    fresh = _telex_cache["key"] == key and time.time() - _telex_cache["at"] < PAGE_REFRESH
-    cached = _telex_cache["groups"]
-    if (not fresh and cached is not None and not request.headers.get("X-Warm")
-            and [t for t, _, _ in cached] != terms):
-        # You added or removed a term: work out only the new one(s) — a few
-        # seconds — instead of all ~45 terms (a minute), then refresh the
-        # rest in the background.
-        have = {t: g for g in cached for t in [g[0]]}
-        missing = [t for t in terms if t not in have]
-        if len(missing) <= 5:
-            if missing:
-                have.update({g[0]: g for g in _telex_matches(missing, note=False)})
-            cached = [have[t] for t in terms]
-            _telex_cache.update(key=None, at=0.0, groups=cached)
-    if fresh:
-        groups = _telex_cache["groups"]
-    elif (_telex_cache["groups"] is not None
-          and [t for t, _, _ in _telex_cache["groups"]] == terms and not request.headers.get("X-Warm")):
-        # Show the last list right away and refresh it in the background.
-        groups = _telex_cache["groups"]
-        if not _telex_state["running"]:
-            def rebuild():
-                _telex_state["running"] = True
-                try:
-                    with app.test_request_context("/telex", headers={"X-Warm": "1"}):
-                        telex()
-                except Exception:
-                    logging.exception("Telex rebuild failed")
-                finally:
-                    _telex_state["running"] = False
-            threading.Thread(target=rebuild, name="telex-rebuild", daemon=True).start()
-    else:
-        groups = _telex_matches(terms)
-        _telex_cache.update(key=key, at=time.time(), groups=groups)
-        _snapshot_save("telex", groups)
-        _verify_top_listings()
-    # What changed since you last looked: newest posts first inside each
-    # term (or cheapest first, one tap), terms with something new on top,
-    # and everything posted in the last 2 days collected at the top.
+    terms = _telex_terms(cfg)  # entries as you typed them (a few hold several terms)
+    from scrapers.enrich import parse_price
     sort = "cheap" if request.args.get("sort") == "cheap" else "new"
     age = lambda r: r.get("age_days") if r.get("age_days") is not None else 999
-    view, new_all = [], {}
-    from scrapers.board import _is_specific
-    from scrapers.enrich import parse_price
-    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 0
-    for term, items, unpriced in groups:
-        # Broad terms ("vintage microphone", "tube mic", "stam") match lots of
-        # cheap odds and ends: nothing under $150 there, and only $300+ (near
-        # your budget) in the "New" section. Specific models: any price.
-        specific = _is_specific(term)
-        if not specific:
-            items = [r for r in items if unit(r) >= 150]
-        fresh = [r for r in items if not r.get("is_old")]
-        old = [r for r in items if r.get("is_old")]
-        if sort == "new":
-            fresh = sorted(fresh, key=age)
-        new = [r for r in fresh if age(r) <= 2 and (specific or unit(r) >= 300)]
+    unit = lambda r: (r.get("price_ctx") or {}).get("unit_value") or parse_price(r.get("price")) or 1e12
+    from scrapers.fb_twins import hide_twins
+    items = hide_twins(_feed_items(cfg))  # Facebook ad-twins: newest only (display only)
+    _mark_lowest(items)
+    view, new_all, feed_counts = [], {}, {}
+    for entry in terms:
+        parts = {p.strip() for p in entry.split(",") if p.strip()}
+        its = [l for l in items if parts & set(l["wanted"])]  # already newest first
+        if sort == "cheap":
+            its = sorted(its, key=unit)
+        # The cheapest working one of each model (the overall cheapest pulses
+        # gold) goes first, cheapest first, however old.
+        lowest, rest = _pinned_first(its, parts)
+        if sort == "cheap":
+            # Cheapest first means every ad still for sale, however old.
+            fresh, old = lowest + sorted(rest, key=lambda r: r.get("total") or r.get("unit") or 1e12), []
+        else:
+            fresh = lowest + [r for r in rest if age(r) <= FRESH_DAYS]
+            old = [r for r in rest if age(r) > FRESH_DAYS]
+        new = [r for r in fresh if age(r) <= 2]
         for r in new:
-            new_all.setdefault(r["url"], (r, term))
-        view.append({"term": term, "all_items": items, "fresh": fresh, "old": old, "unpriced": unpriced,
+            new_all.setdefault(r["url"], (r, entry))
+        feed_counts[entry] = len(its)
+        view.append({"term": entry, "all_items": its, "fresh": fresh, "old": old, "unpriced": [],
                      "new_count": len(new)})
     view.sort(key=lambda v: v["new_count"] == 0)  # stable: keeps your order otherwise
     new_items = sorted(new_all.values(), key=lambda x: age(x[0]))
     from scrapers.telex import state as telex_state
     from scrapers.telex import groups as telex_groups
-    return render_template("telex.html", groups=groups, terms=terms, view=view, new_items=new_items, sort=sort,
-                           total=sum(len(g) for _, g, _ in groups), sweep=telex_state(),
+    try:
+        from scrapers.telex_suggest import suggest_terms
+        sharper = suggest_terms(terms, [f.get("title") for f in favorite_listings(limit=300)],
+                                term_for=_telex_term_for)
+    except Exception:
+        logging.exception("Sharper terms failed")
+        sharper = []
+    return render_template("telex.html", sharper=sharper, feed_counts=feed_counts, terms=terms, view=view, new_items=new_items,
+                           sort=sort, total=sum(feed_counts.values()), sweep=telex_state(),
                            model_groups=_telex_group_lists(cfg), has_groups=bool(telex_groups(cfg)))
 
 
@@ -1472,15 +1923,46 @@ def telex_status():
 def _terms_changed(added: list[str] | None = None) -> None:
     """After a Telex term is added or removed: update only what that term
     touches — its Price Board row (in the background, a few seconds) — instead
-    of recalculating everything. The Telex page itself works out just the new
-    term on its next load."""
+    of recalculating everything. The Feed, the Telex page and the deals
+    (which follow the Wanted list) refresh on their next load."""
+    _data_changed()
+    # Several adds/removes in a row (one after the other) used to start one
+    # minute-long Price Board rebuild EACH, all at once — the site hung.
+    # Now: one rebuild, a little after the last change.
+    with _board_lock:
+        _board_state["due"] = time.time() + 20
+        _board_state["terms"] |= set(added or [])
+        if _board_state["running"]:
+            return
+        _board_state["running"] = True
+
     def run():
         try:
-            from scrapers import board
-            board.build(load_config_raw(), only=added or [])
+            while True:
+                wait = _board_state["due"] - time.time()
+                if wait > 0:
+                    time.sleep(min(wait, 5))
+                    continue
+                with _board_lock:
+                    terms = list(_board_state["terms"])
+                    _board_state["terms"] = set()
+                    due = _board_state["due"]
+                try:
+                    from scrapers import board
+                    board.build(load_config_raw(), only=terms)
+                except Exception:
+                    logging.exception("Price Board update for changed terms failed")
+                with _board_lock:
+                    if _board_state["due"] == due and not _board_state["terms"]:
+                        _board_state["running"] = False
+                        return
         except Exception:
-            logging.exception("Price Board update for new terms failed")
+            _board_state["running"] = False
     threading.Thread(target=run, name="board-terms", daemon=True).start()
+
+
+_board_lock = threading.Lock()
+_board_state: dict = {"due": 0.0, "terms": set(), "running": False}
 
 
 @app.route("/telex/add", methods=["POST"])
@@ -1499,6 +1981,15 @@ def telex_add():
         cfg["telex_list"] = terms
         save_config_raw(cfg)
         _terms_changed(new)
+        # Search the new term(s) right away on the fast sites and eBay
+        # (Facebook follows in the all-day rotation), so they show up on the
+        # Feed within a minute instead of at the next 30-minute cycle.
+        global _telex_thread
+        if _telex_thread is None or not _telex_thread.is_alive():
+            TELEX_STATUS_PATH.write_text(json.dumps({"state": "running", "started": time.time(),
+                                                     "done": 0, "total": len(new)}))
+            _telex_thread = threading.Thread(target=_run_telex_job, args=(new, True), daemon=True)
+            _telex_thread.start()
     return redirect(url_for("telex"))
 
 
@@ -1740,7 +2231,1335 @@ def learning_dismiss():
     return redirect(url_for("learning_page"))
 
 
+# ---------------------------------------------------------------------------
+# Feed — the home page: everything for sale that matches your Wanted list
+# (Telex List), newest post first, with what's new since you last looked on
+# top. One list, one set of rules (scrapers/wanted.py); deals and steals are
+# badges and filters on it rather than separate pages.
+# ---------------------------------------------------------------------------
+
+FEED_VISIT_FILE = Path("/data/feed_visit.json")
+FEED_RECENT_DAYS = 14   # posted within this → main list; older → collapsed section
+FEED_STEAL_PCT = 50  # same as steal alerts (scrapers/steals.py MIN_PCT)
+_feed_cache: dict = {"key": None, "at": 0.0, "data": None}
+
+
+def _feed_visit() -> Optional[str]:
+    """Your previous Feed visit (UTC ISO). Coming back after 30+ minutes
+    starts a new visit; reloading in between keeps the same "new" line."""
+    now = datetime.now(timezone.utc)
+    try:
+        v = json.loads(FEED_VISIT_FILE.read_text())
+    except Exception:
+        v = {}
+    if request.headers.get("X-GearScout-Test") or request.headers.get("X-Warm"):
+        return v.get("previous")
+    current = v.get("current")
+    if not current or now - datetime.fromisoformat(current) > timedelta(minutes=30):
+        v["previous"] = current
+    v["current"] = now.isoformat()
+    try:
+        FEED_VISIT_FILE.write_text(json.dumps(v))
+    except OSError:
+        pass
+    return v.get("previous")
+
+
+def _ago(iso: Optional[str]) -> Optional[str]:
+    try:
+        d = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    mins = int((datetime.now(timezone.utc) - d).total_seconds() // 60)
+    if mins < 60:
+        return f"{max(mins, 1)}m ago"
+    if mins < 48 * 60:
+        return f"{mins // 60}h ago"
+    return f"{mins // 1440}d ago"
+
+
+def _mark_lowest(items: list[dict]) -> None:
+    """(Kept for callers; the marks are set when the Feed is built.)"""
+    return None
+
+
+def _mark_picks(items: list[dict], cfg) -> None:
+    """For every term: the cheapest working one of each model among exactly
+    these listings (scrapers/models.py) — the term's overall cheapest pulses
+    gold, each model's cheapest gets a gold "Lowest <model>" tag. Worked out
+    from the list itself, so a new cheaper ad is marked as soon as it's
+    listed; the scraper re-checks the marked ones are still for sale."""
+    from scrapers import models, wanted
+    from scrapers.enrich import parse_price, quantity
+    by_term: dict[str, list] = {}
+    for l in items:
+        l["lowest_for"], l["model_lowest"], l["model_lowest_label"] = None, None, None
+        ctx = l.get("price_ctx") or {}
+        l["unit"] = ctx.get("unit_value") or (
+            (parse_price(l.get("price")) or 0) / max(1, quantity(l.get("title"), l.get("description"))))
+        l["qty"] = ctx.get("qty") or 1
+        l["total"] = models.landed(l)  # price + known shipping, per piece
+        for t in l.get("wanted") or []:
+            by_term.setdefault(t, []).append(l)
+    by_url = {l["url"]: l for l in items}
+    marked = set()
+    exclude = cfg.get("exclude_words") or []
+    for term in wanted.terms(cfg):
+        ps = models.picks(term, by_term.get(term, []), exclude)
+        for i, p in enumerate(ps):
+            l = by_url.get(p["url"])
+            if not l:
+                continue
+            marked.add(p["url"])
+            if i == 0:
+                l["lowest_for"] = (l["lowest_for"] or []) + [term]
+            l["model_lowest"] = {**(l["model_lowest"] or {}), term: p["model"]}
+    for l in items:
+        names = list(dict.fromkeys((l.get("model_lowest") or {}).values()))
+        l["model_lowest_label"] = ", ".join(names[:2]) if names else None
+    try:
+        Path("/data/lowest_picks.txt").write_text("\n".join(sorted(marked)))
+    except OSError:
+        pass
+
+
+def _pinned_first(its: list[dict], parts: set) -> tuple[list, list]:
+    """(the cheapest of each model for these terms — cheapest first — , the
+    rest). The overall cheapest is simply the first of them."""
+    unit = lambda r: r.get("total") or r.get("unit") or 1e12  # price + shipping per piece, as the picks use
+    pinned = [r for r in its if parts & (set(r.get("lowest_for") or []) | set((r.get("model_lowest") or {}).keys()))]
+    pinned.sort(key=unit)
+    return pinned, [r for r in its if r not in pinned]
+
+
+def _feed_items(cfg) -> list[dict]:
+    """Every Wanted match still for sale, decorated for display, newest post
+    first. Rebuilt when a scrape or sweep finishes, or every 3 minutes."""
+    from scrapers import wanted
+    from scrapers.enrich import parse_price
+    marker = _last_change_marker()
+    try:
+        marker += str(int(Path("/data/last_sweep.json").stat().st_mtime))
+    except OSError:
+        pass
+    key = (_data_version[0], marker, tuple(wanted.terms(cfg)))
+    c = _feed_cache
+    if c["data"] is None:
+        snap = _snapshot_load("feed")  # right after a restart: the saved copy, instantly
+        if snap is not None:
+            c.update(key=None, at=0.0, data=snap)
+    if c["data"] is not None and c["key"] == key and time.time() - c["at"] < 180:
+        return c["data"]
+    if c["data"] is not None and not _feed_state.get("rebuilding"):
+        # Something changed: show the current list right away and rebuild in
+        # the background — rebuilding inside the request made the page hang
+        # for a minute while a scrape was using the CPU.
+        same_terms = c["key"] is None or (len(c["key"]) > 2 and c["key"][2] == key[2])
+        if same_terms:
+            def rebuild():
+                _feed_state["rebuilding"] = True
+                try:
+                    _build_feed(cfg, key)
+                except Exception:
+                    logging.exception("Feed rebuild failed")
+                finally:
+                    _feed_state["rebuilding"] = False
+            threading.Thread(target=rebuild, name="feed-rebuild", daemon=True).start()
+            return c["data"]
+    elif c["data"] is not None and _feed_state.get("rebuilding") and c["key"] is not None \
+            and len(c["key"]) > 2 and c["key"][2] == key[2]:
+        return c["data"]
+    if c["data"] is not None:
+        # Your terms changed (added / removed): show the current list right
+        # away — minus removed terms — and rebuild in the background, instead
+        # of making the page wait (several deletes in a row stalled it).
+        current = set(key[2])
+        stale = [l for l in c["data"] if set(l.get("wanted") or []) & current]
+        if not _feed_state.get("rebuilding"):
+            def rebuild_terms():
+                _feed_state["rebuilding"] = True
+                try:
+                    _build_feed(load_config_raw(), (_data_version[0], key[1], tuple(wanted.terms(load_config_raw()))))
+                except Exception:
+                    logging.exception("Feed rebuild failed")
+                finally:
+                    _feed_state["rebuilding"] = False
+            threading.Thread(target=rebuild_terms, name="feed-rebuild-terms", daemon=True).start()
+        return stale
+    return _build_feed(cfg, key)
+
+
+_feed_state: dict = {"rebuilding": False}
+
+
+def _build_feed(cfg, key) -> list[dict]:
+    from scrapers import wanted
+    from scrapers.enrich import parse_price
+    c = _feed_cache
+    ms = wanted.matchers(cfg)
+    items, seen_ads = [], set()
+    for r in wanted.recent_rows():
+        found = wanted.match(r.get("title"), r.get("price"), ms, r.get("source_name"))
+        if not found:
+            continue
+        ad = ((r.get("title") or "").lower().strip(), r.get("price"))
+        if ad in seen_ads:  # the same ad stored twice (another link to it)
+            continue
+        seen_ads.add(ad)
+        r["wanted"] = found
+        items.append(r)
+    # Display fields and the shared junk filters, independent of this
+    # request's own filters (those are applied afterwards).
+    with app.test_request_context("/", headers={"X-Warm": "1"}):
+        items = _decorate(items)
+    # Deals and steals: the same calculation the Deals and Steals pages, the
+    # digest and the steal alerts use (scrapers/steals.py: 10%+ under the most
+    # trustworthy comp, double-checked against other listings of the same
+    # gear) — so a listing shows the same "% under" everywhere.
+    with app.test_request_context("/deals"):
+        deals = _all_deals() or {}
+    comp_by_url = {d["url"]: d["comp"] for d in deals.get("trusted") or []}
+    # Steals with only one price source: shown marked "double-check".
+    check_by_url = {d["url"]: d["comp"] for d in deals.get("rough") or []
+                    if FEED_STEAL_PCT <= d["comp"]["pct"] <= 90}  # 80–90% "too good": shown, to double-check
+    out = []
+    for l in items:
+        ctx = l.get("price_ctx") or {}
+        typical = parse_price(ctx.get("typical")) if ctx.get("typical") and not ctx.get("rough") else None
+        value = ctx.get("unit_value") or parse_price(l.get("price"))
+        if typical and value and value < typical * 0.15:
+            continue  # a part or plugin with a vague title
+        comp = comp_by_url.get(l["url"])
+        l["comp"] = comp
+        l["is_deal"] = bool(comp)
+        l["deal_pct"] = comp["pct"] if comp else None
+        l["is_steal"] = bool(comp and comp["pct"] >= FEED_STEAL_PCT and not comp["est"])
+        check = None if comp else check_by_url.get(l["url"])
+        if check:
+            l["comp"], l["is_steal"], l["steal_check"] = check, True, True
+            l["deal_pct"] = check["pct"]
+        if ctx:
+            ctx["deal"] = False  # the card's "% under" comes from l.comp, as everywhere else
+        l["checked_label"] = _ago(l.get("confirmed_live_at"))
+        out.append(l)
+    _mark_picks(out, cfg)
+    # Newest post first; ties (same posting time, or no posting time) go to
+    # the one Gear Scout found most recently.
+    out.sort(key=lambda l: l.get("first_seen") or "", reverse=True)
+    out.sort(key=lambda l: l["age_days"] if l.get("age_days") is not None else 999)
+    try:
+        Path("/data/shown_feed.txt").write_text("\n".join(l["url"] for l in out[:400] if l.get("url")))
+        # Tell the hourly refresh which of your listings still have no usual
+        # price, so it looks those up first (Reverb, eBay when allowed).
+        Path("/data/nocomp_titles.txt").write_text("\n".join(dict.fromkeys(
+            l["title"] for l in out if l.get("title") and not (l.get("price_ctx") or {}).get("typical")
+            and not l.get("comp"))))
+    except OSError:
+        pass
+    c.update(key=key, at=time.time(), data=out)
+    _snapshot_save("feed", out)
+    return out
+
+
+INBOX_DONE_FILE = Path("/data/inbox_done.json")
+INBOX_DROP_DAYS = 3      # a price drop stays in the inbox this long
+INBOX_DROP_PCT = 10      # ...and only cuts this big count
+INBOX_AUCTION_HOURS = 48  # auctions ending within this show up
+
+
+def _inbox_done() -> dict:
+    try:
+        return json.loads(INBOX_DONE_FILE.read_text())
+    except Exception:
+        return {}
+
+
+@app.route("/inbox/done", methods=["POST"])
+def inbox_done():
+    """✓ Done on a front-page card (or a whole section): it leaves the inbox
+    for good. The listing itself stays everywhere else."""
+    keys = request.form.getlist("key") or (request.get_json(silent=True) or {}).get("keys") or []
+    done = _inbox_done()
+    now = datetime.now(timezone.utc)
+    for k in keys:
+        if k:
+            done[str(k)[:600]] = now.isoformat()
+    # Forget entries older than 120 days so the file stays small.
+    cutoff = (now - timedelta(days=120)).isoformat()
+    done = {k: v for k, v in done.items() if v >= cutoff}
+    try:
+        INBOX_DONE_FILE.write_text(json.dumps(done))
+    except OSError:
+        pass
+    if request.is_json or request.headers.get("X-Requested-With"):
+        return jsonify(ok=True)
+    return redirect(url_for("feed"))
+
+
+def _inbox(items: list[dict], since: Optional[str]) -> list[dict]:
+    """The front page: only what needs your attention, most urgent first.
+    Each listing shows in one section; ✓ Done removes it from the inbox."""
+    done = _inbox_done()
+    now = datetime.now(timezone.utc)
+    age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
+    used, sections = set(), []
+    # Listings marked done in any section ("steal:<url>", "drop:<url>:<price>",
+    # "fav:<url>:<price>:<pending>"): they don't come back as a steal or as
+    # new — only a fresh event (an auction ending, another price cut) does.
+    done_urls = set()
+    for k in done:
+        kind, _, rest = k.partition(":")
+        extra = {"drop": 1, "fav": 2}.get(kind)
+        done_urls.add(rest.rsplit(":", extra)[0] if extra else rest)
+
+    def add(key, title, note, rows, keyf, once=False):
+        out = []
+        for l in rows:
+            k = keyf(l)
+            if l.get("url") in used or k in done or l.get("sold") or l.get("hidden") \
+                    or (once and l.get("url") in done_urls):
+                continue
+            used.add(l.get("url"))
+            out.append((l, k))
+        sections.append({"id": key, "title": title, "note": note, "rows": out})
+
+    def ends(l):
+        m = re.search(r"ends (\d{4}-\d{2}-\d{2} \d{2}:\d{2})", l.get("description") or "")
+        if not m:
+            return None
+        try:  # auction end times are written in Pacific time
+            from zoneinfo import ZoneInfo
+            return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+        except ValueError:
+            return None
+
+    soon = sorted((l for l in items if l.get("is_auction") and ends(l)
+                   and now < ends(l) <= now + timedelta(hours=INBOX_AUCTION_HOURS)), key=ends)
+    for l in soon:
+        l["inbox_note"] = "ends " + ends(l).strftime("%a %-I:%M %p").replace(":00 ", " ") + " PT"
+    add("auctions", "⏰ Auctions ending soon", f"Ending in the next {INBOX_AUCTION_HOURS} hours.", soon,
+        lambda l: f"auction:{l['url']}")
+    steals = sorted((l for l in items if l.get("is_steal")), key=lambda l: -(l.get("deal_pct") or 0))
+    add("steals", "💥 Steals", f"{FEED_STEAL_PCT}%+ under what this gear usually sells for.", steals,
+        lambda l: f"steal:{l['url']}", once=True)
+    drop_cut = (now - timedelta(days=INBOX_DROP_DAYS)).isoformat()
+    def cut(l):
+        from scrapers.enrich import parse_price
+        a, b = parse_price(l.get("previous_price")), parse_price(l.get("price"))
+        return round(100 * (a - b) / a) if a and b and b < a else 0
+
+    drops = sorted((l for l in items if l.get("previous_price") and (l.get("price_dropped_at") or "") >= drop_cut
+                    and cut(l) >= INBOX_DROP_PCT), key=lambda l: l.get("price_dropped_at") or "", reverse=True)
+    for l in drops:
+        l["inbox_note"] = f"{cut(l)}% cut · was {l['previous_price']}"
+    add("drops", "📉 Price drops", f"Cut {INBOX_DROP_PCT}%+ in the last {INBOX_DROP_DAYS} days.", drops,
+        lambda l: f"drop:{l['url']}:{l.get('price')}")  # a further cut shows again
+    favs = [l for l in items if l.get("favorite") and (l.get("pending")
+            or (l.get("previous_price") and (l.get("price_dropped_at") or "") >= drop_cut))]
+    for l in favs:
+        l["inbox_note"] = "sale pending" if l.get("pending") else f"price cut, was {l['previous_price']}"
+    add("favorites", "★ Your favorites", "Something changed on gear you starred.", favs,
+        lambda l: f"fav:{l['url']}:{l.get('price')}:{bool(l.get('pending'))}")
+    new = [l for l in items if since and (l.get("first_seen") or "") > since and age(l) <= FEED_RECENT_DAYS]
+    add("new", "🆕 New since you last looked", "Newest post first.", new, lambda l: f"new:{l['url']}", once=True)
+    return sections
+
+
+@app.route("/mics")
+def mics_page():
+    """Mic Focus: the mics being hunted right now, best discount first."""
+    from scrapers import market_pulse, price_targets
+    ctx = _mics_ctx()
+    ctx["pulse"] = market_pulse.pulse(load_config_raw())  # weekly trend per mic (read-only, cached 30 min)
+    from scrapers import price_history
+    ctx["history"] = price_history.history(load_config_raw())  # asking-price history per model (cached 30 min)
+    from scrapers import wait_signal
+    ctx["waits"] = wait_signal.signals(ctx["history"])  # buy-now / wait / steady badge per model, from that same history
+    from scrapers import best_month
+    ctx["best_months"] = best_month.best_months(load_config_raw())  # cheapest calendar month per model; empty until the data is thick enough
+    from scrapers import regional_gap
+    ctx["regional_gaps"] = regional_gap.regional_gaps(load_config_raw())  # same model far cheaper in another state (cached 30 min)
+    try:
+        ctx["price_targets"] = price_targets.status(load_config_raw())
+    except Exception:
+        app.logger.exception("price targets panel")
+        ctx["price_targets"] = []
+    try:
+        from scrapers import star_sold_tracker
+        ctx["star_tracker"] = star_sold_tracker.tracker()  # cached 5 min, read-only
+    except Exception:
+        app.logger.exception("starred sold tracker panel")
+        ctx["star_tracker"] = None
+    try:
+        from scrapers import deal_vanish
+        ctx["deal_vanish"] = deal_vanish.stats()  # cached 5 min, read-only; no sites = card hidden
+    except Exception:
+        app.logger.exception("deal vanish panel")
+        ctx["deal_vanish"] = None
+    try:
+        from scrapers import hold_tracker
+        ctx["hold_models"] = hold_tracker.stats()  # cached 30 min, read-only; empty = card hidden
+    except Exception:
+        app.logger.exception("hold-value panel")
+        ctx["hold_models"] = None
+    try:  # compact pickup-route panel: only from deals already built (never triggers a rebuild)
+        pp = _pickup_plan(_deals_cache["data"]) if _deals_cache["data"] is not None else None
+        ctx["pickup"] = {"count": pp["count"], "areas": len(pp["clusters"]), "miles": pp["total_miles"]} if pp else None
+    except Exception:
+        app.logger.exception("pickup route panel")
+        ctx["pickup"] = None
+    return render_template("mics.html", **ctx)
+
+
+@app.route("/offers")
+def offers_page():
+    """Offer log: what you offered, what sellers said, which discounts worked."""
+    from scrapers import offer_log
+    return render_template("offers.html", s=offer_log.summary(), labels=offer_log.LABELS)
+
+
+@app.route("/offers/add", methods=["POST"])
+def offers_add():
+    """Records one offer + reply (only writes /data/offers.json)."""
+    from scrapers import offer_log
+    f = request.form
+    o = offer_log.add(f.get("url"), f.get("title"), f.get("source"), f.get("seller"),
+                      f.get("asking"), f.get("offered"), f.get("reply"), f.get("counter"))
+    return jsonify(ok=bool(o), discount=offer_log.discount(o) if o else None), (200 if o else 400)
+
+
+@app.route("/offer")
+def offer_page():
+    """One-tap instant offer: the page every deal push/email links to."""
+    from scrapers import instant_offer as io
+    url = (request.args.get("url") or "").strip()
+    l = io.lookup(url) if url else None
+    if not l:
+        return render_template("offer.html", l=None, url=url), 404
+    ask = l.get("ask")
+    ch = io.channel(url, l.get("offers_ok"), _inject_ebay_connected().get("ebay_connected"))
+    amount = io.suggest(ask)
+    return render_template("offer.html", l=l, url=url, ask=ask, amount=amount, channel=ch,
+                           floor=io.min_offer(ask) if ask else None,
+                           msg=io.message(l.get("title"), amount) if amount else "", ship_note=io.SHIP_NOTE)
+
+
+@app.route("/reverb/offer", methods=["POST"])
+def reverb_offer():
+    """Sends a real, binding Make-an-Offer on Reverb. Only when the form says
+    confirm=1 (the card's second tap); dry_run=1 builds everything but sends
+    nothing. (Same open access as the other POST routes; the login gate is off.)"""
+    from scrapers import reverb_offer as ro
+    f = request.form
+    if f.get("confirm") != "1":
+        return jsonify(ok=False, message="Confirmation required"), 400
+    res = ro.send_offer(f.get("url"), f.get("amount"), dry_run=f.get("dry_run") == "1",
+                        title=f.get("title") or "", source="Reverb", seller=f.get("seller") or "",
+                        asking=f.get("asking"))
+    return jsonify(res)
+
+
+@app.route("/ebay/offer", methods=["POST"])
+def ebay_offer():
+    """Sends a real, binding Best Offer on an eBay Buy It Now listing. Same
+    rules as /reverb/offer: confirm=1 required, dry_run=1 sends nothing."""
+    from scrapers import ebay_offer as eo
+    f = request.form
+    if f.get("confirm") != "1":
+        return jsonify(ok=False, message="Confirmation required"), 400
+    res = eo.send_offer(f.get("url"), f.get("amount"), dry_run=f.get("dry_run") == "1",
+                        title=f.get("title") or "", source="eBay", seller=f.get("seller") or "",
+                        asking=f.get("asking"))
+    return jsonify(res)
+
+
+EBAY_STATE_PATH = "/data/ebay_oauth_state.txt"
+
+
+def _ebay_save_user_token(refresh_token):
+    """Targeted write of ebay_api.user_refresh_token only (None/"" clears it).
+    Backs config.yaml up once, next to it, before the first write."""
+    bak = CONFIG_PATH + ".bak-ebay"
+    try:
+        if not os.path.exists(bak):
+            shutil.copy2(CONFIG_PATH, bak)
+    except OSError:
+        app.logger.warning("ebay: could not make a config backup (continuing)")
+    cfg = load_config_for_edit()
+    ebay_cfg = cfg.setdefault("ebay_api", {})
+    ebay_cfg["user_refresh_token"] = refresh_token or ""
+    save_config_raw(cfg)
+
+
+@app.route("/ebay/connect")
+def ebay_connect():
+    from scrapers import ebay_offer as eo
+    try:
+        state = secrets.token_urlsafe(24)
+        url = eo.consent_url(state)
+    except Exception:
+        url = None
+    if not url:
+        return redirect(url_for("settings", saved="ebay-needs-runame"))
+    try:
+        with open(EBAY_STATE_PATH, "w") as f:
+            f.write("%s %d" % (state, int(time.time())))
+    except OSError:
+        return redirect(url_for("settings", saved="ebay-error"))
+    return redirect(url)
+
+
+@app.route("/ebay/callback")
+def ebay_callback():
+    from scrapers import ebay_offer as eo
+    code = request.args.get("code")
+    state = request.args.get("state") or ""
+    try:
+        with open(EBAY_STATE_PATH) as f:
+            saved_state, ts = f.read().split()
+        os.remove(EBAY_STATE_PATH)
+    except (OSError, ValueError):
+        saved_state, ts = "", "0"
+    if (not code or not saved_state or not secrets.compare_digest(saved_state, state)
+            or time.time() - int(ts) > 900):
+        app.logger.warning("ebay callback: missing code or bad/expired state")
+        return redirect(url_for("settings", saved="ebay-error"))
+    try:
+        tok = eo.exchange_code(code)
+        _ebay_save_user_token(tok["refresh_token"])
+    except Exception as e:
+        app.logger.warning("ebay callback failed: %s", type(e).__name__ + ": " + str(e)[:200])
+        return redirect(url_for("settings", saved="ebay-error"))
+    return redirect(url_for("settings", saved="ebay-connected"))
+
+
+@app.route("/ebay/disconnect", methods=["POST"])
+def ebay_disconnect():
+    from scrapers import ebay_offer as eo
+    _ebay_save_user_token("")
+    eo.clear_cache()
+    return redirect(url_for("settings", saved="ebay"))
+
+
+@app.route("/settings/ebay-runame", methods=["POST"])
+def settings_ebay_runame():
+    cfg = load_config_for_edit()
+    cfg.setdefault("ebay_api", {})["runame"] = request.form.get("runame", "").strip()
+    save_config_raw(cfg)
+    return redirect(url_for("settings", saved="ebay"))
+
+
+@app.context_processor
+def _inject_ebay_connected():
+    try:
+        e = load_config_raw().get("ebay_api") or {}
+        return {"ebay_connected": bool(str(e.get("user_refresh_token") or "").strip()
+                                       and str(e.get("client_id") or "").strip()
+                                       and str(e.get("client_secret") or "").strip())}
+    except Exception:
+        return {"ebay_connected": False}
+
+
+@app.route("/offers/remove", methods=["POST"])
+def offers_remove():
+    from scrapers import offer_log
+    offer_log.remove(request.form.get("id") or "")
+    return redirect(url_for("offers_page"))
+
+
+@app.route("/flips")
+def flips_page():
+    """Flip engine: suggestions only (buy cheap, resell for profit) plus the
+    tracker of what you bought and sold. Nothing here posts or contacts anyone."""
+    from scrapers import flips
+    try:
+        items = flips.find(load_config_raw())
+    except Exception:
+        app.logger.exception("flip suggestions")
+        items = []
+    owned = flips.bought_urls()
+    for r in items:
+        r["draft"] = flips.draft(r)
+        r["owned"] = r.get("url") in owned
+    return render_template("flips.html", items=items, t=flips.summary(), min_profit=flips.MIN_PROFIT,
+                           min_pct=flips.MIN_PROFIT_PCT, min_comps=flips.MIN_COMPS)
+
+
+@app.route("/flips/bought", methods=["POST"])
+def flips_bought():
+    """"I bought this" (only writes /data/flips.json)."""
+    from scrapers import flips
+    f = request.form
+    flips.bought(f.get("url"), f.get("title"), f.get("source"), f.get("paid"), f.get("expected"))
+    return redirect(url_for("flips_page") + "#tracker")
+
+
+@app.route("/flips/sold", methods=["POST"])
+def flips_sold():
+    """Sold price + shipping for a flip you bought (only writes /data/flips.json)."""
+    from scrapers import flips
+    flips.sold(request.form.get("id") or "", request.form.get("price"), request.form.get("ship"))
+    return redirect(url_for("flips_page") + "#tracker")
+
+
+@app.route("/flips/remove", methods=["POST"])
+def flips_remove():
+    from scrapers import flips
+    flips.remove(request.form.get("id") or "")
+    return redirect(url_for("flips_page") + "#tracker")
+
+
+def _seller_watched(source, seller) -> bool:
+    from scrapers import seller_watch
+    return seller_watch.is_watched(source, seller)
+
+
+app.jinja_env.globals["seller_watched"] = _seller_watched  # a global so the card macro sees it
+
+
+@app.route("/sellers")
+def sellers_page():
+    """Watched sellers and their latest listings (read from the database only)."""
+    from scrapers import seller_watch
+    rows = []
+    for w in seller_watch.load():
+        try:
+            items = seller_watch.latest(w)
+        except Exception:
+            app.logger.exception("watched seller listings")
+            items = []
+        rows.append({**w, "items": items})
+    return render_template("sellers.html", rows=rows)
+
+
+@app.route("/sellers/watch", methods=["POST"])
+def sellers_watch():
+    """Follows or unfollows a seller (only writes /data/watched_sellers.json)."""
+    from scrapers import seller_watch
+    f = request.form
+    if f.get("unwatch") == "1":
+        ok = seller_watch.remove(f.get("source"), f.get("seller"))
+    else:
+        ok = bool(seller_watch.add(f.get("source"), f.get("seller")))
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=ok), (200 if ok else 400)
+    return redirect(url_for("sellers_page"))
+
+
+@app.route("/sellers/hide", methods=["POST"])
+def sellers_hide():
+    """Hides (or unhides) every ad from one seller. Display only; writes
+    /data/hidden_sellers.json and deletes nothing."""
+    from scrapers import hidden_sellers
+    f = request.form
+    if f.get("unhide") == "1":
+        ok = hidden_sellers.remove(f.get("source"), f.get("seller"))
+    else:
+        ok = bool(hidden_sellers.add(f.get("source"), f.get("seller")))
+    if ok:
+        _data_changed()
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=ok), (200 if ok else 400)
+    return redirect(request.form.get("next") or url_for("settings"))
+
+
+@app.route("/price-targets/add", methods=["POST"])
+def price_targets_add():
+    """Saves a model + the most you'd pay (only writes /data/price_targets.json)."""
+    from scrapers import price_targets
+    price_targets.add(request.form.get("text"), request.form.get("max_price"))
+    return redirect(url_for("mics_page") + "#price-targets")
+
+
+@app.route("/price-targets/remove", methods=["POST"])
+def price_targets_remove():
+    from scrapers import price_targets
+    price_targets.remove(request.form.get("id") or "")
+    return redirect(url_for("mics_page") + "#price-targets")
+
+
+def _mics_ctx() -> dict:
+    """Everything the Mics page and Home show about mics (and outboard
+    targets such as the Distressor, which are not mics)."""
+    from scrapers import mic_focus
+    cfg = load_config_raw()
+    st = mic_focus.settings(cfg)
+    data = mic_focus.load()
+    # Hidden (✕), sold or pending since the list was built: gone right away.
+    from scrapers.reposts import collapse_reposts
+    rows = collapse_reposts(_decorate(mic_focus.still_showing(data.get("rows") or [])))
+    for l in rows:
+        l["age_days"] = _age_days(l)
+        m = l["mic"]
+        if m.get("unsure") and not m.get("used"):
+            l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+                f"No solid used value yet (only {m.get('n') or 0} other listing{'' if m.get('n') == 1 else 's'} of this model)"))
+            continue
+        if m["pct"] is not None and m["pct"] > 0:
+            label = "New" if m["ref_kind"] == "new" else "Used market"
+            l["comp"] = {"pct": m["pct"], "ref": f"${m['ref']:,}", "est": False, "label": label}
+        elif m["ref"]:
+            l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+                f"{'New' if m['ref_kind'] == 'new' else 'Used market'} ~${m['ref']:,}: "
+                + ("about the same" if m["pct"] is not None and m["pct"] > -5 else f"{-m['pct']}% over")))
+    # % brands only list their deals; one with no solid used value waits in
+    # "Check these" at the end. United, Dachman and the Distressor list everything.
+    check = sorted((l for l in rows if l["mic"].get("unsure")), key=lambda l: (l["mic"]["name"], l["mic"]["delivered"]))
+    rows = [l for l in rows if not l["mic"].get("unsure")]
+    pct_keys = {t["key"] for t in st["targets"] if mic_focus.pct_mode(t)}
+    by = {t["key"]: [] for t in st["targets"]}
+    for l in rows:
+        if l["mic"]["target"] in pct_keys and not l["mic"]["hit"]:
+            continue
+        by.setdefault(l["mic"]["target"], []).append(l)
+    # Each section in the order of the price the card shows (listing +
+    # listed shipping) — sorting by per-piece price put a $1,299 pair first.
+    from scrapers.enrich import model_key, parse_price
+
+    def shown(l):
+        v = parse_price(l.get("price")) or 0
+        return v + (l["shipping"] if isinstance(l.get("shipping"), (int, float)) else 0)
+    models = {}
+    for k, ls in by.items():
+        ls.sort(key=shown)
+        # Lowest price per model: the cheapest listing of each model, cheapest first.
+        groups = {}
+        for l in ls:
+            q = l["mic"].get("model")
+            if q:
+                label = q
+            else:
+                mk = (model_key(l.get("title")) or "").split("|")[0]
+                label = mk.split(":")[-1].upper() if mk else "Other"
+            # "TLM 103", "TLM-103" and "TLM103" are one model
+            g = groups.setdefault(re.sub(r"[\s-]", "", label.lower()), {"label": label, "n": 0, "best": l})
+            g["n"] += 1
+        models[k] = sorted(groups.values(), key=lambda g: shown(g["best"]))
+        for g in models[k]:
+            g["price"] = shown(g["best"])
+            # Highlight the cheapest ad of each model on its card (the "💲 Lowest"
+            # tag and border the Price Board uses) — here and in "In your price range".
+            if g["n"] > 1:
+                g["best"]["model_lowest"] = True
+                g["best"]["model_lowest_label"] = g["label"]
+    # In your price range, newest first (cheapest-first buried new ones
+    # mid-list, so the top never seemed to change); categories stay cheapest first.
+    # "Newest" = when the seller posted it, when known: a dealer's 2017 ad that
+    # a newly added brand only just turned up goes below this week's ads (Oct 28).
+    def listed(l):
+        found = l.get("first_seen") or ""
+        try:
+            p = datetime.fromisoformat(l.get("posted_at") or "")
+            p = p if p.tzinfo else p.replace(tzinfo=timezone.utc)
+            return min(found, p.astimezone(timezone.utc).isoformat()) if found else p.isoformat()
+        except (TypeError, ValueError):
+            return found
+    outboard_keys = {t["key"] for t in st["targets"] if t.get("outboard")}
+    all_hits = sorted((l for l in rows if l["mic"]["hit"]), key=listed, reverse=True)
+    hits = [l for l in all_hits if l["mic"]["target"] not in outboard_keys]  # the Distressor etc. aren't mics
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    auctions = _decorate(mic_focus.still_showing(data.get("auctions") or []))
+    for l in auctions:
+        m = l["mic"]
+        mins = m.get("mins_left") or 0
+        try:  # minutes left as of now, not as of the last sweep
+            mins = int((datetime.fromisoformat(m["ends"]) - datetime.now(timezone.utc)).total_seconds() // 60)
+        except Exception:
+            pass
+        l["auction_ends"] = (f"{mins} min" if mins < 90 else f"{mins // 60} h" if mins < 48 * 60 else f"{mins // 1440} days")
+        ship = l["shipping"] if isinstance(l.get("shipping"), (int, float)) else 0
+        top = max(0, int(m["max_price"] - ship))
+        l["price_ctx"] = dict(l.get("price_ctx") or {}, note=(
+            f"Bid + shipping ${m['delivered']:,.0f} · max bid ${top:,} to stay "
+            + ("50% under used" if m["target"] in pct_keys else "within your limit")))
+    auctions = [l for l in auctions if not l["auction_ends"].startswith("-")]
+    # Landing: the best deals on everything you hunt (last 150 days), and
+    # what's new since your last visit across all of it.
+    deals = collapse_reposts(_decorate(mic_focus.still_showing(data.get("deals") or [])))
+    for l in deals:
+        d = l["deal"]
+        l["age_days"] = _age_days(l)
+        l["comp"] = {"pct": d["pct"], "ref": f"${d['used']:,}", "est": False,
+                     "label": "Sold" if "sales" in (d.get("basis") or "") else "Used market"}
+    deals_warn = [l for l in deals if l.get("warn")]
+    deals = [l for l in deals if not l.get("warn")]
+    since = _visit_marker()
+    new = []
+    if since:
+        seen_new = set()
+        for l in deals + all_hits + [l for t in ("united", "dachman") for l in by.get(t, []) if l["mic"]["hit"]]:
+            if (l.get("first_seen") or "") > since and l["url"] not in seen_new:
+                seen_new.add(l["url"])
+                new.append(l)
+        new.sort(key=listed, reverse=True)
+    from urllib.parse import quote
+    mercari = [(q, f"https://www.mercari.com/search/?keyword={quote(q)}&sortBy=2") for q in mic_focus.fb_terms(cfg)]
+    return dict(st=st, hits=hits, all_hits=all_hits, by=by, models=models, built=_ago(data.get("built")), built_iso=data.get("built"),
+                auctions=auctions, mercari=mercari, deals=deals, deals_warn=deals_warn, new=new, proposals=_proposals_view(),
+                since=_ago(since) if since else None, since_iso=since, check=check, pct_keys=pct_keys, outboard_keys=outboard_keys,
+                listed=listed, shown=shown, sweep=sweep, terms=mic_focus.sweep_terms(cfg), saved=request.args.get("saved"))
+
+
+OUTBOARD_MAX_AGE_DAYS = 45
+OUTBOARD_PICKUP_MAX_MILES = 500
+
+
+def _outboard_fresh_near(l: dict) -> bool:
+    """Outboard section: ads up to 45 days old; local-pickup ads only within 500 miles of home."""
+    age = l.get("age_days")
+    if age is None:
+        age = _age_days(l)
+    if age is None or age > OUTBOARD_MAX_AGE_DAYS:
+        return False
+    if _is_local_pickup(l.get("source_name") or ""):
+        d = l.get("distance")
+        if d is not None and d > OUTBOARD_PICKUP_MAX_MILES:
+            return False
+    return True
+
+
+_finder_cache: dict = {}
+_finder_lock = threading.Lock()
+
+
+def _cached_find(name: str, fn, cfg, ttl: float = 300):
+    """Home's finders each scan the whole listings table; share one result
+    for `ttl` seconds (one build at a time, stale copy served meanwhile) so
+    page loads and retries can't pile up."""
+    ent = _finder_cache.get(name)
+    now = time.time()
+    if ent and now - ent[0] < ttl:
+        return list(ent[1])
+    if ent:
+        if not _finder_lock.acquire(blocking=False):
+            return list(ent[1])
+    else:
+        _finder_lock.acquire()
+    try:
+        ent = _finder_cache.get(name)
+        if ent and time.time() - ent[0] < ttl:
+            return list(ent[1])
+        res = fn(cfg)
+        _finder_cache[name] = (time.time(), res)
+        return list(res)
+    finally:
+        _finder_lock.release()
+
+
+def _finder_cards(name: str, fn, cfg, ttl: float = 300) -> list:
+    """A cached Home finder's ads, minus what you hid / what sold since, decorated for cards."""
+    from scrapers import mic_focus
+    return _decorate(mic_focus.still_showing(_cached_find(name, fn, cfg, ttl)))
+
+
+def _home_page():
+    """Home: new results, smokin' hot deals, outboard (Distressor), a compact
+    Mics section, what's coming next, and the "Check these" list last."""
+    ctx = _mics_ctx()
+    cfg = load_config_raw()
+    st, by, listed = ctx["st"], ctx["by"], ctx["listed"]
+    outboard_keys = ctx["outboard_keys"]
+    since = ctx["since_iso"]
+    # Smokin' hot: the Telex List's 50%+ deals and the mic deals, best score first.
+    from scrapers.reposts import collapse_reposts
+    hot, seen_urls = [], set()
+    for l in collapse_reposts(sorted(ctx["deals"] + ctx["hits"], key=lambda l: -(l.get("score") or 0))):
+        if l.get("url") not in seen_urls:
+            seen_urls.add(l.get("url"))
+            hot.append(l)
+    # Outboard targets (the Distressor; others can be added to mic_focus.TARGETS with outboard=True).
+    outboard = []
+    for t in st["targets"]:
+        if not t.get("outboard"):
+            continue
+        ls = [l for l in ctx["all_hits"] if l["mic"]["target"] == t["key"] and l.get("url") not in seen_urls
+              and _outboard_fresh_near(l)]
+        outboard.append({"key": t["key"], "name": t["name"].replace("Empirical Labs ", ""), "note": t.get("note"),
+                         "on": t["on"], "rows": ls})
+    mic_keys = [t["key"] for t in st["targets"] if t["key"] not in outboard_keys]
+    mic_targets = [t for t in st["targets"] if t["key"] in mic_keys]
+    mic_count = sum(len(by.get(k) or []) for k in mic_keys)
+    # New since you last looked: all gear (Telex List and mics, outboard too).
+    new = list(ctx["new"])
+    if since:
+        have = {l.get("url") for l in new}
+        try:
+            for l in _feed_items(cfg):
+                age = l["age_days"] if l.get("age_days") is not None else 999
+                if (l.get("first_seen") or "") > since and age <= FEED_RECENT_DAYS and l.get("url") not in have \
+                        and not l.get("sold") and not l.get("hidden"):
+                    have.add(l.get("url"))
+                    new.append(l)
+        except Exception:
+            logging.exception("Home: Telex List new results failed")
+        for k in mic_keys + list(outboard_keys):
+            for l in by.get(k) or []:
+                if (l.get("first_seen") or "") > since and l.get("url") not in have:
+                    have.add(l.get("url"))
+                    new.append(l)
+        new.sort(key=listed, reverse=True)
+        new = collapse_reposts(new)
+    # Vague-title ads the AI named from the photo and that are 50%+ under used.
+    mislabeled = []
+    try:
+        from scrapers import mic_focus, mislabeled as ML
+        from scrapers.enrich import parse_price
+        mislabeled = _decorate(mic_focus.still_showing(_cached_find("mislabeled", ML.find, cfg)))
+        for l in mislabeled:
+            l["comp"] = {"pct": round((1 - (parse_price(l.get("price")) or 0) / l["used_value"]) * 100),
+                         "ref": f"${l['used_value']:,}", "est": False, "label": f"AI guess: {l['guess']}"}
+    except Exception:
+        logging.exception("Home: mislabeled finder failed")
+    quiet = []
+    try:
+        from scrapers import mic_focus, quiet_auctions
+        quiet = _decorate(mic_focus.still_showing(_cached_find("quiet", quiet_auctions.find, cfg)))
+        for l in quiet:
+            q = l["quiet"]
+            l["comp"] = {"pct": q["pct"], "ref": f"${q['used']:,}", "est": False, "label": "Used market"}
+        quiet.sort(key=lambda l: l["quiet"]["ends"])
+    except Exception:
+        logging.exception("Home: quiet auctions failed")
+    motivated = []
+    try:
+        from scrapers import mic_focus, motivated as MOT
+        motivated = _decorate(mic_focus.still_showing(_cached_find("motivated", MOT.find, cfg)))
+        for l in motivated:
+            m = l["motivated_ad"]
+            l["comp"] = {"pct": m["pct"], "ref": f"${m['used']:,}", "est": False, "label": "Used market"}
+        motivated = collapse_reposts(sorted(motivated, key=lambda l: -l["motivated_ad"]["pct"]))
+    except Exception:
+        logging.exception("Home: motivated sellers failed")
+    clones, posting = [], {}
+    try:  # the clone makers' newest ads, every source (cached + pre-warmed like the other finders)
+        from scrapers import clone_makers, mic_focus, posting_times
+        clones = _decorate(mic_focus.still_showing(_cached_find("clones", clone_makers.find, cfg)))
+        posting = posting_times.summary()  # reads one small saved file
+    except Exception:
+        logging.exception("Home: clone-maker feed failed")
+    pairs = []
+    try:  # two single ads of the same model that together beat a pair's used value
+        from scrapers import mic_focus, pair_up
+        found = _cached_find("pairs", pair_up.find, cfg)
+        flat = [x for p in found for x in (p["a"], p["b"])]
+        ok = {l["url"]: l for l in _decorate(mic_focus.still_showing(flat))}
+        pairs = [dict(p, a=ok[p["a"]["url"]], b=ok[p["b"]["url"]]) for p in found if p["a"]["url"] in ok and p["b"]["url"] in ok]
+    except Exception:
+        logging.exception("Home: pair-up finder failed")
+    lots = []
+    try:  # multi-item ads priced under the sum of their parts
+        from scrapers import lot_hunter
+        lots = _finder_cards("lots", lot_hunter.find, cfg)
+    except Exception:
+        logging.exception("Home: lot hunter failed")
+    wanted_ads = []
+    try:  # no-price / "must go" local ads for buy-list gear
+        from scrapers import wanted_ads as WA
+        wanted_ads = [l for l in _finder_cards("wanted_ads", WA.find, cfg) if _outboard_fresh_near(l)][:WA.LIMIT]
+    except Exception:
+        logging.exception("Home: wanted-ad sniper failed")
+    fixers = []
+    try:  # for-parts / needs-tubes ads on valuable gear, with profit-if-fixed
+        from scrapers import fixer_upper
+        fixers = _finder_cards("fixers", fixer_upper.find, cfg)
+    except Exception:
+        logging.exception("Home: fixer-upper finder failed")
+    mods = []
+    try:  # capsule / transformer upgrades priced like a stock mic
+        from scrapers import mod_finder
+        mods = _finder_cards("mods", mod_finder.find, cfg)
+    except Exception:
+        logging.exception("Home: mod finder failed")
+    parts_radar = []
+    try:  # transformers / T4B cells / NOS tubes well under their usual price
+        from scrapers import parts_radar as _PR
+        parts_radar = _finder_cards("parts_radar", _PR.find, cfg)
+    except Exception:
+        logging.exception("Home: parts radar failed")
+    windows = []
+    try:  # models whose asking prices are falling across several sellers (30-min cache: it reads ~75 days of ads)
+        from scrapers import price_windows as _PW
+        windows = _finder_cards("windows", _PW.find, cfg, ttl=1800)
+    except Exception:
+        logging.exception("Home: price windows failed")
+    ctx.update(new=new, hot=hot, outboard=outboard, mic_targets=mic_targets, mic_count=mic_count, mislabeled=mislabeled,
+               quiet=quiet, motivated=motivated, clones=clones, posting=posting, pairs=pairs, lots=lots, wanted_ads=wanted_ads, fixers=fixers,
+               mods=mods, parts_radar=parts_radar, windows=windows)
+    return render_template("home.html", **ctx)
+
+
+def _proposals_view() -> dict:
+    from scrapers import proposals
+    items = proposals.load()
+    return {"open": [p for p in items if p["status"] == "proposed"],
+            "approved": [p for p in items if p["status"] == "approved"],
+            "built": sorted((p for p in items if p["status"] == "built"), key=lambda p: p.get("built_at") or "", reverse=True)[:5]}
+
+
+@app.route("/proposals/<pid>", methods=["POST"])
+def proposal_decide(pid):
+    """Build / Skip on a proposal (the nightly update builds approved ones)."""
+    from scrapers import proposals
+    action = request.form.get("action")
+    if action in ("approved", "skipped"):
+        proposals.set_status(pid, action)
+    return redirect(url_for("mics_page") + "#proposals")
+
+
+@app.route("/builder")
+def builder_status_page():
+    """Live status of the background builder (written to /data/builder_status.json by scripts/status_push.sh on the host)."""
+    import html as _h
+    try:
+        s = json.load(open("/data/builder_status.json"))
+        age = int(time.time() - os.path.getmtime("/data/builder_status.json"))
+    except Exception:
+        return "<p style='font-family:sans-serif'>Builder status is not available yet.</p>"
+    mark = {"done": "&#10003;", "running": "&#9654;", "waiting": "&middot;"}
+    pct = int(100 * s["done"] / max(s["total"], 1))
+    rows = "".join(f'<li class="{p["state"]}"><b>{mark[p["state"]]}</b> {_h.escape(p["label"])}</li>' for p in s["plan"])
+    commits = "".join(f"<li>{_h.escape(c[:110])}</li>" for c in s["commits"][:8])
+    lim = ", ".join(f"{a} until {t}" for a, t in s["limited"].items())
+    stale = f" &middot; <b>host not reporting for {age // 60} min</b>" if age > 180 else ""
+    return f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=refresh content=15>
+<title>Gear Scout builder</title><style>
+:root{{--bg:#fff;--fg:#1a1a1a;--dim:#777;--bar:#2b7a4b;--track:#e6e6e6}}@media(prefers-color-scheme:dark){{:root{{--bg:#161616;--fg:#eee;--dim:#999;--track:#333;--bar:#4cc38a}}}}
+body{{background:var(--bg);color:var(--fg);font:15px -apple-system,system-ui,sans-serif;margin:0;padding:16px;max-width:640px}}
+.track{{background:var(--track);border-radius:8px;height:14px}}.fill{{background:var(--bar);height:14px;border-radius:8px;width:{pct}%}}
+ul{{list-style:none;padding:0}}li{{padding:5px 0}}.waiting,.done{{color:var(--dim)}}.running{{font-weight:600}}h3{{margin:20px 0 4px}}small{{color:var(--dim)}}</style>
+<h2>Gear Scout builder</h2><div class=track><div class=fill></div></div>
+<p><b>{s['done']}/{s['total']}</b> batches done &middot; App {'healthy' if s['healthy'] else '<b>DOWN</b>'} &middot; {s['counts'].get('proposed',0)} ideas waiting &middot; {s['counts'].get('built',0)} built{(' &middot; limited: '+lim) if lim else ''}{stale}</p>
+<ul>{rows}</ul><h3>Latest commits</h3><ul>{commits}</ul><small>Updated {s['at']}, refreshes itself</small>"""
+
+
+@app.route("/mics/built")
+def mics_built():
+    """When the Mics list was last rebuilt — the open page polls this and
+    reloads itself after each sweep instead of going stale."""
+    from scrapers import mic_focus
+    return {"built": mic_focus.load().get("built")}
+
+
+@app.route("/shopping")
+def shopping():
+    """Studio shopping list: cheapest live listings per item, running total."""
+    from scrapers import shopping_list
+    from scrapers import build_planner
+    from scrapers import bundle_shipping
+    ship_groups = bundle_shipping.find_groups(shopping_list.build()["items"], shopping_list.load_state()["bought"])
+    return render_template("shopping.html", s=shopping_list.summary(), plan=build_planner.plan(load_config_raw()),
+                           ship_groups=ship_groups)
+
+
+def _pickup_plan(deals: Optional[dict]) -> dict:
+    """Weekend pickup route from the (already built) deals data."""
+    from scrapers import pickup_route
+    from scrapers.geo import miles_between, place_coords, zip_coords
+    home_zip = str(load_config_raw().get("home_zip") or "")
+    home = zip_coords(home_zip) if home_zip else None
+    listings = list((deals or {}).get("trusted", [])) + list((deals or {}).get("rough", []))
+    plan = pickup_route.build(listings, home, place_coords, miles_between)
+    plan["home_set"] = bool(home)
+    return plan
+
+
+@app.route("/pickup-route")
+def pickup_route_page():
+    """Weekend pickup route: live local deals grouped by area with a stop order."""
+    return render_template("pickup_route.html", p=_pickup_plan(_all_deals()))
+
+
+@app.route("/shopping/state", methods=["POST"])
+def shopping_state():
+    """Saves a 'bought' count for one item, or the budget."""
+    from scrapers import shopping_list
+    d = request.get_json(silent=True) or {}
+    st = shopping_list.load_state()
+    if "budget" in d:
+        try:
+            st["budget"] = max(0, float(re.sub(r"[^\d.]", "", str(d["budget"])))) if str(d["budget"]).strip() else None
+        except ValueError:
+            return {"ok": False, "error": "Type the budget as a number, like 1500."}, 400
+    if "key" in d:
+        items = {i["key"]: i for i in shopping_list.build()["items"]}
+        if d["key"] not in items:
+            return {"ok": False, "error": "Unknown item."}, 400
+        try:
+            n = int(d.get("bought", 0))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Type how many as a whole number."}, 400
+        st["bought"][d["key"]] = min(max(n, 0), items[d["key"]]["qty"])
+    shopping_list.save_state(st)
+    return {"ok": True}
+
+
+@app.route("/mics/settings", methods=["POST"])
+def mics_settings():
+    data = load_config_for_edit()
+    mf = data.get("mic_focus") or {}
+    if "enabled" in request.form:
+        mf["enabled"] = request.form.get("enabled") == "1"
+    targets = dict(mf.get("targets") or {})
+    from scrapers.mic_focus import TARGETS
+    for t in TARGETS:
+        k = t["key"]
+        if f"price_{k}" not in request.form:
+            if f"on_{k}" in request.form or "min_price" in request.form:  # a 50%-rule brand: just its on/off tick
+                targets[k] = dict(targets.get(k) or {}, on=request.form.get(f"on_{k}") == "1")
+            continue
+        try:
+            price = max(0, int(float(re.sub(r"[^\d.]", "", request.form.get(f"price_{k}") or "") or 0)))
+        except ValueError:
+            continue
+        targets[k] = dict(targets.get(k) or {}, max_price=price, on=request.form.get(f"on_{k}") == "1")
+    mf["targets"] = targets
+    if "min_price" in request.form:
+        try:
+            mf["min_price"] = max(0, int(float(re.sub(r"[^\d.]", "", request.form.get("min_price") or "") or 0)))
+        except ValueError:
+            pass
+    data["mic_focus"] = mf
+    save_config_raw(data)
+    _data_changed()  # Deals / Steals follow Mic Focus (on/off, limits): rebuild them
+    return redirect(url_for("mics_page", saved=1))
+
+
 @app.route("/")
+def feed():
+    from scrapers import wanted
+    cfg = load_config_raw()
+    if not request.args:
+        if (cfg.get("mic_focus") or {}).get("enabled"):
+            return mics_page()  # Mic Focus: the mics are the front page (the inbox is at /?inbox=1)
+        return _home_page()  # new results + smokin' hot deals; the old inbox is at /?inbox=1
+    terms = wanted.terms(cfg)
+    items = _feed_items(cfg)
+    if not (request.args.get("term") or request.args.get("show") or request.args.get("sort") or request.args.get("all")):
+        # The front page: an inbox of what needs your attention. Every
+        # listing for a term lives on the Telex List (and ?all=1).
+        since = _feed_visit()
+        from scrapers.fb_twins import hide_twins
+        sections = _inbox(hide_twins(items), since)
+        sweep = None
+        try:
+            info = json.loads(Path("/data/last_sweep.json").read_text())
+            sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+        except Exception:
+            pass
+        _verify_feed([l["url"] for s in sections for l, _ in s["rows"]][:80])
+        from scrapers import analytics
+        stats = analytics.load(cfg)
+        return render_template("feed.html", sections=sections, total=len(items), terms=terms,
+                               since_label=_ago(since), first_visit=since is None, sweep=sweep,
+                               waiting=sum(len(s["rows"]) for s in sections),
+                               stats=stats, stats_ago=_ago(stats["built"]) if stats else None)
+    since = _feed_visit()
+    show = request.args.get("show") or "all"
+    term = request.args.get("term") or ""
+    sort = "cheap" if request.args.get("sort") == "cheap" else "new"
+    try:
+        within = int(request.args.get("within") or 0)
+    except ValueError:
+        within = 0
+    counts = {t: 0 for t in terms}
+    for l in items:
+        for t in l["wanted"]:
+            if t in counts:
+                counts[t] += 1
+    view = items
+    _mark_lowest(items)
+    pinned = []
+    if term:
+        parts = {p.strip() for p in term.split(",") if p.strip()}
+        view = [l for l in view if parts & set(l["wanted"])]
+        # Filtering by a term: the cheapest working one of each model on top.
+        pinned, _ = _pinned_first(view, parts)
+    if show == "deals":
+        view = [l for l in view if l.get("deal_pct")]
+    elif show == "steals":
+        view = [l for l in view if l.get("is_steal")]
+    if within:
+        view = [l for l in view if l.get("distance") is None or l["distance"] <= within]
+    # The pinned cheapest still have to pass the Deals / Steals / distance filters.
+    in_view = {id(l) for l in view}
+    pinned = [l for l in pinned if id(l) in in_view]
+    for l in view:
+        l["is_new"] = bool(since and (l.get("first_seen") or "") > since)
+    # "New" = new to you AND recently posted; an old ad Gear Scout only just
+    # dug up goes with the older ads (still tagged NEW there).
+    age = lambda l: l["age_days"] if l.get("age_days") is not None else 999
+    new = [l for l in view if l["is_new"] and age(l) <= FEED_RECENT_DAYS]
+    recent = [l for l in view if not l["is_new"] and age(l) <= FEED_RECENT_DAYS]
+    older = [l for l in view if age(l) > FEED_RECENT_DAYS]
+    if pinned:
+        new = [l for l in new if l not in pinned]
+        older = [l for l in older if l not in pinned]
+        recent = pinned + [l for l in recent if l not in pinned]
+    if show in ("deals", "steals") and sort != "cheap":
+        # Deals / steals: all of them in view, whatever their age (a steal
+        # posted three weeks ago is still a steal) — newest first.
+        new, recent, older = new, recent + older, []
+    if sort == "cheap":
+        # One list, every ad still for sale whatever its age, cheapest first
+        # (each model's cheapest on top when a term is picked).
+        rest = sorted((l for l in view if l not in pinned), key=lambda l: l.get("total") or l.get("unit") or 1e12)
+        new, recent, older = [], pinned + rest, []
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    _verify_feed([l["url"] for l in (new + recent)[:80]])
+    return render_template("feed_all.html", new=new, recent=recent, older=older, total=len(items),
+                           terms=terms, counts=counts, term=term, show=show, since_label=_ago(since),
+                           sweep=sweep, recent_days=FEED_RECENT_DAYS, steal_pct=FEED_STEAL_PCT, sort=sort,
+                           first_visit=since is None)
+
+
+_feed_verify = {"running": False}
+
+
+def _verify_feed(urls: list[str]):
+    """Sold check for the top of the Feed right away (websites hourly;
+    Facebook ads are left to the scraper's sold check, Feed first)."""
+    if _feed_verify["running"] or not urls:
+        return
+
+    def run():
+        from concurrent.futures import ThreadPoolExecutor
+        from scrapers.sold_check import _record, check_url
+        from scrapers.store import _conn
+        _feed_verify["running"] = True
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            web = [u for u in urls if "facebook.com" not in u]
+            with _conn() as conn:
+                recent = {u for (u,) in conn.execute(
+                    f"SELECT url FROM seen WHERE url IN ({','.join('?' * len(web))}) AND sold_checked_at >= ?",
+                    (*web, cutoff))} if web else set()
+            todo = [u for u in web if u not in recent]
+
+            def one(u):
+                try:
+                    gone = check_url(u)
+                except Exception:
+                    gone = None
+                _record(u, gone)
+                return u, gone
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                gone = [u for u, g in pool.map(one, todo) if g]
+            if gone:
+                _data_changed()
+                logging.info("Feed: %d sold/ended listings taken off", len(gone))
+        finally:
+            _feed_verify["running"] = False
+    threading.Thread(target=run, name="verify-feed", daemon=True).start()
+
+
+@app.route("/health")
+def health():
+    """Is everything being searched? Per site: last search, how many it
+    found and how many were new; per Wanted term: when each site group last
+    searched it; and how fresh the Feed is."""
+    from scrapers import wanted
+    from scrapers.store import _conn
+    from scrapers.telex import EBAY_EVERY_MIN, FAST_EVERY_MIN, _cable_part_number, sweep_state
+    cfg = load_config_raw()
+    try:
+        run = json.loads(Path("/data/last_run.json").read_text())
+    except Exception:
+        run = {}
+    with _conn() as conn:
+        last_found = dict(conn.execute("SELECT source_name, MAX(first_seen) FROM seen GROUP BY source_name").fetchall())
+        new_24h = dict(conn.execute(
+            "SELECT source_name, COUNT(*) FROM seen WHERE first_seen >= ? GROUP BY source_name",
+            ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),)).fetchall())
+    sites = []
+    for s in run.get("sources") or []:
+        name = s.get("name")
+        sites.append({"name": name, "ok": s.get("success"), "blocked": s.get("blocked"), "count": s.get("count"),
+                      "error": s.get("error"), "last_new": _ago(last_found.get(name)),
+                      "new_24h": new_24h.get(name, 0)})
+    # Facebook Marketplace regions and Craigslist cities are many small sources: one row each group.
+    st = sweep_state()
+    term_rows = []
+    for t in wanted.terms(cfg):
+        row = {"term": t}
+        for site in ("fast", "ebay", "fb"):
+            s = st.get((t, site)) or {}
+            row[site] = _ago(s.get("searched_at"))
+            row[site + "_new"] = s.get("new") or 0
+        row["fb_slow"] = _cable_part_number(t)  # searched on Facebook every 3 days (see telex.run_wanted_sweep)
+        term_rows.append(row)
+    items = _feed_items(cfg)
+    # Freshness: for Feed listings found in the last day with a known posting
+    # time, how long after the seller posted Gear Scout found them.
+    lags = []
+    for l in items:
+        if l.get("age_known") and l.get("posted_at") and l.get("first_seen"):
+            try:
+                p = datetime.fromisoformat(l["posted_at"])
+                f = datetime.fromisoformat(l["first_seen"])
+                p = p if p.tzinfo else p.replace(tzinfo=timezone.utc)
+                f = f if f.tzinfo else f.replace(tzinfo=timezone.utc)
+                # Ads posted in the last 3 days and found in the last day (an
+                # old ad found late says nothing about how fast new ones arrive).
+                now = datetime.now(timezone.utc)
+                if now - f < timedelta(days=1) and now - p < timedelta(days=3):
+                    lags.append(max(0.0, (f - p).total_seconds() / 3600))
+            except ValueError:
+                pass
+    lags.sort()
+    lag = {"n": len(lags), "median": round(lags[len(lags) // 2], 1) if lags else None,
+           "within_1h": sum(x <= 1 for x in lags), "within_6h": sum(x <= 6 for x in lags)}
+    # The top of the Feed (what you actually scroll through) — the long tail
+    # of older ads is re-checked more slowly.
+    top = items[:200]
+    six_h = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    checks = {"total": len(top), "fresh": sum(1 for l in top if (l.get("confirmed_live_at") or "") >= six_h)}
+    sweep = None
+    try:
+        info = json.loads(Path("/data/last_sweep.json").read_text())
+        sweep = {"ago": _ago(info["finished"]), "new": info.get("new", 0)}
+    except Exception:
+        pass
+    try:
+        refresh = json.loads(Path("/data/last_refresh.json").read_text())
+        refresh = {"ago": _ago(refresh["finished"]), "new": refresh.get("new_count", 0)}
+    except Exception:
+        refresh = None
+    email = None
+    try:
+        es = json.loads(Path("/data/email_status.json").read_text())
+        email = {"ok_ago": _ago(es["last_ok"]) if es.get("last_ok") else None,
+                 "failing_ago": _ago(es["failing_since"]) if es.get("failing_since") else None,
+                 "why": es.get("last_fail_why") or ""}
+    except Exception:
+        pass
+    try:
+        from scrapers import term_silence
+        silent = term_silence.silent_terms()
+    except Exception:
+        silent = []
+    try:
+        from scrapers import term_hit_rate
+        noisy = term_hit_rate.cached_noisy_lines(cfg)
+    except Exception:
+        noisy = []
+    return render_template("health.html", sites=sites, term_rows=term_rows, lag=lag, checks=checks,
+                           sweep=sweep, refresh=refresh, email=email, silent=silent, noisy=noisy,
+                           fast_every=FAST_EVERY_MIN, ebay_every=EBAY_EVERY_MIN)
+
+
+@app.route("/dashboard")
 def index():
     cfg = load_config_raw()
     data = _index_listings(cfg)
@@ -1764,6 +3583,10 @@ def index():
         last_refresh=last_refresh,
         no_comp=data["no_comp"][:150], no_comp_total=len(data["no_comp"]),
         old_items=data.get("old", []),
+        usually_hidden=data.get("usually_hidden", [])[:150],
+        usually_hidden_total=len(data.get("usually_hidden", [])),
+        shop_folds=data.get("shop_folds", []),
+        usually_hidden_brands=sorted({l.get("hidden_brand") for l in data.get("usually_hidden", []) if l.get("hidden_brand")}),
         new_items=new_items[:48], new_total=len(new_items), new_since=since,
         auctions=data.get("auctions", []),
         scraped_at=_last_scraped_by_site(),
@@ -1841,7 +3664,7 @@ def _index_listings(cfg) -> dict:
             def rebuild():
                 _index_state["running"] = True
                 try:
-                    with app.test_request_context("/", headers={"X-Warm": "1"}):
+                    with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
                         _index_listings(load_config_raw())
                 except Exception:
                     logging.exception("Dashboard rebuild failed")
@@ -1890,6 +3713,28 @@ def _build_index_listings(cfg) -> dict:
                  key=lambda l: -(l.get("comp") or {}).get("pct", 0))
     old_ids = {id(l) for l in old}
     worth = [l for l in worth if id(l) not in old_ids]
+    # Brands you keep hiding drop to a collapsed line (unless 60%+ under comp).
+    usually_hidden, kept = [], []
+    try:
+        from scrapers.hidden_brands import is_usually_hidden, usually_hidden_brands
+        _hb = usually_hidden_brands()
+        for l in worth:
+            b = is_usually_hidden(l, _hb)
+            if b:
+                l["hidden_brand"] = b
+                usually_hidden.append(l)
+            else:
+                kept.append(l)
+        worth = kept
+    except Exception:
+        logging.exception("Hidden-brand memory failed")
+    # Reverb shops' new / B-stock Lauten and Warm Audio copies: one line per model.
+    shop_folds = []
+    try:
+        from scrapers.shop_fold import fold_shop_stock
+        worth, shop_folds = fold_shop_stock(worth)
+    except Exception:
+        logging.exception("Shop-stock fold failed")
     grouped = _group_by_source(worth[:300], decorated=True)
     from zoneinfo import ZoneInfo
     now_s = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M")  # ShopGoodwill times are Pacific
@@ -1906,7 +3751,8 @@ def _build_index_listings(cfg) -> dict:
     picked = {l.get("url") for l in for_you}
     return {"grouped": grouped, "no_comp": no_comp, "for_you": for_you,
             "deals": [l for l in _deals_from(grouped) if l.get("url") not in picked],  # each ad once
-            "auctions": auctions, "old": old}
+            "auctions": auctions, "old": old, "usually_hidden": usually_hidden,
+            "shop_folds": shop_folds}
 
 
 @app.route("/scrape/start", methods=["POST"])
@@ -1993,8 +3839,15 @@ def jobs_active():
 def favorites():
     listings = favorite_listings(limit=300)
     grouped_listings = _group_by_source(listings)
+    try:
+        from scrapers import market_value as _MV
+        star_offers = _MV.star_offer_notes(listings)
+    except Exception:
+        app.logger.exception("star offer notes")
+        star_offers = []
     return render_template(
         "favorites.html",
+        star_offers=star_offers,
         deals=_deals_from(grouped_listings),
         grouped_listings=grouped_listings,
         result_count=len(listings),
@@ -2125,6 +3978,70 @@ def _start_lowest_job(query: str) -> bool:
     _lowest_thread = threading.Thread(target=_run_lowest_job, args=(query,), daemon=True)
     _lowest_thread.start()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Saved: what you paid for your gear vs. new, with social slides
+# ---------------------------------------------------------------------------
+_savings_cache: dict = {"key": None, "at": 0.0, "data": None}
+
+
+def _savings_data(refresh: bool = False):
+    from scrapers import savings
+    url = (load_config_raw().get("savings_sheet_url") or "").strip()
+    if not url:
+        return url, None
+    c = _savings_cache
+    if not refresh and c["key"] == url and c["data"] is not None and time.time() - c["at"] < 600:
+        return url, c["data"]
+    d = savings.build(url, refresh=refresh)
+    c.update(key=url, at=time.time(), data=d)
+    return url, d
+
+
+@app.route("/saved")
+def savings_page():
+    from scrapers import savings_slides
+    url, d = _savings_data()
+    slides = savings_slides.slides(d) if d and d.get("count") else []
+    try:
+        from scrapers import deal_calibration
+        calib = deal_calibration.report(d.get("items") or []) if d else None
+    except Exception:
+        calib = None
+    try:
+        from scrapers import resale_drafter
+        resale = resale_drafter.drafts(d.get("items") or []) if d else {}
+    except Exception:
+        resale = {}
+    return render_template("savings.html", sheet_url=url, d=d, slides=slides, calib=calib, resale=resale,
+                           version=int(_savings_cache.get("at") or 0))
+
+
+@app.route("/saved/sheet", methods=["POST"])
+def savings_sheet():
+    cfg = load_config_for_edit()
+    cfg["savings_sheet_url"] = request.form.get("sheet_url", "").strip()
+    save_config_raw(cfg)
+    _savings_cache.update(key=None, data=None)
+    return redirect(url_for("savings_page"))
+
+
+@app.route("/saved/refresh", methods=["POST"])
+def savings_refresh():
+    _savings_data(refresh=True)
+    return redirect(url_for("savings_page"))
+
+
+@app.route("/saved/slide/<int:n>.svg")
+def savings_slide(n: int):
+    from flask import Response
+    from scrapers import savings_slides
+    _, d = _savings_data()
+    slides = savings_slides.slides(d) if d and d.get("count") else []
+    if not 1 <= n <= len(slides):
+        return ("No such slide", 404)
+    return Response(slides[n - 1], mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 @app.route("/lowest")
@@ -2418,12 +4335,19 @@ def listing_tags():
 @app.route("/sources")
 def sources():
     cfg = load_config_raw()
+    from scrapers import catch_speed
+    speed = [dict(r, median_text=catch_speed.fmt(r["median"]), p90_text=catch_speed.fmt(r["p90"]))
+             for r in catch_speed.scoreboard()]  # read-only, cached 10 min
     return render_template(
         "sources.html",
+        catch_speed=speed,
         sources=cfg.get("sources", []),
         source_types=SOURCE_TYPES,
         fb_session=fb_session_status(),
     )
+
+
+from scrapers import hidden_sellers as _hidden_sellers_mod  # noqa: E402
 
 
 @app.route("/settings")
@@ -2451,10 +4375,27 @@ def settings():
         ),
         exclude_text="\n".join(str(w) for w in (cfg.get("exclude_words") or [])),
         hidden_count=count_hidden(),
+        hidden_sellers=_hidden_sellers_mod.load(),
         ebay_client_id=(cfg.get("ebay_api") or {}).get("client_id", ""),
         ebay_has_secret=bool((cfg.get("ebay_api") or {}).get("client_secret")),
+        ebay_runame_set=bool(str((cfg.get("ebay_api") or {}).get("runame") or "").strip()),
+        ebay_budget=_ebay_budget(),
         saved=request.args.get("saved"),
     )
+
+
+def _ebay_budget() -> dict:
+    """Today's eBay calls used / left (a tiny file in /data, written by every eBay call)."""
+    try:
+        from scrapers.ebay_api import budget_status
+        return budget_status()
+    except Exception:
+        return {}
+
+
+@app.route("/ebay/budget")
+def ebay_budget_json():
+    return jsonify(_ebay_budget())
 
 
 @app.route("/settings/ebay", methods=["POST"])
@@ -2502,9 +4443,22 @@ def settings_email():
     # Only overwrite the saved app password if a new one was actually typed
     # — the field ships blank (not pre-filled) so this never round-trips
     # the real secret back into the page source.
-    new_password = request.form.get("password", "").strip()
+    # Google shows app passwords as "abcd efgh ijkl mnop": the spaces go.
+    new_password = re.sub(r"\s+", "", request.form.get("password", ""))
+    pw_warning = False
     if new_password:
         email_cfg["password"] = new_password
+        gmail = "gmail" in (email_cfg.get("smtp_host") or "smtp.gmail.com").lower()
+        pw_warning = gmail and not re.fullmatch(r"[a-zA-Z]{16}", new_password)
+    # Gear Scout's own sign-in password (separate from the email one).
+    new_login = request.form.get("login_password", "")
+    login_short = False
+    if new_login:
+        if len(new_login) >= 8:
+            from werkzeug.security import generate_password_hash
+            cfg["login"] = {**(cfg.get("login") or {}), "password_hash": generate_password_hash(new_login)}
+        else:
+            login_short = True
 
     try:
         email_cfg["max_listings_per_source"] = max(1, int(request.form.get("max_listings_per_source", "").strip()))
@@ -2523,7 +4477,7 @@ def settings_email():
         schedule_cfg["cron"] = cron
 
     save_config_raw(cfg)
-    return redirect(url_for("settings", saved="email"))
+    return redirect(url_for("settings", saved="email_pw_warn" if pw_warning else "login_short" if login_short else "email"))
 
 
 @app.route("/settings/keywords", methods=["POST"])
@@ -2756,8 +4710,56 @@ def _keep_caches_warm():
             sale_stats()
             from scrapers.market import load_market
             load_market()
+            from scrapers import market_value as _mvw
+            _mvw.index(max_age=1200)  # refreshed here, before page loads find it stale
+            try:
+                from scrapers import market_pulse as _MP
+                _MP.pulse(load_config_raw())
+            except Exception:
+                logging.exception('Cache warm-up: market pulse failed')
+            # The Mics page's other panels each scan the listings table when their cache is
+            # cold (price targets ~10 s, history / best month / regional gap seconds each).
+            try:
+                from scrapers import best_month as _BM, flips as _FL, price_history as _PH, price_targets as _PT
+                from scrapers import regional_gap as _RG
+                _wcfg = load_config_raw()
+                for _fn in (_PT.status, _PH.history, _BM.best_months, _RG.regional_gaps, _FL.find):
+                    _fn(_wcfg)
+                from scrapers import star_sold_tracker as _SST
+                _SST.tracker()
+            except Exception:
+                logging.exception("Cache warm-up: Mics panels failed")
+            from scrapers import clone_makers as _CM, mislabeled as _ML, motivated as _MOT, quiet_auctions as _QA
+            from scrapers import lot_hunter as _LH, fixer_upper as _FU, mod_finder as _MF, parts_radar as _PR, pair_up as _PU, wanted_ads as _WA
+            _cfg = load_config_raw()
+            try:
+                from scrapers import hold_tracker as _HT
+                _HT.stats()  # the Mics page's Hold-value card (own 30-min cache)
+            except Exception:
+                logging.exception("Cache warm-up: hold tracker failed")
+            for _n, _f in (("mislabeled", _ML.find), ("quiet", _QA.find), ("motivated", _MOT.find), ("clones", _CM.find), ("pairs", _PU.find), ("lots", _LH.find), ("wanted_ads", _WA.find), ("fixers", _FU.find), ("mods", _MF.find), ("parts_radar", _PR.find)):
+                try:
+                    _cached_find(_n, _f, _cfg, ttl=240)
+                except Exception:
+                    logging.exception("Cache warm-up: %s failed", _n)
+            try:
+                from scrapers import shopping_list as _SL
+                _SL.build()  # the /shopping page's 10-minute cache (and its bundle offers)
+            except Exception:
+                logging.exception("Cache warm-up: shopping list failed")
+            try:
+                from scrapers import deal_calibration as _DC
+                _DC.report((_savings_data()[1] or {}).get("items") or [])  # the Saved page's Deal calibration card
+            except Exception:
+                logging.exception("Cache warm-up: deal calibration failed")
+            try:
+                from scrapers import price_windows as _PW
+                _cached_find("windows", _PW.find, _cfg, ttl=1500)  # reads ~75 days of ads: its own slower refresh
+            except Exception:
+                logging.exception("Cache warm-up: windows failed")
+            _feed_items(load_config_raw())  # the Feed (home page) first
             # The Dashboard's default view, ready before anyone asks.
-            with app.test_request_context("/", headers={"X-Warm": "1"}):
+            with app.test_request_context("/dashboard", headers={"X-Warm": "1"}):
                 if _index_cache["key"] is None and _index_cache["data"] is not None:
                     # Showing the saved copy from before the restart: rebuild for real now.
                     data = _build_index_listings(load_config_raw())
@@ -2774,6 +4776,39 @@ def _keep_caches_warm():
         except Exception:
             logging.exception("Cache warm-up failed")
         time.sleep(300)
+
+
+def _singleflight_builders():
+    """Page builders keep a 30-minute cache but not a lock, so a cold cache
+    (every restart) let every open page rebuild at once and stall the site.
+    Wrap them so concurrent callers queue behind one build, then hit its cache."""
+    import functools
+    import importlib
+    targets = (("best_month", "best_months"), ("price_history", "history"), ("regional_gap", "regional_gaps"),
+               ("market_pulse", "pulse"), ("flips", "find"), ("price_targets", "status"), ("price_targets", "hits"),
+               ("wait_signal", "signals"), ("seller_watch", "watched"), ("offer_log", "summary"),
+               ("hold_tracker", "stats"))
+    for mod_name, fn_name in targets:
+        try:
+            mod = importlib.import_module(f"scrapers.{mod_name}")
+            fn = getattr(mod, fn_name, None)
+            if fn is None or getattr(fn, "_singleflight", False):
+                continue
+            lock = threading.RLock()
+
+            def make(fn=fn, lock=lock):
+                @functools.wraps(fn)
+                def wrapper(*a, **k):
+                    with lock:
+                        return fn(*a, **k)
+                wrapper._singleflight = True
+                return wrapper
+            setattr(mod, fn_name, make())
+        except Exception:
+            logging.exception("single-flight wrap failed for %s.%s", mod_name, fn_name)
+
+
+_singleflight_builders()
 
 
 if __name__ == "__main__":
@@ -2794,7 +4829,7 @@ if __name__ == "__main__":
 
     # Every other background search: a "running" left over from before the
     # restart can't still be running.
-    for path in (TELEX_STATUS_PATH, LOWEST_STATUS_PATH, FBPOSTS_STATUS_PATH):
+    for path in (TELEX_STATUS_PATH, LOWEST_STATUS_PATH, FBPOSTS_STATUS_PATH, MANUAL_SCRAPE_STATUS_PATH):
         try:
             st = json.loads(path.read_text())
             if st.get("state") == "running":

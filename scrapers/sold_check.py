@@ -35,6 +35,7 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 RECHECK_HOURS = 12
+REVERB_MAX = 250  # Reverb API checks per hourly run, on top of the other sites' 120
 _GONE_TEXT = re.compile(
     r"this ad is no longer available|this posting has been deleted|this posting has expired|"
     r"this posting has been flagged for removal|listing (?:is no longer|isn'?t) available|"
@@ -47,6 +48,11 @@ def _ensure(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(seen)")}
     if "sold_checked_at" not in cols:
         conn.execute("ALTER TABLE seen ADD COLUMN sold_checked_at TEXT")
+    # When a check last actually confirmed the ad is still up (a page that
+    # couldn't be read counts as checked, so it isn't retried every run, but
+    # doesn't count as "still listed").
+    if "confirmed_live_at" not in cols:
+        conn.execute("ALTER TABLE seen ADD COLUMN confirmed_live_at TEXT")
 
 
 def _ebay_gone(url: str) -> Optional[bool]:
@@ -63,15 +69,23 @@ def _ebay_gone(url: str) -> Optional[bool]:
     if not (api.get("client_id") and api.get("client_secret")):
         return None
     token = _get_token(api["client_id"].strip(), api["client_secret"].strip())
-    r = requests.get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"),
-                     params={"legacy_item_id": m.group(1)},
-                     headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, timeout=20)
+    from scrapers.ebay_api import _headers, shipping_of
+    from scrapers.ebay_api import ebay_get
+    r = ebay_get(SEARCH_URL.replace("item_summary/search", "item/get_item_by_legacy_id"), job="sold_check",
+                 params={"legacy_item_id": m.group(1)}, headers=_headers(token), timeout=20)
     _check_response(r)
     if r.status_code in (404, 410):
         return True
     if r.status_code != 200:
         return None
     item = r.json()
+    try:
+        from scrapers.ebay_api import country_of
+        from scrapers.store import set_country, set_shipping
+        set_shipping(url, shipping_of(item))
+        set_country(url, country_of(item))
+    except Exception:
+        pass
     end = item.get("itemEndDate")
     if end:
         try:
@@ -86,16 +100,37 @@ def _ebay_gone(url: str) -> Optional[bool]:
 def check_url(url: str) -> Optional[bool]:
     """True = sold/gone, False = still listed, None = couldn't tell."""
     if "ebay.com/itm" in url:
-        return _ebay_gone(url)
+        try:
+            return _ebay_gone(url)
+        except RuntimeError:  # eBay budget / daily limit: can't tell now
+            return None
     if "reverb.com/item/" in url:
         m = re.search(r"/item/(\d+)", url)
         if not m:
             return None
-        r = requests.get(f"https://api.reverb.com/api/listings/{m.group(1)}",
-                         headers={"Accept-Version": "3.0", "Accept": "application/hal+json"}, timeout=20)
+        from scrapers.reverb_api import reverb_get
+        r = reverb_get(f"https://api.reverb.com/api/listings/{m.group(1)}",
+                       headers={"Accept-Version": "3.0", "Accept": "application/hal+json"}, timeout=20)
         if r.status_code == 404:
             return True
+        if not r.ok:
+            return None
+        try:
+            from scrapers.reverb_api import country_of, shipping_of
+            from scrapers.store import set_country, set_shipping
+            set_shipping(url, shipping_of(r.json()))
+            set_country(url, country_of(r.json()))
+        except Exception:
+            pass
         slug = ((r.json().get("state") or {}).get("slug") or "").lower()
+        if slug == "sold":
+            # A real sale (not "ended" = taken down): its last price is the
+            # best sold price Reverb still shows — used values learn from these.
+            try:
+                from scrapers.market_value import record_sale
+                record_sale(url, (r.json().get("price") or {}).get("amount"))
+            except Exception:
+                logger.exception("Couldn't record a Reverb sale")
         return None if not slug else slug != "live"
     if "/products/" in url and "facebook.com" not in url:
         # Shopify product: its .js twin says whether any variant is for sale.
@@ -136,8 +171,8 @@ def check_url(url: str) -> Optional[bool]:
     return bool(_GONE_TEXT.search(html))
 
 
-SHOWN_FILES = ("/data/shown_dashboard.txt", "/data/shown_steals.txt", "/data/shown_telex.txt",
-               "/data/shown_telex_groups.txt")
+SHOWN_FILES = ("/data/shown_feed.txt", "/data/shown_mics.txt", "/data/shown_dashboard.txt", "/data/shown_steals.txt",
+               "/data/shown_telex.txt", "/data/shown_telex_groups.txt")
 SHOWN_RECHECK_HOURS = 4
 
 
@@ -169,8 +204,26 @@ def _shown_first(limit: int, include_fb: bool) -> list[str]:
                 " AND (sold_checked_at IS NULL OR sold_checked_at < ?) GROUP BY url", (*chunk, cutoff)).fetchall()
     # Never-checked first, then the longest since a check — so nothing far
     # down the page waits forever behind the top listings.
+    # Your Feed comes before the other pages — in Mic Focus, the Mics page's
+    # "in your price range" list comes first (Oct 27: half of it waited
+    # 5–19 h behind ~400 Feed ads the owner isn't looking at).
     order = {u: i for i, u in enumerate(shown)}
-    return [u for u, _ in sorted(set(due), key=lambda r: (r[1], order.get(r[0], 0)))][:limit]
+    try:
+        feed = set(open(SHOWN_FILES[0]).read().split("\n"))
+    except OSError:
+        feed = set()
+    top = set()
+    try:
+        import yaml
+        from scrapers import mic_focus
+        data = mic_focus.load()
+        if data.get("rows") and mic_focus.enabled(yaml.safe_load(open("/config/config.yaml")) or {}):
+            top = {r["url"] for r in data["rows"] if r["mic"]["hit"]}
+            feed = {r["url"] for r in data["rows"]}  # the Mics page stands in for the Feed
+    except Exception:
+        logger.debug("Mic Focus order skipped", exc_info=True)
+    return [u for u, _ in sorted(set(due), key=lambda r: (r[0] not in top, r[0] not in feed, r[1],
+                                                           order.get(r[0], 0)))][:limit]
 
 
 def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
@@ -184,7 +237,7 @@ def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
         rows = conn.execute(
             f"""SELECT url, MAX(favorite) AS fav, MAX(first_seen) AS seen FROM seen
                 WHERE url LIKE 'http%' AND sold = 0 AND hidden = 0 AND duplicate = 0
-                AND (first_seen >= ? OR favorite = 1)
+                AND (COALESCE(last_seen, first_seen) >= ? OR favorite = 1)
                 AND (sold_checked_at IS NULL OR sold_checked_at < ?
                      OR (COALESCE(pending, 0) = 1 AND sold_checked_at < ?))
                 AND url NOT LIKE '%shopgoodwill.com%' AND url NOT LIKE '%search/posts%'
@@ -198,10 +251,12 @@ def _candidates(limit: int, include_fb: bool) -> list[tuple[str, str]]:
 
 
 def _record(url: str, gone: Optional[bool]) -> None:
+    now = datetime.now(timezone.utc).isoformat()
     with _conn() as conn:
         _ensure(conn)
-        conn.execute("UPDATE seen SET sold_checked_at = ? WHERE url = ?",
-                     (datetime.now(timezone.utc).isoformat(), url))
+        conn.execute("UPDATE seen SET sold_checked_at = ? WHERE url = ?", (now, url))
+        if gone is False:
+            conn.execute("UPDATE seen SET confirmed_live_at = ? WHERE url = ?", (now, url))
         conn.commit()
     if gone:
         mark_sold(url)
@@ -219,11 +274,18 @@ def fb_listed_at(text: str):
     return datetime.now(timezone.utc) - timedelta(days=n * days)
 
 
+_FB_AD_SHOWN = re.compile(r"(?m)^Listed .{1,40} ago|send seller a message|message seller", re.I)
+_FB_LOGIN = re.compile(r"forgot (?:password|account)|create new account|log in to continue", re.I)
+
+
 def check_fb(urls: list[str]):
     """Opens each Facebook listing in one paced browser and yields
     (url, gone) — gone is None when the page couldn't be read. Also notes
     "pending" sales."""
     if not urls:
+        return
+    from scrapers.fb_posts_background import facebook_paused
+    if facebook_paused():  # Facebook asked the account to slow down
         return
     try:
         from scrapers.facebook_scraper import SESSION_FILE, _browser, _new_context
@@ -235,19 +297,27 @@ def check_fb(urls: list[str]):
                 gone = None
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=40000)
-                    # Wait only until the item (its title) or a "gone" notice shows,
-                    # instead of a fixed 2 seconds.
+                    # Wait until the ad's "Listed … ago" line or a "gone" notice
+                    # shows. (The page's first <h1> is often just "Notifications",
+                    # so it can't be used to tell the ad has loaded.)
                     try:
                         page.wait_for_function(
-                            "() => document.querySelector('h1') || /no longer available|isn't available|this listing/i"
-                            ".test(document.body.innerText.slice(0, 3000))", timeout=3500, polling=200)
+                            "() => /\\nListed .{1,40} ago|no longer available|isn't available|this listing/i"
+                            ".test(document.body.innerText.slice(0, 8000))", timeout=8000, polling=250)
                     except Exception:
                         pass
                     page.wait_for_timeout(300)
-                    text = page.inner_text("body")[:5000]
+                    text = page.inner_text("body")[:8000]
                     gone = bool(_GONE_TEXT.search(text) or re.search(r"^\s*Sold\s*$", text, re.M)
                                 or "/marketplace/item/" not in page.url)
-                    if not gone:
+                    if not gone and not _FB_AD_SHOWN.search(text):
+                        # A deleted or sold ad usually doesn't say so: Facebook
+                        # just shows Marketplace with no ad on it. Count that as
+                        # gone — but only when the page clearly loaded logged in
+                        # (a login wall or half-loaded page means "can't tell").
+                        logged_in = "Marketplace" in text and not _FB_LOGIN.search(text)
+                        gone = True if logged_in and len(text) > 500 else None
+                    if gone is False:
                         from scrapers.store import set_pending
                         set_pending(url, bool(re.search(r"(?mi)^\s*pending\s*$|sale pending", text)))
                         posted = fb_listed_at(text)
@@ -270,12 +340,16 @@ def run_sold_check(max_http: int = 120, max_fb: int = 60) -> dict:
     start = time.time()
     checked = sold = 0
     lock = threading.Lock()
-    shown = _shown_first(max_http, include_fb=False)
+    shown = _shown_first(max_http * 3, include_fb=False)
     http = list(dict.fromkeys(shown + [u for u, _ in _candidates(max_http * 2, include_fb=False)]))
     # eBay is checked through its API, which counts against the daily
-    # allowance: at most 40 per hour, the ones you can see first.
-    ebay = [u for u in http if "ebay.com/itm" in u][:40]
-    http = [u for u in http if "ebay.com/itm" not in u][:max_http] + ebay
+    # allowance: at most 10 per hour (was 40 = ~960 a day), the ones you can see first.
+    ebay = [u for u in http if "ebay.com/itm" in u][:10]
+    # Reverb's public API is quick and has no daily cap, so those checks
+    # don't share the 120 slots (Oct 30: 124 of the Feed's 179 Reverb ads
+    # were over 4 h unchecked, and a sold SSL Big Six stayed up a day).
+    reverb = [u for u in http if "reverb.com/item/" in u][:REVERB_MAX]
+    http = [u for u in http if "ebay.com/itm" not in u and "reverb.com/item/" not in u][:max_http] + reverb + ebay
 
     def check_one(url):
         nonlocal checked, sold

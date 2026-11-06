@@ -19,6 +19,7 @@ cache period.
 import logging
 import re
 import statistics
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -131,8 +132,9 @@ def _reverb_by_condition(query: str) -> dict[str, list[float]]:
     cached = _by_condition_cache.get(query)
     if cached and time.time() - cached[0] < 600:
         return cached[1]
-    resp = requests.get(API_URL, params={"query": query, "per_page": 50},
-                        headers=HEADERS, timeout=20)
+    from scrapers.reverb_api import reverb_get
+    resp = reverb_get(API_URL, params={"query": query, "per_page": 50},
+                      headers=HEADERS, timeout=20)
     resp.raise_for_status()
     out: dict[str, list[float]] = {}
     for item in resp.json().get("listings", []) or []:
@@ -178,8 +180,9 @@ def _ebay_prices(query: str, api_cfg: dict) -> list[float]:
     """Used / open-box / refurbished asking prices on eBay (Browse API)."""
     from scrapers.ebay_api import CONDITION_FILTER, SEARCH_URL, _get_token
     token = _get_token(api_cfg["client_id"].strip(), api_cfg["client_secret"].strip())
-    resp = requests.get(
-        SEARCH_URL,
+    from scrapers.ebay_api import ebay_get
+    resp = ebay_get(
+        SEARCH_URL, job="lookups",
         params={"q": query, "limit": 50, "filter": f"{CONDITION_FILTER},buyingOptions:{{FIXED_PRICE}}"},
         headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
         timeout=20,
@@ -301,8 +304,24 @@ def market_typical(query: str, ebay_cfg: Optional[dict] = None,
     return best
 
 
+_market_cache: dict = {"at": 0.0, "m": None}
+_market_lock = threading.Lock()
+
+
 def load_market() -> MarketIndex:
-    """{value_key: typical asking price} for fresh, usable cache entries."""
+    """{value_key: typical asking price} for fresh, usable cache entries.
+    Cached 60 s: concurrent page loads share one build."""
+    if _market_cache["m"] is not None and time.time() - _market_cache["at"] < 60:
+        return _market_cache["m"]
+    with _market_lock:
+        if _market_cache["m"] is not None and time.time() - _market_cache["at"] < 60:
+            return _market_cache["m"]
+        m = _load_market_uncached()
+        _market_cache.update(at=time.time(), m=m)
+        return m
+
+
+def _load_market_uncached() -> MarketIndex:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=CACHE_DAYS)).isoformat()
     with _conn() as conn:
         _ensure_table(conn)
