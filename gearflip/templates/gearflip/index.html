@@ -106,11 +106,12 @@
   {% if thanks %}<p class="gf-pos">Got it. That one's gone, and Gear Flip is re-ranking with what you told it.</p>{% endif %}
   <div class="gf-chips">
     {% for k, label in [('all', 'All'), ('working', 'Working'), ('repair', '🔧 Needs repair'), ('local', '📍 Local pickup')] %}
-    <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort, dir='rev' if rev else None) }}#all">{{ label }}</a>
+    <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort, dir='rev' if rev else None, over=1 if show_over else None) }}#all">{{ label }}</a>
     {% endfor %}
+    {% if n_over %}<a class="gf-chip {{ 'on' if show_over }}" href="{{ url_for('gearflip.index', kind=kind, sort=sort, dir='rev' if rev else None, over=None if show_over else 1) }}#all">{{ 'Hide' if show_over else 'Show' }} {{ n_over }} over your {{ cap|gf_money }}</a>{% endif %}
   </div>
   <form class="gf-chips" method="get" action="{{ url_for('gearflip.index') }}#all">
-    <input type="hidden" name="kind" value="{{ kind }}">
+    <input type="hidden" name="kind" value="{{ kind }}">{% if show_over %}<input type="hidden" name="over" value="1">{% endif %}
     <label class="muted" for="gf-sort">Sort by</label>
     <select id="gf-sort" name="sort" onchange="this.form.submit()">
       {% for k, s in sorts.items() %}<option value="{{ k }}" {{ 'selected' if sort == k }}>{{ s[0] }}</option>{% endfor %}
@@ -135,7 +136,7 @@
             {% if m.pickup %}<span class="gf-tag">📍 local seller</span>{% endif %}
             {% if o.offers_ok %}<span class="gf-tag">takes offers</span>{% endif %}
             {% if o.url in owned %}<span class="gf-tag plan">✓ you bought this</span>{% endif %}
-            {% if o.photo and not o.photo.none %}<span class="gf-tag plan">📷 photo checked</span>{% elif res.photo_ai and not o.photo %}<span class="gf-tag">📷 not checked yet</span>{% endif %}
+            {% if o.photo and not o.photo.none %}<span class="gf-tag plan">📷 photo checked</span>{% elif res.photo_ai and not o.photo %}<span class="gf-tag fix">📷 photo not checked yet</span>{% endif %}
             {% for f in o.flags %}<span class="gf-tag warn">⚠ {{ f }}</span>{% endfor %}
           </div>
         </div>

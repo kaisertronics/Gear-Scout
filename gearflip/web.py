@@ -79,6 +79,10 @@ def index():
     owned = ledger.open_urls()
     gone = feedback.hidden_urls()
     opps = [o for o in (res.get("opps") or []) if economics.passes(o["m"], st) and o.get("url") not in gone]
+    cap = max(book["value"], book["cash"])  # what you could ever spend right now
+    over = [o for o in opps if o["m"]["cash_need"] > cap]
+    if not request.args.get("over"):
+        opps = [o for o in opps if o["m"]["cash_need"] <= cap]
     kind = request.args.get("kind", "all")
     if kind == "working":
         opps = [o for o in opps if not o["m"]["repair"]]
@@ -94,7 +98,7 @@ def index():
     sc = scour.status()
     hours = round(len(scour.FLIP_TERMS) / scour.REVERB_TERMS_PER_PASS * st["scan_minutes"] / 60, 1)
     return render_template("gearflip/index.html", st=st, res=res, book=book, plan=plan, opps=opps[:80],
-                           total=len(opps), kind=kind, sort=sort, sorts=SORTS, rev=flip, owned=owned, scanning=engine.scanning(),
+                           total=len(opps), kind=kind, sort=sort, sorts=SORTS, rev=flip, n_over=len(over), show_over=bool(request.args.get("over")), cap=cap, owned=owned, scanning=engine.scanning(),
                            scan_ago=_ago(res.get("at")) if res else "", job=jobs.status(), sc=sc, cover_hours=hours,
                            age=_age, ago=_ago, channels=economics.CHANNELS, repairs=economics.REPAIRS,
                            saved=request.args.get("saved"), reasons=feedback.REASONS, learned=feedback.learned(),

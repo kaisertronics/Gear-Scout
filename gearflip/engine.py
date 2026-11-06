@@ -102,7 +102,8 @@ def scan(cfg: Optional[dict] = None, st: Optional[dict] = None) -> dict:
         opps = source.drop_stolen_photos(opps[:MAX_KEEP * 2])[:MAX_KEEP]
         res = {"at": datetime.now(timezone.utc).isoformat(), "seconds": round(time.time() - t0, 1),
                "rows": len(rows), "found": len(opps), "settings": st, "opps": opps,
-               "photo_dropped": dropped[:60], "photo_ai": bool(source.gemini_key(cfg))}
+               "photo_dropped": dropped[:60], "photo_ai": bool(source.gemini_key(cfg)),
+               "photo_paused": source.gemini_paused()}
         S.write_json(scan_path(), res)
         logger.info("Gear Flip scan: %d listings -> %d opportunities in %.1fs", len(rows), len(opps), res["seconds"])
         return res
@@ -132,6 +133,24 @@ def latest() -> dict:
     return S.read_json(scan_path(), {}) or {}
 
 
+PHOTO_WAIT_MIN = 30
+
+
+def photo_wait(o: dict, res: dict, now: Optional[datetime] = None) -> bool:
+    """True while a flip should wait for its picture check: only when picture
+    analysis is on and not resting, and for at most PHOTO_WAIT_MIN minutes after
+    Gear Scout found the ad. After that it's shown and pushed marked
+    "photo not checked yet" rather than held back for hours."""
+    if not res.get("photo_ai") or o.get("photo") or res.get("photo_paused"):
+        return False
+    try:
+        found = datetime.fromisoformat(str(o.get("first_seen")))
+        found = found if found.tzinfo else found.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return False
+    return ((now or datetime.now(timezone.utc)) - found).total_seconds() < PHOTO_WAIT_MIN * 60
+
+
 def plan(res: Optional[dict] = None, st: Optional[dict] = None, book: Optional[dict] = None) -> dict:
     """The best set of buys for the cash you have free right now."""
     res = res if res is not None else latest()
@@ -139,9 +158,8 @@ def plan(res: Optional[dict] = None, st: Optional[dict] = None, book: Optional[d
     book = book or ledger.bankroll(st["budget"])
     owned = ledger.open_urls() | feedback.hidden_urls()
     opps = [o for o in (res.get("opps") or []) if o.get("url") not in owned and economics.passes(o["m"], st)]
-    # With picture analysis on, the plan only holds flips whose photo checked out
-    if res.get("photo_ai"):
-        opps = [o for o in opps if o.get("photo")]
+    # With picture analysis on, a brand-new flip waits a little for its photo check
+    opps = [o for o in opps if not photo_wait(o, res)]
     cash = max(0.0, book["cash"])
     chosen = portfolio.optimize(opps, cash, int(st.get("max_per_model", 1)))
     return {"cash": cash, "items": chosen, "t": portfolio.totals(chosen, cash),

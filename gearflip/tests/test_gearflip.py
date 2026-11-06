@@ -12,6 +12,8 @@ ST = {"buy_tax_pct": 10, "local_pickup_cost": 15, "sell_on": "best", "min_roi": 
 @pytest.fixture
 def gf_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("GEARFLIP_DIR", str(tmp_path / "gf"))
+    from gearflip import source
+    monkeypatch.setattr(source, "gemini_paused", lambda: False)  # tests never read the live pause
     return tmp_path / "gf"
 
 
@@ -266,6 +268,7 @@ def test_photo_check_runs_once_and_feeds_the_scan(db, monkeypatch):
     db.mark_seen(l)
     calls = []
     monkeypatch.setattr(source, "gemini_key", lambda cfg: "k")
+    monkeypatch.setattr(source, "gemini_paused", lambda: False)  # never the Mac's real pause file
     monkeypatch.setattr(source, "photo_bytes", lambda url: ("image/jpeg", b"x"))
     monkeypatch.setattr(source, "ai_json", lambda key, prompt, photo: calls.append(prompt) or
                         '{"is_item": "no", "matches_model": "unsure", "note": "just the box"}')
@@ -373,3 +376,15 @@ def test_every_sort_option_works(db, monkeypatch):
     b = c.get("/gearflip?sort=cheapest&dir=rev", headers={"X-GearScout-Test": "1"}).data.split(b'id="all"')[1]
     i1, i50 = a.find(b"example.com/1\""), a.find(b"example.com/50\"")
     assert 0 < i1 < i50 and b.find(b"example.com/50\"") < b.find(b"example.com/1\"")
+
+
+def test_photo_wait_falls_back_after_30_minutes_or_when_gemini_rests():
+    from gearflip import engine
+    now = datetime.now(timezone.utc)
+    new = {"first_seen": (now - timedelta(minutes=5)).isoformat()}
+    old = {"first_seen": (now - timedelta(minutes=45)).isoformat()}
+    on = {"photo_ai": True}
+    assert engine.photo_wait(new, on, now) and not engine.photo_wait(old, on, now)
+    assert not engine.photo_wait(new, {"photo_ai": True, "photo_paused": True}, now)
+    assert not engine.photo_wait({**new, "photo": {"is_item": "yes"}}, on, now)
+    assert not engine.photo_wait(new, {}, now)

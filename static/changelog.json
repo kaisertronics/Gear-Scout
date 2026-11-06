@@ -12,7 +12,8 @@
       "Picture analysis: with your free Gemini key, Gear Flip looks at each strong flip's photo before pushing it or adding it to your plan. Boxes, accessories and the wrong model are hidden; worn or damaged gear and missing parts lower the resale estimate.",
       "Gear Flip cards now have \"✕ Not this one\": pick why (not the real item, wrong model, resale too high, repair too risky, too big, not your gear, sketchy seller, sold). It's hidden, and Gear Flip learns from the reason. \"What Gear Flip learned from you\" lists each rule, with Undo.",
       "Gear Flip's resale estimates now use the last 6 months first (real Reverb sales, then recent asking prices), falling back to the full year only when there isn't enough recent data.",
-      "Gear Flip has a \"Sort by\" menu with every number on the cards: profit, ROI, ROI per month, margin, confidence, days to sell, cheapest or biggest buy, resale, safest worst case, room to haggle, furthest under value, lowest fees, most price data, newest. There's a \"reverse\" box to flip the order."
+      "Gear Flip has a \"Sort by\" menu with every number on the cards: profit, ROI, ROI per month, margin, confidence, days to sell, cheapest or biggest buy, resale, safest worst case, room to haggle, furthest under value, lowest fees, most price data, newest. There's a \"reverse\" box to flip the order.",
+      "Gear Flip's list now shows only flips you can afford with your bankroll. A \"Show N over your $X\" button reveals the rest. New flips wait at most 30 minutes for the photo check, then show and push marked \"photo not checked yet\" instead of being held for hours while Gemini rests."
     ]
   },
   {
