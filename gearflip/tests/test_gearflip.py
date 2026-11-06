@@ -22,7 +22,7 @@ def test_working_item_numbers_add_up():
     m = E.analyze(title="Neumann TLM 103", ask=600, value=1000, n=20, sold_basis=True, local=True, settings=ST)
     assert m["buy_total"] == 615 and m["tax"] == 0 and m["pickup"] == 15  # local: a trip, no tax
     assert m["repair"] is None and m["repair_cost"] == 0
-    side = E.sell_side(m["channel"], 980, "small")
+    side = E.sell_side(m["channel"], 950, "small")
     assert m["resale"] == round(side["price"]) and m["fees"] == round(side["fees"])
     assert m["profit_if_ok"] == round(side["net"] - 615)
     assert m["downside"] < m["expected"] < m["profit_if_ok"]
@@ -388,3 +388,11 @@ def test_photo_wait_falls_back_after_30_minutes_or_when_gemini_rests():
     assert not engine.photo_wait(new, {"photo_ai": True, "photo_paused": True}, now)
     assert not engine.photo_wait({**new, "photo": {"is_item": "yes"}}, on, now)
     assert not engine.photo_wait(new, {}, now)
+
+
+def test_resale_is_a_quick_sale_price_not_the_typical_ask():
+    from gearflip import source
+    asks = [800, 850, 900, 950, 1000, 1100, 1300, 1500]
+    q = source.quick_sale(asks)
+    assert 840 <= q <= 900  # the lower quarter, not the ~$975 median
+    assert source.quick_sale([500, 600]) is None and source.quick_sale([500, 600, 700]) == 500

@@ -138,8 +138,10 @@ def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = 
     sell_on = s.get("sell_on", "best")
     size = size_class(title)
     buy = buy_cost(ask, ship_in, local, tax_pct, pickup)
-    # Asking prices run above what gear sells for; real sales don't.
-    resale = value * (0.98 if sold_basis else 0.90)
+    # `value` is already a quick-sale price (real sales, or the lower quarter of
+    # asks). Trim a little more: buyers haggle, and the last listed price of a
+    # sold Reverb ad is often above the accepted offer.
+    resale = value * 0.95
     rc, success, rdays = repair_terms(repair)
     diag = min(rc, DIAG_CAP) if repair else 0
     speed_known = days_base is not None

@@ -114,14 +114,22 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     sold_n = ((mv._cache.get("sold") or {}).get(k) or (None, 0))[1] if k else 0
     # Prefer the last 6 months: real sales first, then recent asking prices,
     # keeping the condition adjustment (mint/rough) Gear Scout's value made.
+    # Resale = a realistic quick sale, not the typical ask (bk: "nothing will
+    # sell that expensive"). Last 6 months first: real sales, else the lower
+    # quarter of recent asks; then the lower quarter of the year's asks.
+    # Never above Gear Scout's own value; condition (mint/rough) kept.
     rv = recent_values().get(k) if k else None
-    if rv:
-        overall, _ = mv._overall(k, *mv.index().get(k, (None, 0)))
-        tier_x = (value / overall) if overall else 1.0
-        if rv["sold_n"] >= mv.MIN_N:
-            value, n, sold_n = rv["sold"] * tier_x, rv["sold_n"], rv["sold_n"]
-        elif rv["ask_n"] >= mv.MIN_N:
-            value, n, sold_n = rv["ask"] * tier_x, rv["ask_n"], 0
+    overall, _ = mv._overall(k, *mv.index().get(k, (None, 0))) if k else (None, 0)
+    tier_x = (value / overall) if overall else 1.0
+    cap = value
+    year_asks = ((mv._cache.get("samples") or {}).get("asks") or {}).get(k) or []
+    if rv and rv["sold_n"] >= mv.MIN_N:
+        value, n, sold_n = rv["sold"] * tier_x, rv["sold_n"], rv["sold_n"]
+    elif rv and rv["ask_n"] >= mv.MIN_N and rv.get("ask_low"):
+        value, n, sold_n = rv["ask_low"] * tier_x, rv["ask_n"], 0
+    elif quick_sale(year_asks) and sold_n < mv.MIN_N:
+        value = quick_sale(year_asks) * tier_x
+    value = min(value, cap)
     if verify.price_problem(float(unit or ask), float(value), repair):
         return None  # far under value: rarely the real, complete unit
     flags = deal_checks.scam_flags(r, None if repair else value, unit or ask)
@@ -192,9 +200,21 @@ def recent_values() -> dict:
             cut_n = len(a) // 10 if len(a) >= 10 else (1 if len(a) >= 5 else 0)
             core = a[cut_n:len(a) - cut_n] if cut_n else a
             out[k] = {"ask": statistics.median(core) if core else None, "ask_n": len(a),
-                      "sold": statistics.median(s_) if s_ else None, "sold_n": len(s_)}
+                      "ask_low": quick_sale(a), "sold": statistics.median(s_) if s_ else None, "sold_n": len(s_)}
         _recent.update(at=time.time(), by_model=out)
         return out
+
+
+def quick_sale(prices: list) -> Optional[float]:
+    """What a used piece realistically sells for SOON: the lower quarter of
+    what the same model is listed at (most ads sit unsold at the median
+    or above). None with fewer than 3 prices."""
+    a = sorted(p for p in prices if p)
+    if len(a) < 3:
+        return None
+    if len(a) < 4:
+        return float(a[0])
+    return float(statistics.quantiles(a, n=4, method="inclusive")[0])
 
 
 def drop_stolen_photos(items: list[dict]) -> list[dict]:
