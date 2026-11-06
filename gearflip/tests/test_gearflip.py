@@ -192,7 +192,7 @@ def test_full_scan_finds_working_and_repair_flips(db):
     assert engine.latest()["found"] == res["found"]
 
 
-def test_tab_renders(db):
+def test_tab_renders(db, monkeypatch):
     flask = pytest.importorskip("flask")
     import jinja2
     from gearflip import engine, settings as S
@@ -201,6 +201,7 @@ def test_tab_renders(db):
     for i in range(2, 10):
         db.mark_seen(_listing(i, "Shure SM7B", 380))
     engine.scan({}, S.save({"min_confidence": 0}))
+    monkeypatch.setattr(engine, "scan_in_background", lambda cfg=None: False)  # no thread outliving the test
     app = flask.Flask(__name__)
     app.jinja_loader = jinja2.ChoiceLoader([jinja2.DictLoader({"base.html": "{% block content %}{% endblock %}"}),
                                            app.jinja_loader] if app.jinja_loader else
@@ -212,3 +213,65 @@ def test_tab_renders(db):
     assert c.get("/gearflip/api/plan.json").json["bankroll"]["budget"] == 500
     r = c.post("/gearflip/settings", data={"budget": "3000", "alerts": "on"})
     assert r.status_code == 302 and S.load()["budget"] == 3000 and S.load()["scour"] is False
+
+
+# ---------------------------------------------------------------- not the real thing
+@pytest.mark.parametrize("title", ["AKG C414 XLS Box", "Neumann U87 Ai original box", "Box for AKG C414",
+                                   "AKG C414 retail box and foam", "Neumann TLM 103 empty box", "Universal Audio 1176 Box",
+                                   "AKG C414 style condenser mic", "AKG C214 (like C414)", "Behringer B-2 Pro vs AKG C414",
+                                   "C414 clone large diaphragm", "Neumann U87 manual"])
+def test_boxes_and_lookalikes_are_not_flips(title):
+    from gearflip import verify
+    assert verify.problem(title)
+
+
+@pytest.mark.parametrize("title", ["AKG C 414 B-XLS w/ case", "Neumann U87 Ai with original box", "AKG C414 XLII in box",
+                                   "Radial JDI DI box", "Neumann TLM 103 mint, box, manual", "AKG C414 XLS like new",
+                                   "Empirical Labs Distressor EL8 original box and manual included", "AKG C414 open box",
+                                   "API 500 lunchbox", "Teletronix LA-2A needs tubes"])
+def test_real_gear_with_extras_is_kept(title):
+    from gearflip import verify
+    assert verify.problem(title) is None
+
+
+def test_far_under_value_is_not_the_real_unit():
+    from gearflip import verify
+    assert verify.price_problem(150, 900, None) and verify.price_problem(150, 900, "tubes") is None
+
+
+# ---------------------------------------------------------------- picture analysis
+def _pic(**kw):
+    from gearflip import photos
+    return photos._clean({"is_item": "yes", "matches_model": "yes", "condition": "good", **kw})
+
+
+def test_photo_effects():
+    from gearflip import photos
+    assert photos.effect(_pic(is_item="no"))["drop"]
+    assert "different model" in photos.effect(_pic(matches_model="no", seen_model="AKG C214"))["drop"]
+    ok = photos.effect(_pic())
+    assert ok["conf"] > 0 and ok["value_x"] == 1.0 and not ok["drop"]
+    bad = photos.effect(_pic(condition="damaged", damage=["dented grille"], missing=["shock mount"]))
+    assert bad["repair"] == "check-over" and bad["value_x"] < 0.85 and "visible damage" in bad["tags"]
+    assert photos.effect(_pic(stock_photo=True))["conf"] < 0
+
+
+def test_photo_check_runs_once_and_feeds_the_scan(db, monkeypatch):
+    from gearflip import engine, photos, settings as S, source
+    for i in range(14):
+        db.mark_seen(_listing(i, "Neumann TLM 103 condenser microphone", 1000 + (i % 5) * 20, ship=0))
+    l = _listing(100, "Neumann TLM 103 condenser microphone", 560, src="Craigslist — Seattle")
+    l.image_url = "https://img.example.com/a.jpg"
+    db.mark_seen(l)
+    calls = []
+    monkeypatch.setattr(source, "gemini_key", lambda cfg: "k")
+    monkeypatch.setattr(source, "photo_bytes", lambda url: ("image/jpeg", b"x"))
+    monkeypatch.setattr(source, "ai_json", lambda key, prompt, photo: calls.append(prompt) or
+                        '{"is_item": "no", "matches_model": "unsure", "note": "just the box"}')
+    st = S.save({"min_confidence": 0})
+    res = engine.scan({}, st)
+    assert [o["url"] for o in res["opps"]] == ["https://example.com/100"] and res["photo_ai"]
+    assert engine.plan(res, st)["items"] == []  # waits for the photo check
+    assert photos.check({}, res["opps"]) == 1 and photos.check({}, res["opps"]) == 0 and len(calls) == 1
+    res = engine.scan({}, st)
+    assert res["opps"] == [] and res["photo_dropped"][0]["why"].startswith("the photo isn't the unit")

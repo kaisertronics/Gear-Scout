@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from gearflip import alerts, engine, ledger, scour, settings as S, source
+from gearflip import alerts, engine, ledger, photos, scour, settings as S, source
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,10 @@ def tick(cfg: Optional[dict] = None, force: bool = False) -> dict:
         if st["scour"] and not source.scrape_busy():
             out["scour"] = scour.run(cfg, st)
         res = engine.scan(cfg, st)
+        # Picture analysis on the best flips not checked yet, then re-rank with what it saw
+        out["photos"] = photos.check(cfg, res.get("opps") or [])
+        if out["photos"]:
+            res = engine.scan(cfg, st)
         out["scan"] = {k: res.get(k) for k in ("rows", "found", "seconds")}
         book = ledger.bankroll(st["budget"])
         plan = engine.plan(res, st, book)

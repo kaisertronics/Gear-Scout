@@ -127,6 +127,7 @@
             {% if m.pickup %}<span class="gf-tag">📍 local seller</span>{% endif %}
             {% if o.offers_ok %}<span class="gf-tag">takes offers</span>{% endif %}
             {% if o.url in owned %}<span class="gf-tag plan">✓ you bought this</span>{% endif %}
+            {% if o.photo and not o.photo.none %}<span class="gf-tag plan">📷 photo checked</span>{% elif res.photo_ai and not o.photo %}<span class="gf-tag">📷 not checked yet</span>{% endif %}
             {% for f in o.flags %}<span class="gf-tag warn">⚠ {{ f }}</span>{% endfor %}
           </div>
         </div>
@@ -145,6 +146,7 @@
         <div><small>Confidence</small>{{ m.confidence }}/100</div>
         <div><small>Walk-away price</small>{{ m.walk_away|gf_money }}</div>
       </div>
+      {% if o.photo and not o.photo.none %}<div class="gf-why">📷 <b>Photo:</b> {{ o.photo.condition }}{% if o.photo.seen_model %}, reads "{{ o.photo.seen_model }}"{% endif %}{% if o.photo.damage %}; damage: {{ o.photo.damage|join(', ') }}{% endif %}{% if o.photo.missing %}; missing: {{ o.photo.missing|join(', ') }}{% endif %}{% if o.photo.note %}. {{ o.photo.note }}{% endif %}</div>{% endif %}
       <div class="gf-why">{{ o.why }} Based on {{ m.comps }} {{ 'real sales' if m.sold_basis else 'comparable ads' }}. Worst realistic case: <span class="{{ 'gf-pos' if m.downside >= 0 else 'gf-neg' }}">{{ m.downside|gf_money }}</span>.{% if m.tax %} Includes ~{{ m.tax|gf_money }} sales tax.{% endif %}</div>
       <form class="gf-act" method="post" action="{{ url_for('gearflip.buy') }}">
         <input type="hidden" name="url" value="{{ o.url }}">
@@ -154,6 +156,12 @@
     </div>
   {% endfor %}
   </div>
+  {% if res.photo_dropped %}
+  <details style="margin-top:12px"><summary class="muted">Hidden by the photo check ({{ res.photo_dropped|length }})</summary>
+    <ul>{% for d in res.photo_dropped %}<li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.title }}</a>: {{ d.why }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% if not res.photo_ai %}<p class="muted">Picture analysis is off: add your free Gemini key in Gear Scout's Settings → AI and Gear Flip will look at each strong flip's photo (right item, right model, damage, missing parts) before it's pushed or planned.</p>{% endif %}
   {% if total > opps|length %}<p class="muted">Showing the top {{ opps|length }} of {{ total }}.</p>{% endif %}
   <p class="muted">* No sell-through history for this model yet, so the days are a typical figure for its price.</p>
 </section>
@@ -242,6 +250,8 @@
       <li><b>Where to sell</b>: whichever earns the most after a small cost for money tied up. {% for k, c in channels.items() %}{{ c.label }}: {{ (c.pct * 100)|round(1) }}% fees{% if c.fixed %} + ${{ c.fixed }}{% endif %}{% if c.price != 1 %}, sells ~{{ ((1 - c.price) * 100)|round|int }}% lower{% endif %}{{ '; ' if not loop.last else '.' }}{% endfor %}</li>
       <li><b>Shipping</b>: by size (mic box $28, rack unit $48, monitors/synths $70, consoles and tape machines $160) plus 1% insurance.</li>
       <li><b>Repairs</b>: typical bench cost and the odds the fix works: {% for k, r in repairs.items() %}{{ k }} ${{ r[0] }} ({{ (r[1] * 100)|int }}%){{ ', ' if not loop.last else '.' }}{% endfor %} If it can't be fixed you still sell it for parts (about 30% of its value). Net profit is the average of the two outcomes; "worst realistic case" is the bad one.</li>
+      <li><b>Picture analysis</b>: with your free Gemini key, an AI looks at each strong flip's photo. A box, case, accessory or different model is hidden. Worn or damaged gear gets a lower resale price (damage on "working" gear adds a check-over), and missing parts lower it too. A stock photo lowers confidence; a real photo of the right unit raises it. Pushes and the plan wait for this check.</li>
+      <li><b>Not the real thing</b>: ads for just the box or manual, look-alikes ("C414 style", "like a U87", "vs", "clone") and prices far under value are left out before any math.</li>
       <li><b>Confidence</b>: more comparable ads, real sales, low-risk repairs and believable prices raise it; prices far under value and warning signs lower it.</li>
       <li><b>Score</b>: profit, ROI and speed, scaled by confidence. <b>Walk-away price</b>: the most you can pay and still hit your {{ st.min_roi }}% / {{ st.min_profit|gf_money }} minimums. Use it for offers.</li>
       <li><b>Best buys</b>: the set that makes the most confidence-weighted profit with the cash you have free (budget + profits − money in unsold flips).</li>

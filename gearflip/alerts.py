@@ -37,12 +37,22 @@ def push_text(o: dict, rank: Optional[int] = None, plan_n: int = 0, cash: Option
     lines.append(f"Confidence {m['confidence']}/100 ({m['comps']} comps{', real sales' if m['sold_basis'] else ''})"
                  f" · Score {m['score']}")
     lines.append(f"Walk-away price: ${m['walk_away']:,}")
+    p = o.get("photo")
+    if p:
+        bits = [f"Photo: {p['condition']}" + (" · real unit" if p["is_item"] == "yes" and not p["stock"] else "")]
+        if p.get("seen_model"):
+            bits.append(f"reads {p['seen_model']}")
+        if p.get("damage"):
+            bits.append("damage: " + ", ".join(p["damage"][:2]))
+        if p.get("missing"):
+            bits.append("missing: " + ", ".join(p["missing"][:2]))
+        lines.append(" · ".join(bits))
     if rank:
         lines.append(f"In your best-buys plan: #{rank} of {plan_n}" + (f" (${cash:,.0f} free)" if cash is not None else ""))
     return title, "\n".join(lines)
 
 
-def _due(opps: list[dict], sent: dict, st: dict, cash_cap: float, now: datetime) -> list[dict]:
+def _due(opps: list[dict], sent: dict, st: dict, cash_cap: float, now: datetime, photo_ai: bool = False) -> list[dict]:
     out = []
     for o in opps:
         m = o["m"]
@@ -50,6 +60,8 @@ def _due(opps: list[dict], sent: dict, st: dict, cash_cap: float, now: datetime)
             continue
         if o.get("age_days") is None or o["age_days"] > FRESH_DAYS:
             continue
+        if photo_ai and not o.get("photo"):
+            continue  # wait for the picture check before pushing
         prev = sent.get(o["url"])
         if prev and m["ask"] > prev.get("ask", 0) * (1 - REPUSH_DROP):
             continue
@@ -67,7 +79,7 @@ def send(cfg: dict, res: dict, plan: dict, st: dict, now: Optional[datetime] = N
     if not st.get("alerts") or not source.push_ready(cfg, st.get("ntfy_topic", "")):
         return out
     cash_cap = max(plan.get("cash", 0), 0) or st["budget"]
-    due = _due(res.get("opps") or [], sent, st, cash_cap, now)
+    due = _due(res.get("opps") or [], sent, st, cash_cap, now, bool(res.get("photo_ai")))
     out["due"] = len(due)
     if not due:
         S.write_json(_path(), sent)

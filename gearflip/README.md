@@ -21,6 +21,8 @@ A buy-to-resell finder for used pro-audio gear. It's the 💹 Gear Flip tab (`/g
 | `ledger.py` | `/data/gearflip/ledger.json` |
 | `engine.py` | Ranked opportunities saved to `/data/gearflip/scan.json` |
 | `scour.py` | Extra searches. State in `scour_state.json` |
+| `verify.py` | Text checks: box/manual-only ads, look-alikes, prices too low to be real |
+| `photos.py` | Picture analysis with the owner's free Gemini key. Results in `photos.json` |
 | `alerts.py` | Pushes and email. Sent log in `alerted.json` |
 | `jobs.py` | One background pass. Status in `jobs.json` |
 | `web.py` + `templates/` | The tab, plus JSON at `/gearflip/api/*.json` |

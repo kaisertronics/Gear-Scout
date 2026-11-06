@@ -97,9 +97,10 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
         return None
     if not look or mv.skip_listing(look) or is_partial(look):
         return None
+    from gearflip import verify
     from gearflip.engine import NEW_RE
-    if NEW_RE.search(title):  # new-in-box ads aren't comparable to used values
-        return None
+    if NEW_RE.search(title) or verify.packaging_only(title) or verify.lookalike(look):
+        return None  # new-in-box (not comparable), just the box, or a look-alike
     ask = parse_price(r.get("price"))
     if not ask or ask < 40:
         return None
@@ -109,6 +110,8 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     value, n = mv.value(look, None if repair else r.get("description"))
     if not value:
         return None
+    if verify.price_problem(float(unit or ask), float(value), repair):
+        return None  # far under value: rarely the real, complete unit
     k = mv._key(look) or ""
     sold_n = ((mv._cache.get("sold") or {}).get(k) or (None, 0))[1] if k else 0
     flags = deal_checks.scam_flags(r, None if repair else value, unit or ask)
@@ -214,6 +217,24 @@ def scrape_busy() -> bool:
         except (OSError, ValueError):
             continue
     return False
+
+
+# ---------------------------------------------------------------- picture analysis
+def gemini_key(cfg: dict) -> str:
+    """The owner's own free Gemini key from Gear Scout's Settings → AI ('' = none)."""
+    return str(((cfg.get("ai") or {}).get("gemini_api_key") or "")).strip()
+
+
+def photo_bytes(image_url: Optional[str]):
+    """(mime type, bytes) of a listing photo (Gear Scout's image cache first)."""
+    from scrapers.assistant import _photo
+    return _photo(image_url)
+
+
+def ai_json(key: str, prompt: str, photo) -> str:
+    """One Gemini call with one photo, answered as JSON text."""
+    from scrapers.assistant import _generate
+    return _generate(key, prompt, json_mode=True, images=[photo])
 
 
 # ---------------------------------------------------------------- notify

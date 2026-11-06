@@ -127,7 +127,7 @@ def score(expected: float, roi: float, days: float, conf: int, scale: float = 50
 def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = False,
             ship_in: Optional[float] = None, local: bool = False, repair: Optional[str] = None,
             days_base: Optional[float] = None, age_days: Optional[float] = None, flags: int = 0,
-            settings: Optional[dict] = None) -> Optional[dict]:
+            settings: Optional[dict] = None, conf_adj: int = 0) -> Optional[dict]:
     """Every number for one listing, on the best place to resell it.
     None when the inputs are unusable."""
     s = settings or {}
@@ -174,6 +174,7 @@ def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = 
     roi = expected / cash_in * 100 if cash_in else 0.0
     conf = confidence(n, sold_basis, success * (NO_REPAIR_SUCCESS if not repair else 1), ask, value, flags,
                       age_days, speed_known)
+    conf = int(max(5, min(95, conf + conf_adj)))  # e.g. what the photo check saw
     # Walk-away: the most you could pay and still hit the minimum ROI and profit.
     r = float(s.get("min_roi", 25)) / 100
     buy_max = min((k - r * spend) / (1 + r), k - float(s.get("min_profit", 40)))

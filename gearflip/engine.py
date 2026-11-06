@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from gearflip import economics, ledger, portfolio, settings as S, source
+from gearflip import economics, ledger, photos, portfolio, settings as S, source
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +32,13 @@ def describe(m: dict) -> str:
 
 
 def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = None,
-                 prep=None, now: Optional[datetime] = None) -> list[dict]:
-    """Every listing that clears your minimums, with its numbers, best first."""
+                 prep=None, now: Optional[datetime] = None, pics: Optional[dict] = None,
+                 dropped: Optional[list] = None) -> list[dict]:
+    """Every listing that clears your minimums, with its numbers, best first.
+    `pics`: photo-check results by link; ads the photo check rejects go to `dropped`."""
     prep = prep or source.prepare
     speed = speed if speed is not None else {}
+    pics = pics if pics is not None else {}
     out, seen = [], set()
     for r in rows:
         try:
@@ -49,17 +52,25 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
         if ad in seen:  # the same ad cross-posted
             continue
         seen.add(ad)
-        m = economics.analyze(title=p["title"], ask=p["ask"], value=p["value"], n=p["n"], sold_basis=p["sold_basis"],
-                              ship_in=p["ship_in"], local=p["local"], repair=p["repair"],
-                              days_base=speed.get(p["model"]), age_days=p["age_days"], flags=p["flags"], settings=st)
+        pic = pics.get(r.get("url"))
+        fx = photos.effect(pic)
+        if fx["drop"]:
+            if dropped is not None:
+                dropped.append({"url": r.get("url"), "title": p["title"], "why": fx["drop"]})
+            continue
+        m = economics.analyze(title=p["title"], ask=p["ask"], value=p["value"] * fx["value_x"], n=p["n"],
+                              sold_basis=p["sold_basis"], ship_in=p["ship_in"], local=p["local"],
+                              repair=p["repair"] or fx["repair"], days_base=speed.get(p["model"]),
+                              age_days=p["age_days"], flags=p["flags"], settings=st, conf_adj=fx["conf"])
         if not m or not economics.passes(m, st):
             continue
         out.append({"url": r.get("url"), "title": p["title"], "source": (r.get("source_name") or "").split(" — ")[0],
                     "source_full": r.get("source_name"), "image": r.get("image_url"), "location": r.get("location"),
                     "posted": r.get("posted_at") or r.get("first_seen"), "first_seen": r.get("first_seen"),
                     "age_days": round(p["age_days"], 1) if p["age_days"] is not None else None,
-                    "offers_ok": r.get("offers_ok"), "model": p["model"], "flags": p.get("flag_text") or [],
-                    "m": m, "why": describe(m)})
+                    "offers_ok": r.get("offers_ok"), "model": p["model"],
+                    "flags": (p.get("flag_text") or []) + fx["tags"],
+                    "photo": pic, "m": m, "why": describe(m)})
     out.sort(key=lambda o: (-o["m"]["score"], -o["m"]["expected"]))
     return out
 
@@ -73,10 +84,12 @@ def scan(cfg: Optional[dict] = None, st: Optional[dict] = None) -> dict:
         cfg = cfg if cfg is not None else source.load_config()
         st = st or S.load()
         rows = source.listing_rows()
-        opps = analyze_rows(rows, cfg, st, source.sell_speed())
+        dropped: list = []
+        opps = analyze_rows(rows, cfg, st, source.sell_speed(), pics=photos.results(), dropped=dropped)
         opps = source.drop_stolen_photos(opps[:MAX_KEEP * 2])[:MAX_KEEP]
         res = {"at": datetime.now(timezone.utc).isoformat(), "seconds": round(time.time() - t0, 1),
-               "rows": len(rows), "found": len(opps), "settings": st, "opps": opps}
+               "rows": len(rows), "found": len(opps), "settings": st, "opps": opps,
+               "photo_dropped": dropped[:40], "photo_ai": bool(source.gemini_key(cfg))}
         S.write_json(scan_path(), res)
         logger.info("Gear Flip scan: %d listings -> %d opportunities in %.1fs", len(rows), len(opps), res["seconds"])
         return res
@@ -113,6 +126,9 @@ def plan(res: Optional[dict] = None, st: Optional[dict] = None, book: Optional[d
     book = book or ledger.bankroll(st["budget"])
     owned = ledger.open_urls()
     opps = [o for o in (res.get("opps") or []) if o.get("url") not in owned and economics.passes(o["m"], st)]
+    # With picture analysis on, the plan only holds flips whose photo checked out
+    if res.get("photo_ai"):
+        opps = [o for o in opps if o.get("photo")]
     cash = max(0.0, book["cash"])
     chosen = portfolio.optimize(opps, cash, int(st.get("max_per_model", 1)))
     return {"cash": cash, "items": chosen, "t": portfolio.totals(chosen, cash),
