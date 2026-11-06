@@ -44,6 +44,11 @@ check, one research angle, 2–5 improvements, changelog, docs/ideas.md, commit 
 push, short morning push to the owner. Set it up to run nightly (~1:45 AM) on
 whatever computer runs Gear Scout.
 
+## Helpers (agents)
+docs/agents/README.md — the nightly developer, the marketing & vision director
+(weekly) and the intern (daily), how the coordinator oversees them, and the shared
+log docs/agent_log.md.
+
 ## Moving / reinstalling
 "Start Gear Scout.command" builds everything, restores a migration bundle's data
 (migration/gear_scout_data.tgz) the first time only, and starts it.
