@@ -26,7 +26,7 @@ from gearflip import settings as S, source
 
 logger = logging.getLogger(__name__)
 
-PER_PASS = 6
+PER_PASS = 10
 PROMPT = """You are checking the photo of a used pro-audio listing for someone who wants to buy it and resell it.
 Listing title: {title}
 Answer ONLY in JSON:

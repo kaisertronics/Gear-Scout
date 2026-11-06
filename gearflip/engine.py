@@ -66,13 +66,15 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
         confirmed = bool(pic and pic.get("is_item") == "yes" and pic.get("matches") == "yes" and not pic.get("stock"))
         if not repair and p["ask"] < p["value"] * fx["value_x"] * verify.TOO_CHEAP_UNCHECKED and not confirmed:
             if dropped is not None:
-                dropped.append({"url": r.get("url"), "title": p["title"],
-                                "why": "priced too far under value to trust until a photo confirms it"})
+                dropped.append({"url": r.get("url"), "title": p["title"], "image": r.get("image_url"),
+                                "held": pic is None, "why": "priced too far under value to trust until a photo confirms it"})
             continue
-        you = feedback.adjust(rules, model=p["model"], title=p["title"], repair=repair, seller=r.get("seller"), photo=pic)
+        you = feedback.adjust(rules, model=p["model"], title=p["title"], repair=repair, seller=r.get("seller"), photo=pic,
+                              ask=p["ask"], value=p["value"])
         if you["drop"]:
             if dropped is not None:
-                dropped.append({"url": r.get("url"), "title": p["title"], "why": "from your ✕s: " + you["drop"]})
+                dropped.append({"url": r.get("url"), "title": p["title"], "image": r.get("image_url"),
+                                "held": pic is None and "photo" in you["drop"], "why": "from your ✕s: " + you["drop"]})
             continue
         m = economics.analyze(title=p["title"], ask=p["ask"], value=p["value"] * fx["value_x"] * you["value_x"],
                               n=p["n"], sold_basis=p["sold_basis"], ship_in=p["ship_in"], local=p["local"],
@@ -108,7 +110,7 @@ def scan(cfg: Optional[dict] = None, st: Optional[dict] = None) -> dict:
         opps = source.drop_stolen_photos(opps[:MAX_KEEP * 2])[:MAX_KEEP]
         res = {"at": datetime.now(timezone.utc).isoformat(), "seconds": round(time.time() - t0, 1),
                "rows": len(rows), "found": len(opps), "settings": st, "opps": opps,
-               "photo_dropped": dropped[:60], "photo_ai": bool(source.gemini_key(cfg)),
+               "photo_dropped": dropped[:60], "held": [d for d in dropped if d.get("held")][:100], "photo_ai": bool(source.gemini_key(cfg)),
                "photo_paused": source.gemini_paused()}
         S.write_json(scan_path(), res)
         logger.info("Gear Flip scan: %d listings -> %d opportunities in %.1fs", len(rows), len(opps), res["seconds"])

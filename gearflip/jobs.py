@@ -48,7 +48,8 @@ def tick(cfg: Optional[dict] = None, force: bool = False) -> dict:
             out["scour"] = scour.run(cfg, st)
         res = engine.scan(cfg, st)
         # Picture analysis on the best flips not checked yet, then re-rank with what it saw
-        out["photos"] = photos.check(cfg, res.get("opps") or [])
+        # (held-back cheap ads are checked too, or they'd wait forever)
+        out["photos"] = photos.check(cfg, (res.get("opps") or []) + (res.get("held") or []))
         if out["photos"]:
             res = engine.scan(cfg, st)
         out["scan"] = {k: res.get(k) for k in ("rows", "found", "seconds")}

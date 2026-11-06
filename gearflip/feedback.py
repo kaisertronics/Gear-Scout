@@ -3,8 +3,8 @@
 Each dismissal is kept in /data/gearflip/feedback.json with the reason you
 chose. The ad is hidden for good, and the reasons become rules:
 
-  wrong item / wrong model  -> that model's ads need more confidence; 2+ = the
-                               photo/model must be confirmed (stricter)
+  wrong item / wrong model  -> that model's ads need more confidence; 2+ = its cheap
+                               ads (under 60% of value) wait for a confirming photo
   resale too optimistic     -> that model's resale estimate drops 8% each time (down to 70%)
   repair too risky          -> that kind of repair loses confidence; 3+ = left out
   too big / heavy           -> that size class loses score; 2+ = left out
@@ -90,7 +90,7 @@ def learned(d: Optional[dict] = None) -> dict:
             continue
         kind, key = rid.split(":", 1)
         nice = key.replace(":", " ").replace("-", " ")
-        text = {"model_check": f"{nice}: be stricter (you flagged wrong item/model {n}×)",
+        text = {"model_check": f"{nice}: less confident" + (", cheap ads wait for a photo check" if n >= 2 else "") + f" (you flagged wrong item/model {n}×)",
                 "price_off": f"{nice}: resale estimate cut {round(100 - _price_x(n) * 100)}%",
                 "risky": f"'{key}' repairs: " + ("left out" if n >= 3 else f"less confident ({n}×)"),
                 "too_big": f"{key} gear: " + ("left out" if n >= 2 else "ranked lower"),
@@ -105,7 +105,7 @@ def _price_x(n: int) -> float:
 
 
 def adjust(rules: dict, *, model: str, title: str, repair: Optional[str], seller: Optional[str],
-           photo: Optional[dict] = None) -> dict:
+           photo: Optional[dict] = None, ask: float = 0, value: float = 0) -> dict:
     """What your past dismissals do to one listing: {"drop": reason|None, "value_x", "conf", "score_x"}."""
     e = {"drop": None, "value_x": 1.0, "conf": 0, "score_x": 1.0}
     b, size = brand(model), economics.size_class(title)
@@ -133,6 +133,8 @@ def adjust(rules: dict, *, model: str, title: str, repair: Optional[str], seller
     if (r := rules.get(f"model_check:{model}")):
         e["conf"] -= 10 * min(r["n"], 3)
         confirmed = photo and photo.get("matches") == "yes" and photo.get("is_item") == "yes"
-        if r["n"] >= 2 and not confirmed:
-            e["drop"] = "this model often wasn't the real thing; waiting for a photo that confirms it"
+        # Hold back only the suspicious ones (cheap for the model), not every ad of it
+        cheap = bool(value) and ask < value * 0.6
+        if r["n"] >= 2 and cheap and not confirmed:
+            e["drop"] = "cheap for a model that often wasn't the real thing; waiting for a photo that confirms it"
     return e

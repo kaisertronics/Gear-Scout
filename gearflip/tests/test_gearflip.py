@@ -302,8 +302,9 @@ def test_dismissals_hide_and_teach(gf_dir):
     F.dismiss({**o, "url": "u5", "model": "akg:c414"}, "wrong_model")
     F.dismiss({**o, "url": "u6", "model": "akg:c414"}, "wrong_model")
     r = F.learned()
-    assert F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None)["drop"]  # needs a confirming photo
-    ok = F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None,
+    assert F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None, ask=300, value=800)["drop"]
+    assert not F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None, ask=650, value=800)["drop"]
+    ok = F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None, ask=300, value=800,
                   photo={"matches": "yes", "is_item": "yes"})
     assert not ok["drop"] and ok["conf"] < 0
 
@@ -410,3 +411,22 @@ def test_resale_is_a_quick_sale_price_not_the_typical_ask():
 def test_knockoff_listings(title, bad):
     from gearflip import verify
     assert verify.knockoff(title) is bad
+
+
+def test_too_cheap_ads_are_held_then_photo_checked(db, monkeypatch):
+    from gearflip import engine, photos, settings as S, source
+    for i in range(10):
+        db.mark_seen(_listing(i, "Shure SM7B", 380 + i * 4))
+    l = _listing(77, "Shure SM7B", 120, src="Craigslist — Seattle")
+    l.image_url = "https://img.example.com/sm7b.jpg"
+    db.mark_seen(l)
+    st = S.save({"min_confidence": 0})
+    res = engine.scan({}, st)
+    assert [h["url"] for h in res["held"]] == ["https://example.com/77"]
+    monkeypatch.setattr(source, "gemini_key", lambda cfg: "k")
+    monkeypatch.setattr(source, "photo_bytes", lambda url: ("image/jpeg", b"x"))
+    monkeypatch.setattr(source, "ai_json", lambda key, prompt, photo:
+                        '{"is_item": "yes", "matches_model": "yes", "condition": "good"}')
+    assert photos.check({}, (res.get("opps") or []) + res["held"]) == 1
+    res = engine.scan({}, st)
+    assert "https://example.com/77" in [o["url"] for o in res["opps"]] and not res["held"]
