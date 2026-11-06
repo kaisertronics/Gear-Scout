@@ -77,7 +77,15 @@ def is_local(source_name: Optional[str]) -> bool:
     return _local(source_name)
 
 
-def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[datetime] = None) -> Optional[dict]:
+def _no(why: Optional[dict], reason: str):
+    """Counts why an ad was left out (shown on the tab), and returns None."""
+    if why is not None:
+        why[reason] = why.get(reason, 0) + 1
+    return None
+
+
+def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[datetime] = None,
+            why: Optional[dict] = None) -> Optional[dict]:
     """The inputs the profit math needs for one listing, or None when Gear
     Scout's own checks say it isn't a single, real, priced piece of gear
     with a known used value."""
@@ -87,30 +95,30 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     title = (r.get("title") or "").strip()
     src = (r.get("source_name") or "").lower()
     if not title or "kijiji" in src or "mcquade" in src:
-        return None
+        return _no(why, "skipped site")
     if title_says_sold(title) or exclude_match(title, cfg.get("exclude_words") or []) or is_not_audio(title) \
             or is_accessory_only(title) or item_form(title) == "plugin":
-        return None
+        return _no(why, "not studio gear, sold, or an accessory")
     rep = fixer_upper.repair_cost(title, r.get("description"))
     repair = rep[0] if rep else ("general repair" if needs_repair(title, r.get("description")) else None)
     look = fixer_upper.strip_repair(title) if repair else title
     if repair and (not include_repairs or fixer_upper._SHELL.search(title)):
-        return None
+        return _no(why, "repair ad excluded")
     if not look or mv.skip_listing(look) or is_partial(look):
-        return None
+        return _no(why, "a part or a lot")
     from gearflip import verify
     from gearflip.engine import NEW_RE
     if NEW_RE.search(title) or verify.packaging_only(title) or verify.lookalike(look) or verify.knockoff(title):
-        return None  # new-in-box (not comparable), just the box, a look-alike or a knockoff
+        return _no(why, "new, box-only, look-alike or knockoff")  # new-in-box (not comparable), just the box, a look-alike or a knockoff
     ask = parse_price(r.get("price"))
     if not ask or ask < 40:
-        return None
+        return _no(why, "no usable price")
     _, qty, unit = price_basis(title, None, ask)
     if qty and int(qty) > 1:
-        return None  # several at one price: not one flip
+        return _no(why, "several at one price")  # several at one price: not one flip
     value, n = mv.value(look, None if repair else r.get("description"))
     if not value:
-        return None
+        return _no(why, "no known used value")
     k = mv._key(look) or ""
     sold_n = ((mv._cache.get("sold") or {}).get(k) or (None, 0))[1] if k else 0
     # Prefer the last 6 months: real sales first, then recent asking prices,
@@ -132,12 +140,12 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
         value = quick_sale(year_asks) * tier_x
     value = min(value, cap)
     if n < MIN_COMPS:
-        return None  # too few comparable ads to trust a resale price
+        return _no(why, "fewer than 6 comparable ads")  # too few comparable ads to trust a resale price
     if verify.price_problem(float(unit or ask), float(value), repair):
-        return None  # far under value: rarely the real, complete unit
+        return _no(why, "priced too far under value")  # far under value: rarely the real, complete unit
     flags = deal_checks.scam_flags(r, None if repair else value, unit or ask)
     if len(flags) >= 2:
-        return None
+        return _no(why, "scam signs")
     now = now or datetime.now(timezone.utc)
     posted = _parse_ts(r.get("posted_at")) or _parse_ts(r.get("first_seen"))
     return {"title": title, "ask": float(unit or ask), "value": float(value), "n": int(n or 0),

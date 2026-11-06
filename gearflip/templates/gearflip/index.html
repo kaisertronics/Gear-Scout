@@ -177,6 +177,12 @@
     </div>
   {% endfor %}
   </div>
+  {% if res.funnel %}
+  <details style="margin-top:12px"><summary class="muted">Why only {{ res.found }} out of {{ res.rows }} ads?</summary>
+    <ul>{% for reason, n in res.funnel %}<li>{{ '{:,}'.format(n) }}: {{ reason }}</li>{% endfor %}</ul>
+    <p class="muted">Want more? Lower "Least profit" or "Least return" in Settings, or raise your budget.</p>
+  </details>
+  {% endif %}
   {% if res.photo_dropped %}
   <details style="margin-top:12px"><summary class="muted">Hidden by the photo check or your ✕s ({{ res.photo_dropped|length }})</summary>
     <ul>{% for d in res.photo_dropped %}<li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.title }}</a>: {{ d.why }}</li>{% endfor %}</ul>

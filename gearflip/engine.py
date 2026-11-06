@@ -31,9 +31,20 @@ def describe(m: dict) -> str:
     return ", ".join(parts) + f" = ~${m['expected']:,} profit ({m['roi']:.0f}% ROI) in ~{m['days']} days."
 
 
+def _miss(m: dict, st: dict) -> str:
+    """Which of your minimums a flip missed first (for the "why so few" line)."""
+    if m["expected"] < float(st.get("min_profit", 40)):
+        return "not enough profit after tax, fees and shipping"
+    if m["roi"] < float(st.get("min_roi", 25)):
+        return "return (ROI) under your minimum"
+    if m["confidence"] < float(st.get("min_confidence", 35)):
+        return "confidence under your minimum"
+    return "too slow to sell"
+
+
 def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = None,
                  prep=None, now: Optional[datetime] = None, pics: Optional[dict] = None,
-                 dropped: Optional[list] = None) -> list[dict]:
+                 dropped: Optional[list] = None, funnel: Optional[dict] = None) -> list[dict]:
     """Every listing that clears your minimums, with its numbers, best first.
     `pics`: photo-check results by link; ads the photo check rejects go to `dropped`."""
     prep = prep or source.prepare
@@ -42,11 +53,13 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
     fb = feedback.load()
     hidden, rules = feedback.hidden_urls(fb), feedback.learned(fb)
     out, seen = [], set()
+    why = funnel if funnel is not None else {}
     for r in rows:
         if r.get("url") in hidden:  # you ✕'d it
             continue
         try:
-            p = prep(r, cfg, st.get("include_repairs", True), now)
+            p = prep(r, cfg, st.get("include_repairs", True), now, why) if prep is source.prepare else \
+                prep(r, cfg, st.get("include_repairs", True), now)
         except Exception:
             logger.exception("Gear Flip: reading %s", r.get("url"))
             continue
@@ -84,6 +97,7 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
             continue
         m["score"] = int(round(m["score"] * you["score_x"]))
         if not economics.passes(m, st):
+            why[_miss(m, st)] = why.get(_miss(m, st), 0) + 1
             continue
         out.append({"url": r.get("url"), "title": p["title"], "source": (r.get("source_name") or "").split(" — ")[0],
                     "source_full": r.get("source_name"), "image": r.get("image_url"), "location": r.get("location"),
@@ -106,11 +120,17 @@ def scan(cfg: Optional[dict] = None, st: Optional[dict] = None) -> dict:
         st = st or S.load()
         rows = source.listing_rows()
         dropped: list = []
-        opps = analyze_rows(rows, cfg, st, source.sell_speed(), pics=photos.results(), dropped=dropped)
+        funnel: dict = {}
+        opps = analyze_rows(rows, cfg, st, source.sell_speed(), pics=photos.results(), dropped=dropped, funnel=funnel)
+        for d in dropped:
+            k = "waiting for a photo check" if d.get("held") else (
+                "left out because of your ✕s" if d["why"].startswith("from your") else "hidden by the photo check or price rules")
+            funnel[k] = funnel.get(k, 0) + 1
         opps = source.drop_stolen_photos(opps[:MAX_KEEP * 2])[:MAX_KEEP]
         res = {"at": datetime.now(timezone.utc).isoformat(), "seconds": round(time.time() - t0, 1),
                "rows": len(rows), "found": len(opps), "settings": st, "opps": opps,
-               "photo_dropped": dropped[:60], "held": [d for d in dropped if d.get("held")][:100], "photo_ai": bool(source.gemini_key(cfg)),
+               "photo_dropped": dropped[:60], "held": [d for d in dropped if d.get("held")][:100],
+               "funnel": sorted(funnel.items(), key=lambda kv: -kv[1]), "photo_ai": bool(source.gemini_key(cfg)),
                "photo_paused": source.gemini_paused()}
         S.write_json(scan_path(), res)
         logger.info("Gear Flip scan: %d listings -> %d opportunities in %.1fs", len(rows), len(opps), res["seconds"])

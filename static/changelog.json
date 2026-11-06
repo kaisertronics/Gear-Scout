@@ -15,7 +15,8 @@
       "Gear Flip has a \"Sort by\" menu with every number on the cards: profit, ROI, ROI per month, margin, confidence, days to sell, cheapest or biggest buy, resale, safest worst case, room to haggle, furthest under value, lowest fees, most price data, newest. There's a \"reverse\" box to flip the order.",
       "Gear Flip's list now shows only flips you can afford with your bankroll. A \"Show N over your $X\" button reveals the rest. New flips wait at most 30 minutes for the photo check, then show and push marked \"photo not checked yet\" instead of being held for hours while Gemini rests.",
       "Gear Flip's resale prices are now realistic quick-sale prices: the lower quarter of what the model is listed at (or real sales), minus 5% for haggling, instead of the typical asking price that most ads never get.",
-      "Gear Flip now skips generic knockoff listings (\"Silver TLM103 Neumann Wired Condenser Microphone US STOCK\"), models with fewer than 6 comparable ads, and working gear priced under 40% of its value until a photo check confirms it's real."
+      "Gear Flip now skips generic knockoff listings (\"Silver TLM103 Neumann Wired Condenser Microphone US STOCK\"), models with fewer than 6 comparable ads, and working gear priced under 40% of its value until a photo check confirms it's real.",
+      "Gear Flip shows \"Why only N out of M ads?\" with how many ads each check left out (not enough profit, too few comparable ads, waiting for a photo check...), so you can see what to loosen."
     ]
   },
   {
