@@ -19,6 +19,7 @@ API. A few new photos per pass, each checked once and remembered in
 "photo not checked"."""
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -27,6 +28,7 @@ from gearflip import settings as S, source
 logger = logging.getLogger(__name__)
 
 PER_PASS = 10
+GAP_SECONDS = 90  # between Gemini calls, so a pass never lands as one burst
 PROMPT = """You are checking the photo of a used pro-audio listing for someone who wants to buy it and resell it.
 Listing title: {title}
 Answer ONLY in JSON:
@@ -102,7 +104,7 @@ def check(cfg: dict, opps: list[dict], limit: int = PER_PASS) -> int:
     if not key or not opps or source.gemini_paused():
         return 0  # no key, or Gemini is resting (shared with Gear Scout's other photo jobs)
     done = results()
-    n = 0
+    n = asked = 0
     for o in opps:
         if n >= limit:
             break
@@ -115,6 +117,9 @@ def check(cfg: dict, opps: list[dict], limit: int = PER_PASS) -> int:
                              at=datetime.now(timezone.utc).isoformat())
             n += 1
             continue
+        if asked:
+            time.sleep(GAP_SECONDS)
+        asked += 1
         try:
             raw = source.ai_json(key, PROMPT.format(title=o.get("title") or ""), photo)
             res = _clean(json.loads(raw) if isinstance(raw, str) else raw)

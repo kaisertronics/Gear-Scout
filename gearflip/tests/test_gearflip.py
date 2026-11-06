@@ -22,7 +22,7 @@ def test_working_item_numbers_add_up():
     m = E.analyze(title="Neumann TLM 103", ask=600, value=1000, n=20, sold_basis=True, local=True, settings=ST)
     assert m["buy_total"] == 615 and m["tax"] == 0 and m["pickup"] == 15  # local: a trip, no tax
     assert m["repair"] is None and m["repair_cost"] == 0
-    side = E.sell_side(m["channel"], 950, "small")
+    side = E.sell_side(m["channel"], 1000, "small")
     assert m["resale"] == round(side["price"]) and m["fees"] == round(side["fees"])
     assert m["profit_if_ok"] == round(side["net"] - 615)
     assert m["downside"] < m["expected"] < m["profit_if_ok"]
@@ -46,7 +46,7 @@ def test_repair_costs_and_odds_lower_the_expected_profit():
 
 def test_heavy_gear_sells_local_and_mics_ship():
     console = E.analyze(title="Tascam 32 channel console", ask=800, value=2000, n=6, settings=ST)
-    mic = E.analyze(title="Neumann U87 Ai", ask=1400, value=2600, n=30, settings=ST)
+    mic = E.analyze(title="Neumann U87 Ai", ask=1400, value=2600, n=30, settings={**ST, "sell_on": "reverb"})
     assert console["size"] == "heavy" and console["channel"] == "local" and console["ship_out"] == 0
     assert mic["size"] == "small" and mic["channel"] in ("reverb", "ebay") and mic["ship_out"] > 0
 

@@ -19,9 +19,10 @@ from typing import Optional
 CHANNELS = {
     "reverb": {"label": "Reverb", "pct": 0.0819, "fixed": 0.49, "ships": True, "price": 1.00, "days": 1.0},
     # eBay Musical Instruments & Gear: 13.6% final value fee + $0.40 per order
-    "ebay": {"label": "eBay", "pct": 0.136, "fixed": 0.40, "ships": True, "price": 0.97, "days": 0.8},
+    "ebay": {"label": "eBay", "pct": 0.136, "fixed": 0.40, "ships": True, "price": 0.98, "days": 0.8},
     # Facebook Marketplace / Craigslist local pickup: no fees, no box, lower price, a bit slower
-    "local": {"label": "Local pickup (FB/Craigslist)", "pct": 0.0, "fixed": 0.0, "ships": False, "price": 0.88, "days": 1.3},
+    # (the quick-sale price already reflects local ads, so only a small extra cut)
+    "local": {"label": "Local pickup (FB/Craigslist)", "pct": 0.0, "fixed": 0.0, "ships": False, "price": 0.95, "days": 1.3},
 }
 INSURE_PCT = 0.01           # shipping insurance, share of the sale price
 
@@ -139,9 +140,9 @@ def analyze(*, title: str, ask: float, value: float, n: int, sold_basis: bool = 
     size = size_class(title)
     buy = buy_cost(ask, ship_in, local, tax_pct, pickup)
     # `value` is already a quick-sale price (real sales, or the lower quarter of
-    # asks). Trim a little more: buyers haggle, and the last listed price of a
-    # sold Reverb ad is often above the accepted offer.
-    resale = value * 0.95
+    # asks), so it isn't discounted again here; only the channel's own price
+    # factor applies (one discount, not two).
+    resale = value
     rc, success, rdays = repair_terms(repair)
     diag = min(rc, DIAG_CAP) if repair else 0
     speed_known = days_base is not None
