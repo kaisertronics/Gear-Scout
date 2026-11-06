@@ -99,8 +99,8 @@ def effect(p: Optional[dict]) -> dict:
 def check(cfg: dict, opps: list[dict], limit: int = PER_PASS) -> int:
     """Looks at the photos of the best flips not checked yet. Returns how many it checked."""
     key = source.gemini_key(cfg)
-    if not key or not opps:
-        return 0
+    if not key or not opps or source.gemini_paused():
+        return 0  # no key, or Gemini is resting (shared with Gear Scout's other photo jobs)
     done = results()
     n = 0
     for o in opps:
@@ -120,6 +120,7 @@ def check(cfg: dict, opps: list[dict], limit: int = PER_PASS) -> int:
             res = _clean(json.loads(raw) if isinstance(raw, str) else raw)
         except Exception as e:
             logger.info("Gear Flip photo check stopped (%s); the rest wait for the next pass", e)
+            source.gemini_backoff(e)
             break  # rate limit or outage
         res["at"] = datetime.now(timezone.utc).isoformat()
         done[url] = res

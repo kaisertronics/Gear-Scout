@@ -718,9 +718,8 @@ def run_fb_posts_roundup():
 
 def run_gear_flip():
     """Gear Flip (gearflip/): scour, scan and alert when a pass is due (its own
-    settings say how often). Steps aside while a scrape is running."""
-    if _run_lock.locked():
-        return
+    settings say how often). It doesn't wait on _run_lock: a pass takes seconds, and
+    the sweep holds that lock so often that passes were skipped for most of the day."""
     try:
         from gearflip import jobs as gearflip_jobs
         gearflip_jobs.tick(load_config())

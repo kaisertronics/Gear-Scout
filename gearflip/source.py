@@ -303,6 +303,25 @@ def photo_bytes(image_url: Optional[str]):
     return _photo(image_url)
 
 
+def gemini_paused() -> bool:
+    """True while Gear Scout's shared Gemini pause is on (busy / rate-limited)."""
+    try:
+        from scrapers import gemini_pause
+    except ImportError:
+        return False
+    return bool(gemini_pause.paused())
+
+
+def gemini_backoff(err: Exception) -> None:
+    """Starts the shared Gemini pause when the error says Gemini is busy or rate-limited."""
+    try:
+        from scrapers import gemini_pause
+    except ImportError:
+        return
+    if gemini_pause.busy(err):
+        gemini_pause.pause()
+
+
 def ai_json(key: str, prompt: str, photo) -> str:
     """One Gemini call with one photo, answered as JSON text."""
     from scrapers.assistant import _generate
