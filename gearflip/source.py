@@ -19,6 +19,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path("/config/config.yaml")
+MIN_COMPS = 6         # comparable ads needed before Gear Flip trusts a resale price
 SEEN_DAYS = 10        # still on its site within this many days
 NEW_DAYS = 45         # first found within this many days
 ROW_LIMIT = 12000
@@ -99,8 +100,8 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
         return None
     from gearflip import verify
     from gearflip.engine import NEW_RE
-    if NEW_RE.search(title) or verify.packaging_only(title) or verify.lookalike(look):
-        return None  # new-in-box (not comparable), just the box, or a look-alike
+    if NEW_RE.search(title) or verify.packaging_only(title) or verify.lookalike(look) or verify.knockoff(title):
+        return None  # new-in-box (not comparable), just the box, a look-alike or a knockoff
     ask = parse_price(r.get("price"))
     if not ask or ask < 40:
         return None
@@ -130,6 +131,8 @@ def prepare(r: dict, cfg: dict, include_repairs: bool = True, now: Optional[date
     elif quick_sale(year_asks) and sold_n < mv.MIN_N:
         value = quick_sale(year_asks) * tier_x
     value = min(value, cap)
+    if n < MIN_COMPS:
+        return None  # too few comparable ads to trust a resale price
     if verify.price_problem(float(unit or ask), float(value), repair):
         return None  # far under value: rarely the real, complete unit
     flags = deal_checks.scam_flags(r, None if repair else value, unit or ask)

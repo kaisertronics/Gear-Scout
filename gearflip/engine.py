@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from gearflip import economics, feedback, ledger, photos, portfolio, settings as S, source
+from gearflip import economics, feedback, ledger, photos, portfolio, settings as S, source, verify
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,12 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
                 dropped.append({"url": r.get("url"), "title": p["title"], "why": fx["drop"]})
             continue
         repair = p["repair"] or fx["repair"]
+        confirmed = bool(pic and pic.get("is_item") == "yes" and pic.get("matches") == "yes" and not pic.get("stock"))
+        if not repair and p["ask"] < p["value"] * fx["value_x"] * verify.TOO_CHEAP_UNCHECKED and not confirmed:
+            if dropped is not None:
+                dropped.append({"url": r.get("url"), "title": p["title"],
+                                "why": "priced too far under value to trust until a photo confirms it"})
+            continue
         you = feedback.adjust(rules, model=p["model"], title=p["title"], repair=repair, seller=r.get("seller"), photo=pic)
         if you["drop"]:
             if dropped is not None:

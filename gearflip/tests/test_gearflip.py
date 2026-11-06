@@ -396,3 +396,17 @@ def test_resale_is_a_quick_sale_price_not_the_typical_ask():
     q = source.quick_sale(asks)
     assert 840 <= q <= 900  # the lower quarter, not the ~$975 median
     assert source.quick_sale([500, 600]) is None and source.quick_sale([500, 600, 700]) == 500
+
+
+@pytest.mark.parametrize("title,bad", [
+    ("Silver TLM103 Neumann Wired Condenser Microphone Matte US STOCK", True),
+    ("Black TLM103 Neumann Wired Condenser Microphone Matte US Fast Shipping", True),
+    ("BM-800 condenser microphone for PC gaming podcast", True),
+    ("Neumann TLM 103 condenser microphone", False),
+    ("Shure SM7B", False),
+    ("Black Lion Audio Auteur MKII preamp", False),
+    ("Black Lion Audio B12A mic preamp", False),
+])
+def test_knockoff_listings(title, bad):
+    from gearflip import verify
+    assert verify.knockoff(title) is bad
