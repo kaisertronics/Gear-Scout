@@ -28,6 +28,7 @@
         <a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('shopping') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('shopping') else '' }}">Shopping list</a>
         <a href="{{ url_for('pickup_route_page') }}" class="{{ 'active' if request.endpoint == 'pickup_route_page' else '' }}">Pickup route</a>
+        <a href="{{ url_for('gearflip.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('gearflip') else '' }}">💹 Gear Flip</a>
         <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('settings') else '' }}">Settings</a>
         <details class="nav-more"><summary>More</summary><div class="nav-more-list">
         <a href="{{ url_for('feed', inbox=1) }}">📬 Inbox</a>
@@ -38,7 +39,8 @@
         {% if not mic_focus_on %}<a href="{{ url_for('telex') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('telex') else '' }}">Telex List</a>
         <a href="{{ url_for('shopping') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('shopping') else '' }}">Shopping list</a>
         <a href="{{ url_for('pickup_route_page') }}" class="{{ 'active' if request.endpoint == 'pickup_route_page' else '' }}">Pickup route</a>
-        <a href="{{ url_for('feed', inbox=1) }}" class="{{ 'active' if request.endpoint == 'feed' and request.args.get('inbox') else '' }}">📬 Inbox</a>{% endif %}
+        <a href="{{ url_for('feed', inbox=1) }}" class="{{ 'active' if request.endpoint == 'feed' and request.args.get('inbox') else '' }}">📬 Inbox</a>
+        <a href="{{ url_for('gearflip.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('gearflip') else '' }}">💹 Gear Flip</a>{% endif %}
         <a href="{{ url_for('health') }}" class="{{ 'active' if request.endpoint == 'health' else '' }}">Health</a>
         <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}" title="Everything Gear Scout has collected, not just your Wanted list">Browse all</a>
         <a href="{{ url_for('deals') }}" class="{{ 'active' if request.endpoint == 'deals' else '' }}">💸 Deals</a>

@@ -716,6 +716,18 @@ def run_fb_posts_roundup():
         logger.exception("Facebook posts roundup failed")
 
 
+def run_gear_flip():
+    """Gear Flip (gearflip/): scour, scan and alert when a pass is due (its own
+    settings say how often). Steps aside while a scrape is running."""
+    if _run_lock.locked():
+        return
+    try:
+        from gearflip import jobs as gearflip_jobs
+        gearflip_jobs.tick(load_config())
+    except Exception:
+        logger.exception("Gear Flip pass failed")
+
+
 def run_schedule():
     cfg = load_config()
     schedule_cfg = cfg.get("schedule", {})
@@ -782,6 +794,10 @@ def run_schedule():
                       name="gear_scout_ai_briefing", misfire_grace_time=3600)
     scheduler.add_job(run_ai_weekly, CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=tz_name),
                       name="gear_scout_ai_weekly", misfire_grace_time=3600)
+
+    # Gear Flip: checks every 5 minutes whether its next pass is due.
+    scheduler.add_job(run_gear_flip, IntervalTrigger(minutes=5, timezone=tz_name),
+                      name="gear_flip", max_instances=1, coalesce=True, misfire_grace_time=300)
 
     logger.info("Scheduler started. Cron: '%s' (%s); background refresh + saved searches every %d min",
                 cron_expr, tz_name, interval)

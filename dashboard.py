@@ -57,6 +57,10 @@ app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # static files cached a day (links carry a version)
 
+# Gear Flip (its own tab at /gearflip): a self-contained module in gearflip/.
+from gearflip.web import bp as _gearflip_bp  # noqa: E402
+app.register_blueprint(_gearflip_bp)
+
 # Listing cards for collapsed sections ("Show all", "No comp yet"…) aren't
 # sent with the page; they're kept here briefly and fetched when opened.
 _lazy_lists: "OrderedDict[str, list]" = OrderedDict()
