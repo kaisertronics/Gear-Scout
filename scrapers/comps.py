@@ -37,12 +37,22 @@ def _build_index_apart() -> dict:
     scraper's browser was also busy. The result is small to send back."""
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
+    pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("fork"))
     try:
-        with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("fork")) as pool:
-            return pool.submit(_build_index).result(timeout=600)
+        result = pool.submit(_build_index).result(timeout=180)
+        pool.shutdown(wait=True)
+        return result
     except Exception:
         import logging
         logging.getLogger(__name__).exception("Price index: separate process failed; building here")
+        # A forked child can deadlock (fork from a threaded process); the old
+        # `with` block then waited on it forever and froze the whole scrape cycle.
+        for proc in list((getattr(pool, "_processes", None) or {}).values()):
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        pool.shutdown(wait=False, cancel_futures=True)
         return _build_index()
 
 
