@@ -275,3 +275,54 @@ def test_photo_check_runs_once_and_feeds_the_scan(db, monkeypatch):
     assert photos.check({}, res["opps"]) == 1 and photos.check({}, res["opps"]) == 0 and len(calls) == 1
     res = engine.scan({}, st)
     assert res["opps"] == [] and res["photo_dropped"][0]["why"].startswith("the photo isn't the unit")
+
+
+# ---------------------------------------------------------------- your ✕s
+def test_dismissals_hide_and_teach(gf_dir):
+    from gearflip import feedback as F
+    m = E.analyze(title="Neumann TLM 103", ask=560, value=1000, n=14, local=True, settings=ST)
+    o = {"url": "u1", "title": "Neumann TLM 103", "model": "neumann:tlm103", "seller": "bob", "m": m}
+    F.dismiss(o, "price_off", "they sell for $800 here")
+    assert F.hidden_urls() == {"u1"}
+    rules = F.learned()
+    assert "price_off:neumann:tlm103" in rules
+    a = F.adjust(rules, model="neumann:tlm103", title="Neumann TLM 103", repair=None, seller=None)
+    assert a["value_x"] == pytest.approx(0.92) and not a["drop"]
+    F.dismiss({**o, "url": "u2"}, "not_my_gear")
+    F.dismiss({**o, "url": "u3", "model": "neumann:u87"}, "not_my_gear")
+    assert F.adjust(F.learned(), model="neumann:km184", title="KM184", repair=None, seller=None)["drop"]
+    F.dismiss({**o, "url": "u4"}, "seller")
+    assert F.adjust(F.learned(), model="akg:c414", title="AKG C414", repair=None, seller="bob")["drop"]
+    F.undo("not_my_gear:neumann")
+    assert not F.adjust(F.learned(), model="neumann:km184", title="KM184", repair=None, seller=None)["drop"]
+    F.dismiss({**o, "url": "u5", "model": "akg:c414"}, "wrong_model")
+    F.dismiss({**o, "url": "u6", "model": "akg:c414"}, "wrong_model")
+    r = F.learned()
+    assert F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None)["drop"]  # needs a confirming photo
+    ok = F.adjust(r, model="akg:c414", title="AKG C414", repair=None, seller=None,
+                  photo={"matches": "yes", "is_item": "yes"})
+    assert not ok["drop"] and ok["conf"] < 0
+
+
+def test_dismiss_route_removes_card_and_rescans(db, monkeypatch):
+    flask = pytest.importorskip("flask")
+    import jinja2
+    from gearflip import engine, feedback, settings as S
+    from gearflip.web import bp
+    db.mark_seen(_listing(1, "Shure SM7B", 200, src="Craigslist — Seattle"))
+    for i in range(2, 10):
+        db.mark_seen(_listing(i, "Shure SM7B", 370 + i * 3))
+    engine.scan({}, S.save({"min_confidence": 0}))
+    assert engine.latest()["opps"]
+    monkeypatch.setattr(engine, "scan_in_background", lambda cfg=None: False)
+    app = flask.Flask(__name__)
+    app.jinja_loader = jinja2.ChoiceLoader([jinja2.DictLoader({"base.html": "{% block content %}{% endblock %}"}),
+                                           app.jinja_loader])
+    app.register_blueprint(bp)
+    c = app.test_client()
+    assert b"Not this one" in c.get("/gearflip", headers={"X-GearScout-Test": "1"}).data
+    r = c.post("/gearflip/dismiss", data={"url": "https://example.com/1", "reason": "too_big", "note": "no room"})
+    assert r.status_code == 302 and feedback.load()["items"][0]["note"] == "no room"
+    page = c.get("/gearflip?thanks=1", headers={"X-GearScout-Test": "1"}).data
+    assert b"https://example.com/1" not in page and b"What Gear Flip learned" in page
+    assert engine.scan({}, S.load())["opps"] == []

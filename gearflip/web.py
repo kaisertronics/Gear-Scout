@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
-from gearflip import economics, engine, jobs, ledger, scour, settings as S
+from gearflip import economics, engine, feedback, jobs, ledger, scour, settings as S
 
 bp = Blueprint("gearflip", __name__, url_prefix="/gearflip", template_folder="templates")
 
@@ -66,7 +66,8 @@ def index():
     book = ledger.bankroll(st["budget"])
     plan = engine.plan(res, st, book)
     owned = ledger.open_urls()
-    opps = [o for o in (res.get("opps") or []) if economics.passes(o["m"], st)]
+    gone = feedback.hidden_urls()
+    opps = [o for o in (res.get("opps") or []) if economics.passes(o["m"], st) and o.get("url") not in gone]
     kind = request.args.get("kind", "all")
     if kind == "working":
         opps = [o for o in opps if not o["m"]["repair"]]
@@ -82,7 +83,8 @@ def index():
                            total=len(opps), kind=kind, sort=sort, owned=owned, scanning=engine.scanning(),
                            scan_ago=_ago(res.get("at")) if res else "", job=jobs.status(), sc=sc, cover_hours=hours,
                            age=_age, ago=_ago, channels=economics.CHANNELS, repairs=economics.REPAIRS,
-                           saved=request.args.get("saved"))
+                           saved=request.args.get("saved"), reasons=feedback.REASONS, learned=feedback.learned(),
+                           n_dismissed=len(feedback.load()["items"]), thanks=request.args.get("thanks"))
 
 
 def _ts(iso) -> float:
@@ -123,6 +125,24 @@ def buy():
     o = _find(url) or {"url": url, "title": request.form.get("title") or url, "source": "", "m": {}}
     ledger.buy(o, request.form.get("paid"))
     return redirect(url_for("gearflip.index") + "#mine")
+
+
+@bp.route("/dismiss", methods=["POST"])
+def dismiss():
+    """✕ on a suggestion, with the reason you picked: hidden, and learned from."""
+    url = request.form.get("url") or ""
+    o = _find(url) or {"url": url, "title": request.form.get("title") or url, "m": {}}
+    feedback.dismiss(o, request.form.get("reason") or "other", request.form.get("note") or "")
+    engine.scan_in_background()  # re-rank with what it just learned
+    return redirect(url_for("gearflip.index", kind=request.form.get("kind") or "all",
+                            sort=request.form.get("sort") or "score", thanks=1) + "#all")
+
+
+@bp.route("/learned/undo", methods=["POST"])
+def learned_undo():
+    feedback.undo(request.form.get("rule") or "")
+    engine.scan_in_background()
+    return redirect(url_for("gearflip.index") + "#learned")
 
 
 @bp.route("/repaired", methods=["POST"])

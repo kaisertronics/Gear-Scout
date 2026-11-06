@@ -9,7 +9,8 @@
       "It scans every 15 minutes (everything Gear Scout finds plus its own Reverb and eBay searches for flip-friendly and broken gear) and pushes strong new flips to your phone with all the numbers, plus a morning email with the plan.",
       "Gear Flip now starts with a $500 budget and ranks small $100–$250 flips well.",
       "Gear Flip leaves out ads for just the box or manual, look-alikes (\"C414 style\", \"like a U87\", \"vs\", clones) and prices too far under value to be the real unit.",
-      "Picture analysis: with your free Gemini key, Gear Flip looks at each strong flip's photo before pushing it or adding it to your plan. Boxes, accessories and the wrong model are hidden; worn or damaged gear and missing parts lower the resale estimate."
+      "Picture analysis: with your free Gemini key, Gear Flip looks at each strong flip's photo before pushing it or adding it to your plan. Boxes, accessories and the wrong model are hidden; worn or damaged gear and missing parts lower the resale estimate.",
+      "Gear Flip cards now have \"✕ Not this one\": pick why (not the real item, wrong model, resale too high, repair too risky, too big, not your gear, sketchy seller, sold). It's hidden, and Gear Flip learns from the reason. \"What Gear Flip learned from you\" lists each rule, with Undo."
     ]
   },
   {

@@ -34,6 +34,10 @@
   .gf-why { font-size: 13px; padding: 8px 12px; color: var(--muted); }
   .gf-act { display: flex; gap: 6px; align-items: center; padding: 0 12px 12px; margin-top: auto; flex-wrap: wrap; }
   .gf-act input[type=number] { width: 100px; }
+  .gf-x-wrap > summary::-webkit-details-marker { display: none; }
+  .gf-why-form { padding: 10px 12px 12px; border-top: 1px dashed var(--border); font-size: 14px; }
+  .gf-why-form label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+  .gf-why-form input[type=text] { width: 100%; padding: 6px 8px; font: inherit; margin: 6px 0; }
   .gf-table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .gf-table th, .gf-table td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: top; }
   .gf-scroll { overflow-x: auto; }
@@ -99,6 +103,7 @@
 
 <section class="panel" id="all">
   <h2>All flips ({{ total }})</h2>
+  {% if thanks %}<p class="gf-pos">Got it. That one's gone, and Gear Flip is re-ranking with what you told it.</p>{% endif %}
   <div class="gf-chips">
     {% for k, label in [('all', 'All'), ('working', 'Working'), ('repair', '🔧 Needs repair'), ('local', '📍 Local pickup')] %}
     <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort) }}#all">{{ label }}</a>
@@ -153,11 +158,23 @@
         <input type="number" name="paid" min="1" step="any" placeholder="paid ${{ m.buy_total }}">
         <button type="submit">I bought this</button>
       </form>
+      <details class="gf-x-wrap">
+        <summary class="gf-act" style="list-style:none;cursor:pointer;margin-top:-6px"><span class="gf-chip">✕ Not this one</span></summary>
+        <form class="gf-why-form" method="post" action="{{ url_for('gearflip.dismiss') }}">
+          <input type="hidden" name="url" value="{{ o.url }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="sort" value="{{ sort }}">
+          <strong>Why? Gear Flip learns from this.</strong>
+          {% for k, label in reasons.items() %}
+          <label><input type="radio" name="reason" value="{{ k }}" {{ 'checked' if loop.first }}> {{ label }}</label>
+          {% endfor %}
+          <input type="text" name="note" maxlength="300" placeholder="Anything else? (optional)">
+          <button type="submit">Remove it</button>
+        </form>
+      </details>
     </div>
   {% endfor %}
   </div>
   {% if res.photo_dropped %}
-  <details style="margin-top:12px"><summary class="muted">Hidden by the photo check ({{ res.photo_dropped|length }})</summary>
+  <details style="margin-top:12px"><summary class="muted">Hidden by the photo check or your ✕s ({{ res.photo_dropped|length }})</summary>
     <ul>{% for d in res.photo_dropped %}<li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.title }}</a>: {{ d.why }}</li>{% endfor %}</ul>
   </details>
   {% endif %}
@@ -165,6 +182,18 @@
   {% if total > opps|length %}<p class="muted">Showing the top {{ opps|length }} of {{ total }}.</p>{% endif %}
   <p class="muted">* No sell-through history for this model yet, so the days are a typical figure for its price.</p>
 </section>
+
+{% if learned or n_dismissed %}
+<section class="panel" id="learned">
+  <h2>🧠 What Gear Flip learned from you</h2>
+  <p class="muted">From the {{ n_dismissed }} suggestion{{ 's' if n_dismissed != 1 }} you removed.{% if not learned %} Nothing to change yet: those were one-offs (sold, or something else).{% endif %}</p>
+  {% if learned %}
+  <ul>{% for rid, r in learned.items() %}
+    <li>{{ r.text }} <form method="post" action="{{ url_for('gearflip.learned_undo') }}" style="display:inline"><input type="hidden" name="rule" value="{{ rid }}"><button type="submit" title="Forget this">Undo</button></form></li>
+  {% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
 
 <section class="panel" id="mine">
   <h2>My flips</h2>
