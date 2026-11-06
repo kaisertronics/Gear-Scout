@@ -64,7 +64,11 @@ def _text(r: dict) -> str:
 def reasons(r: dict) -> list[str]:
     """Every motivated-seller reason the ad gives, in priority order ([] = none)."""
     text = _NOT_MOVE.sub(" ", _text(r))
-    return [label for label, rx in _PATTERNS if rx.search(text)]
+    out = [label for label, rx in _PATTERNS if rx.search(text)]
+    from scrapers.closeout import _EXTRA  # "whole studio", rack lots: closeout-only phrases count as motivated too
+    if _EXTRA.search(text):
+        out.append("Closeout")
+    return out
 
 
 def reason(r: dict) -> Optional[str]:

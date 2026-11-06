@@ -659,6 +659,11 @@ def _decorate(listings: list[dict]) -> list[dict]:
             l["motivated"] = motivated_reason(l)
         except Exception:
             l["motivated"] = None
+        try:
+            from scrapers.closeout import label as closeout_label
+            l["closeout"] = closeout_label(l)
+        except Exception:
+            l["closeout"] = None
         l["age_days"] = _age_days(l)
         l["age_known"] = bool(l.get("posted_at"))
         l["needs_repair"] = needs_repair(l.get("title"), l.get("description"))
@@ -1043,6 +1048,16 @@ def _back_in_stock(l):
         mins = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
         ago = f"{mins}m ago" if mins < 60 else (f"{mins // 60}h ago" if mins < 2880 else f"{mins // 1440}d ago")
         return {"label": f"Back in stock {ago}"}
+    except Exception:
+        return None
+
+
+@app.template_filter("ribbon_note")
+def _ribbon_note(l):
+    """'Ribbon: no ribbon condition mentioned, ask' style note for a ribbon mic, or None (see scrapers/ribbon_note.py)."""
+    try:
+        from scrapers import ribbon_note
+        return ribbon_note.ribbon_note(l.get("title"), l.get("description")) if hasattr(l, "get") else None
     except Exception:
         return None
 

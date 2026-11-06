@@ -110,19 +110,21 @@
       {% set fr = l|fair_range %}{% if fr %}<div class="muted" style="font-size:.8em" title="Middle half of recent sold / asking prices for this model">Fair price {{ fr[0] }} ({{ fr[1] }} comps)</div>{% endif %}
       {% set sc = l|scarcity %}{% if sc %}<div class="muted" style="font-size:.8em" title="How many distinct ads of this exact model Gear Scout has ever seen">{{ sc.label }}</div>{% endif %}
       {% set bis = l|back_in_stock %}{% if bis %}<div class="muted" style="font-size:.8em" title="This shop listing was out of stock and came back in the last 48 hours">{{ bis.label }}</div>{% endif %}
+      {% set rbn = l|ribbon_note %}{% if rbn %}<div class="muted" style="font-size:.8em" title="Ribbon mics are fragile; this is what the ad says about the ribbon">{{ rbn }}</div>{% endif %}
       {% if l.price_ctx and l.price_ctx.bstock and not l.comp %}
         <div class="listing-typical" title="What a dealer B-stock / open-box unit goes for ({{ l.price_ctx.bstock_basis }})">B-stock ~{{ l.price_ctx.bstock }}{% if l.price_ctx.worth %} · <strong>{{ l.price_ctx.under_ref_pct }}% under</strong>{% endif %}</div>
       {% endif %}
       {% if l.sale and not l.sale.fast %}
         <div class="listing-typical" title="Median price of {{ l.sale.n }} listings of this model Gear Scout watched sell">went for ~{{ l.sale.price }} ({{ l.sale.n }} sold)</div>
       {% endif %}
-      {% if l.ship_warn or l.watched_auction or l.bundle or l.lot or l.resale or l.no_acc or l.mic_case or l.cond_grade or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or l.offers_ok or l.motivated or (l.seller_other and l.seller_other >= 2) %}
+      {% if l.ship_warn or l.watched_auction or l.bundle or l.lot or l.resale or l.no_acc or l.mic_case or l.cond_grade or l.needs_repair or (l.price_ctx and l.price_ctx.deal) or l.previous_price or l.sold or l.pending or (l.sale and l.sale.fast) or l.stale or l.offers_ok or l.motivated or l.closeout or (l.seller_other and l.seller_other >= 2) %}
         <div class="listing-flags">
           {% if l.watched_auction %}<span class="flag flag-deal" title="An auction from a seller you watch is ending soon">⏱ Watched seller auction · <span class="gs-countdown{% if l.watched_auction.urgent %} gs-urgent{% endif %}" data-end-ts="{{ l.watched_auction.ts }}">{{ l.watched_auction.label }}</span></span>{% endif %}
           {% if l.sale and l.sale.fast %}<span class="flag flag-deal" title="{{ l.sale.n }} of these sold in a median {{ l.sale.days }} days, around {{ l.sale.price }} — act fast">⚡ Sells in ~{{ l.sale.days|round|int }}d</span>{% endif %}
           {% if l.seller_other and l.seller_other >= 2 %}<span class="flag flag-stale" title="This seller has {{ l.seller_other }} other ads Gear Scout has seen — likely a dealer or flipper, often open to bundle deals">🏪 {{ l.seller_other }} other ads</span>{% endif %}
           {% if l.stale %}<span class="flag flag-stale" title="Listed {{ l.stale.days }} days ago — sellers often take an offer after a few weeks">Listed {{ l.stale.days }}d · try {{ l.stale.offer }}</span>{% endif %}
           {% if l.motivated %}<span class="flag flag-deal" title="The ad says why the seller wants it gone ({{ l.motivated }}) — likely to take a lower offer">Motivated seller · {{ l.motivated }}</span>{% endif %}
+          {% if l.closeout %}<span class="flag flag-deal" title="The ad reads like a studio closeout, estate or liquidation ({{ l.closeout }}) — often priced to clear">Closeout · {{ l.closeout }}</span>{% endif %}
           {% if l.haggle %}<span class="flag" title="The ad says it's open to offers">Room to haggle</span>{% endif %}
           {% if l.offers_ok %}<span class="flag" title="The seller accepts offers on Reverb (Make an Offer button)">Offers OK</span>{% endif %}
           {% if l.lot %}<span class="flag flag-deal" title="{{ l.lot['title'] }}">{{ l.lot['text'] }}</span>{% endif %}

@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-11-05",
+    "title": "Hourly improvements",
+    "items": [
+      "Ads that read like a studio closing, estate sale, liquidation, whole-studio sale or rack lot now get a \"Closeout\" tag and join the motivated-seller finds.",
+      "Ribbon mic cards now show a short note on the ribbon's condition (re-ribboned, sagging or blown, or \"not mentioned, ask the seller\"). Ribbons were already covered by the 2-minute fast scan."
+    ]
+  },
+  {
+    "date": "2026-11-05",
     "title": "Nightly improvements",
     "items": [
       "The Health page now lists search terms that match lots of ads but never lead to a star or alert, so you can see which ones are just noise.",
