@@ -62,7 +62,7 @@ def listing_rows(now: Optional[datetime] = None) -> list[dict]:
     new_cut = (now - timedelta(days=NEW_DAYS)).isoformat()
     with _conn() as conn:
         conn.row_factory = sqlite3.Row
-        return [dict(r) for r in conn.execute(
+        rows = [dict(r) for r in conn.execute(
             "SELECT global_id, source_name, title, url, price, image_url, description, posted_at, first_seen,"
             " last_seen, shipping, location, seller, offers_ok FROM seen"
             " WHERE first_seen >= ? AND url LIKE 'http%' AND hidden = 0 AND duplicate = 0"
@@ -71,6 +71,12 @@ def listing_rows(now: Optional[datetime] = None) -> list[dict]:
             " AND url NOT LIKE '%search/posts%' AND COALESCE(description, '') NOT LIKE 'Auction%'"
             " AND COALESCE(last_seen, first_seen) >= ? ORDER BY first_seen DESC LIMIT ?",
             (new_cut, seen_cut, ROW_LIMIT))]
+    try:  # Gear Scout's shared freshness rule: no old posts, relists, or ads not seen live in a day
+        from scrapers import freshness
+        rows = freshness.keep(rows)
+    except ImportError:
+        pass
+    return rows
 
 
 def is_local(source_name: Optional[str]) -> bool:
