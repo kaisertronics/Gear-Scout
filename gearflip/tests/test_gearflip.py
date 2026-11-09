@@ -441,3 +441,12 @@ def test_no_model_value_falls_back_to_similar_ads(db):
     v = source.similar_value("Zorblax ZX-9000 tube preamp", "https://example.com/x")
     assert v and 400 <= v[0] <= 430 and v[1] == 8
     assert source.similar_value("Zorblax tube preamp") is None  # no model number: too loose
+
+
+def test_fake_risk_flag():
+    from gearflip import engine
+    assert engine.fake_risk(400, 900, None, False).startswith("fake risk")
+    assert not engine.fake_risk(400, 900, None, True)         # photo confirmed the real unit
+    assert not engine.fake_risk(400, 900, "recap", False)     # repair ads are cheap for a reason
+    assert not engine.fake_risk(150, 300, None, False)        # cheap gear isn't worth faking
+    assert not engine.fake_risk(700, 900, None, False)        # near market

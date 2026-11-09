@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 
 NEW_RE = re.compile(r"^\W*new\b|\[new\]|\bnew (?:in|with|old)\b|\bnos\b|\bbrand new\b|\bsealed\b|\bunopened\b", re.I)
 MAX_KEEP = 150
+FAKE_RISK_VALUE = 400   # pricey gear (pro mics especially) is what gets faked or misdescribed
+FAKE_RISK_SHARE = 0.65  # ...when it asks under this share of its used value
+
+
+def fake_risk(ask: float, value: float, repair, confirmed: bool) -> str:
+    """A warning when expensive working gear is priced well under market and no
+    photo has confirmed it's the real unit."""
+    if repair or confirmed or value < FAKE_RISK_VALUE or ask >= value * FAKE_RISK_SHARE:
+        return ""
+    return f"fake risk: {ask / value * 100:.0f}% of its ~${value:,.0f} value, check photos and serial first"
 _lock = threading.Lock()
 
 
@@ -82,6 +92,7 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
                 dropped.append({"url": r.get("url"), "title": p["title"], "image": r.get("image_url"),
                                 "held": pic is None, "why": "priced too far under value to trust until a photo confirms it"})
             continue
+        risk = fake_risk(p["ask"], p["value"] * fx["value_x"], repair, confirmed)
         you = feedback.adjust(rules, model=p["model"], title=p["title"], repair=repair, seller=r.get("seller"), photo=pic,
                               ask=p["ask"], value=p["value"])
         if you["drop"]:
@@ -93,7 +104,7 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
                               n=p["n"], sold_basis=p["sold_basis"], ship_in=p["ship_in"], local=p["local"],
                               repair=repair, days_base=speed.get(p["model"]), age_days=p["age_days"],
                               flags=p["flags"], settings=st,
-                              conf_adj=fx["conf"] + you["conf"] + (-15 if p.get("basis") == "similar" else 0))
+                              conf_adj=fx["conf"] + you["conf"] + (-10 if risk else 0) + (-15 if p.get("basis") == "similar" else 0))
         if not m:
             continue
         m["score"] = int(round(m["score"] * you["score_x"]))
@@ -106,7 +117,7 @@ def analyze_rows(rows: list[dict], cfg: dict, st: dict, speed: Optional[dict] = 
                     "age_days": round(p["age_days"], 1) if p["age_days"] is not None else None,
                     "offers_ok": r.get("offers_ok"), "model": p["model"], "seller": r.get("seller"),
                     "basis": p.get("basis", "model"),
-                    "flags": (p.get("flag_text") or []) + fx["tags"],
+                    "flags": (p.get("flag_text") or []) + fx["tags"] + ([risk] if risk else []),
                     "photo": pic, "m": m, "why": describe(m)})
     out.sort(key=lambda o: (-o["m"]["score"], -o["m"]["expected"]))
     return out

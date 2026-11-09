@@ -37,6 +37,9 @@ def push_text(o: dict, rank: Optional[int] = None, plan_n: int = 0, cash: Option
     lines.append(f"Confidence {m['confidence']}/100 ({m['comps']} comps{', real sales' if m['sold_basis'] else ''})"
                  f" · Score {m['score']}")
     lines.append(f"Walk-away price: ${m['walk_away']:,}")
+    for f in o.get("flags") or []:
+        if f.startswith("fake risk"):
+            lines.append("⚠ " + f[0].upper() + f[1:])
     p = o.get("photo")
     if not p:
         lines.append("Photo not checked yet: look closely before you buy")
