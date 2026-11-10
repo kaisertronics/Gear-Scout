@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Gear Flip · Gear Scout{% endblock %}
+{% block content %}
+<style>
+  .gf-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+  .gf-head h2 { margin: 0; }
+  .gf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .gf-stat { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+  .gf-stat b { display: block; font-size: 20px; }
+  .gf-stat span { font-size: 12px; color: var(--muted); }
+  .gf-pos { color: var(--green-text); }
+  .gf-neg { color: var(--red-text); }
+  .gf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .gf-chip { padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; text-decoration: none;
+    background: var(--panel); color: inherit; white-space: nowrap; }
+  .gf-chip.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .gf-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .gf-card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); overflow: hidden; display: flex; flex-direction: column; }
+  .gf-card.plan { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .gf-top { display: flex; gap: 10px; padding: 12px; }
+  .gf-top img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; flex: none; background: var(--bg); }
+  .gf-title { font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .gf-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .gf-big { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .gf-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .gf-tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+  .gf-tag.plan { background: var(--green-bg); color: var(--green-text); }
+  .gf-tag.fix { background: var(--amber-bg); color: var(--amber-text); }
+  .gf-tag.warn { background: var(--red-bg); color: var(--red-text); }
+  .gf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); }
+  .gf-grid div { padding: 6px 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 14px; }
+  .gf-grid div:nth-child(3n) { border-right: 0; }
+  .gf-grid small { display: block; font-size: 11px; color: var(--muted); }
+  .gf-why { font-size: 13px; padding: 8px 12px; color: var(--muted); }
+  .gf-act { display: flex; gap: 6px; align-items: center; padding: 0 12px 12px; margin-top: auto; flex-wrap: wrap; }
+  .gf-act input[type=number] { width: 100px; }
+  .gf-x-wrap > summary::-webkit-details-marker { display: none; }
+  .gf-why-form { padding: 10px 12px 12px; border-top: 1px dashed var(--border); font-size: 14px; }
+  .gf-why-form label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+  .gf-why-form input[type=text] { width: 100%; padding: 6px 8px; font: inherit; margin: 6px 0; }
+  .gf-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .gf-table th, .gf-table td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+  .gf-scroll { overflow-x: auto; }
+  .gf-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; }
+  .gf-form label { display: flex; flex-direction: column; font-size: 13px; gap: 3px; }
+  .gf-form label.chk { flex-direction: row; align-items: center; gap: 8px; }
+  .gf-form input[type=number], .gf-form input[type=text], .gf-form select { padding: 6px 8px; font: inherit; }
+  .gf-inline { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0; }
+  .gf-inline input[type=number] { width: 90px; }
+  @media (max-width: 520px) {
+    .gf-cards { grid-template-columns: 1fr; }
+    .gf-stat b { font-size: 17px; }
+    .gf-top img { width: 70px; height: 70px; }
+  }
+</style>
+
+<section class="panel">
+  <div class="gf-head">
+    <h2>💹 Gear Flip</h2>
+    <form method="post" action="{{ url_for('gearflip.scan_now') }}" class="gf-inline">
+      <span class="muted">{% if scanning %}Scanning now…{% elif scan_ago %}Last scan {{ scan_ago }}: {{ res.rows or 0 }} live ads checked, {{ res.found or 0 }} flips found.{% else %}First scan running…{% endif %}</span>
+      <button type="submit">Scan now</button>
+    </form>
+  </div>
+  <p class="muted">Finds used gear you can buy, fix if needed, and resell for a profit: after sales tax, selling fees, shipping and repairs. It checks everything Gear Scout collects plus its own searches every {{ st.scan_minutes }} minutes, and pushes strong new flips to your phone. Suggestions only; every number is an estimate.</p>
+  <div class="gf-stats">
+    <div class="gf-stat"><b>{{ book.value|gf_money }}</b><span>Bankroll (started at {{ book.budget|gf_money }})</span></div>
+    <div class="gf-stat"><b>{{ book.cash|gf_money }}</b><span>Cash free to spend</span></div>
+    <div class="gf-stat"><b>{{ book.tied|gf_money }}</b><span>In {{ book.open }} flip{{ 's' if book.open != 1 }} not sold yet</span></div>
+    <div class="gf-stat"><b class="{{ 'gf-pos' if book.realized >= 0 else 'gf-neg' }}">{{ book.realized|gf_money }}</b><span>Profit from {{ book.sold }} sold{% if book.roi is not none %} · {{ book.roi }}% ROI{% endif %}</span></div>
+  </div>
+</section>
+
+{% set t = plan.t %}
+<section class="panel" id="plan">
+  <h2>🏆 Best buys for your {{ plan.cash|gf_money }}</h2>
+  {% if plan['items'] %}
+  <p>Buy these <strong>{{ t.n }}</strong> for <strong>{{ t.cash_in|gf_money }}</strong> (repairs included) and expect about <strong class="gf-pos">{{ t.expected|gf_money }} profit</strong>: {{ t.roi }}% return in about {{ t.days }} days{% if t.roi_month %} ({{ t.roi_month }}% a month){% endif %}.</p>
+  <div class="gf-stats">
+    <div class="gf-stat"><b>{{ t.buy|gf_money }}</b><span>Buy, all-in</span></div>
+    <div class="gf-stat"><b>{{ t.repair|gf_money }}</b><span>Repairs set aside</span></div>
+    <div class="gf-stat"><b>{{ t.resale|gf_money }}</b><span>Resale</span></div>
+    <div class="gf-stat"><b>{{ t.fees|gf_money }}</b><span>Selling fees</span></div>
+    <div class="gf-stat"><b>{{ t.ship|gf_money }}</b><span>Shipping out</span></div>
+    <div class="gf-stat"><b class="gf-pos">{{ t.expected|gf_money }}</b><span>Expected profit</span></div>
+    <div class="gf-stat"><b class="{{ 'gf-pos' if t.downside >= 0 else 'gf-neg' }}">{{ t.downside|gf_money }}</b><span>If everything goes badly</span></div>
+    <div class="gf-stat"><b>{{ t.confidence }}/100</b><span>Confidence · {{ t.cash_left|gf_money }} left over</span></div>
+  </div>
+  <div class="gf-scroll"><table class="gf-table">
+    <tr><th>#</th><th>Buy this</th><th>All-in</th><th>Sell</th><th>Profit</th><th>ROI</th><th>Days</th><th>Conf.</th></tr>
+    {% for o in plan['items'] %}{% set m = o.m %}
+    <tr><td>{{ loop.index }}</td>
+      <td><a href="{{ o.url }}" target="_blank" rel="noopener">{{ o.title[:70] }}</a><br><span class="muted">{{ o.source }}{% if m.repair %} · needs {{ m.repair }}{% endif %}</span></td>
+      <td>{{ m.cash_need|gf_money }}</td><td>{{ m.resale|gf_money }}<br><span class="muted">{{ m.channel_label }}</span></td>
+      <td class="gf-pos"><strong>{{ m.expected|gf_money }}</strong></td><td>{{ m.roi|round|int }}%</td><td>{{ m.days }}</td><td>{{ m.confidence }}</td></tr>
+    {% endfor %}
+  </table></div>
+  <p class="muted">Picked to make the most profit from the cash you have free, with shaky estimates counted for less and at most {{ st.max_per_model }} of any one model.</p>
+  {% else %}
+  <p class="muted">{% if not res %}The first scan is running; this fills in within a minute or two.{% else %}Nothing fits your free cash and minimums right now. Gear Flip keeps looking every {{ st.scan_minutes }} minutes.{% endif %}</p>
+  {% endif %}
+</section>
+
+<section class="panel" id="all">
+  <h2>All flips ({{ total }})</h2>
+  {% if thanks %}<p class="gf-pos">Got it. That one's gone, and Gear Flip is re-ranking with what you told it.</p>{% endif %}
+  <div class="gf-chips">
+    {% for k, label in [('all', 'All'), ('working', 'Working'), ('repair', '🔧 Needs repair'), ('local', '📍 Local pickup')] %}
+    <a class="gf-chip {{ 'on' if kind == k }}" href="{{ url_for('gearflip.index', kind=k, sort=sort, dir='rev' if rev else None, over=1 if show_over else None) }}#all">{{ label }}</a>
+    {% endfor %}
+    {% if n_over %}<a class="gf-chip {{ 'on' if show_over }}" href="{{ url_for('gearflip.index', kind=kind, sort=sort, dir='rev' if rev else None, over=None if show_over else 1) }}#all">{{ 'Hide' if show_over else 'Show' }} {{ n_over }} over your {{ cap|gf_money }}</a>{% endif %}
+  </div>
+  <form class="gf-chips" method="get" action="{{ url_for('gearflip.index') }}#all">
+    <input type="hidden" name="kind" value="{{ kind }}">{% if show_over %}<input type="hidden" name="over" value="1">{% endif %}
+    <label class="muted" for="gf-sort">Sort by</label>
+    <select id="gf-sort" name="sort" onchange="this.form.submit()">
+      {% for k, s in sorts.items() %}<option value="{{ k }}" {{ 'selected' if sort == k }}>{{ s[0] }}</option>{% endfor %}
+    </select>
+    <label class="muted"><input type="checkbox" name="dir" value="rev" {{ 'checked' if rev }} onchange="this.form.submit()"> reverse</label>
+    <noscript><button type="submit">Sort</button></noscript>
+  </form>
+  {% if not opps %}<p class="muted">No flips clear your minimums{% if kind != 'all' %} in this view{% endif %} yet.</p>{% endif %}
+  <div class="gf-cards">
+  {% for o in opps %}{% set m = o.m %}{% set rank = plan.rank.get(o.url) %}
+    <div class="gf-card {{ 'plan' if rank }}">
+      <div class="gf-top">
+        {% if o.image %}<img src="{{ o.image }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+        <div style="min-width:0">
+          <a class="gf-title" href="{{ o.url }}" target="_blank" rel="noopener">{{ o.title }}</a>
+          <div class="gf-sub">{{ o.source }}{% if o.location %} · {{ o.location }}{% endif %}{% if o.age_days is not none %} · {{ age(o.age_days) }}{% endif %}</div>
+          <div class="gf-big gf-pos">+{{ m.expected|gf_money }} <span style="font-size:14px">({{ m.roi|round|int }}% ROI)</span></div>
+          <div class="gf-tags">
+            {% if rank %}<span class="gf-tag plan">Plan #{{ rank }}</span>{% endif %}
+            <span class="gf-tag">Score {{ m.score }}</span>
+            {% if m.repair %}<span class="gf-tag fix">🔧 {{ m.repair }}</span>{% endif %}
+            {% if m.pickup %}<span class="gf-tag">📍 local seller</span>{% endif %}
+            {% if o.offers_ok %}<span class="gf-tag">takes offers</span>{% endif %}
+            {% if o.url in owned %}<span class="gf-tag plan">✓ you bought this</span>{% endif %}
+            {% if o.photo and not o.photo.none %}<span class="gf-tag plan">📷 photo checked</span>{% elif res.photo_ai and not o.photo %}<span class="gf-tag fix">📷 photo not checked yet</span>{% endif %}
+            {% for f in o.flags %}<span class="gf-tag warn">⚠ {{ f }}</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="gf-grid">
+        <div><small>Asking</small>{{ m.ask|gf_money }}</div>
+        <div><small>All-in buy</small>{{ m.buy_total|gf_money }}</div>
+        <div><small>Sell for</small>{{ m.resale|gf_money }}</div>
+        <div><small>Fees ({{ m.channel_label.split(' ')[0] }})</small>{{ m.fees|gf_money }}</div>
+        <div><small>Shipping</small>{{ m.ship_out|gf_money }}</div>
+        <div><small>Repair{% if m.repair %} ({{ m.repair_odds }}% odds){% endif %}</small>{{ m.repair_cost|gf_money }}</div>
+        <div><small>Net profit</small><strong>{{ m.expected|gf_money }}</strong></div>
+        <div><small>Margin</small>{{ m.margin|round|int }}%</div>
+        <div><small>ROI / month</small>{{ m.roi_month|round|int }}%</div>
+        <div><small>Days to sell</small>~{{ m.days }}{% if not m.speed_known %}*{% endif %}</div>
+        <div><small>Confidence</small>{{ m.confidence }}/100</div>
+        <div><small>Walk-away price</small>{{ m.walk_away|gf_money }}</div>
+      </div>
+      {% if o.photo and not o.photo.none %}<div class="gf-why">📷 <b>Photo:</b> {{ o.photo.condition }}{% if o.photo.seen_model %}, reads "{{ o.photo.seen_model }}"{% endif %}{% if o.photo.damage %}; damage: {{ o.photo.damage|join(', ') }}{% endif %}{% if o.photo.missing %}; missing: {{ o.photo.missing|join(', ') }}{% endif %}{% if o.photo.note %}. {{ o.photo.note }}{% endif %}</div>{% endif %}
+      <div class="gf-why">{{ o.why }} Based on {{ m.comps }} {{ 'real sales' if m.sold_basis else ('similar-titled ads (rough estimate)' if o.basis == 'similar' else 'comparable ads') }}. Worst realistic case: <span class="{{ 'gf-pos' if m.downside >= 0 else 'gf-neg' }}">{{ m.downside|gf_money }}</span>.{% if m.tax %} Includes ~{{ m.tax|gf_money }} sales tax.{% endif %}</div>
+      <form class="gf-act" method="post" action="{{ url_for('gearflip.buy') }}">
+        <input type="hidden" name="url" value="{{ o.url }}">
+        <input type="number" name="paid" min="1" step="any" placeholder="paid ${{ m.buy_total }}">
+        <button type="submit">I bought this</button>
+      </form>
+      <details class="gf-x-wrap">
+        <summary class="gf-act" style="list-style:none;cursor:pointer;margin-top:-6px"><span class="gf-chip">✕ Not this one</span></summary>
+        <form class="gf-why-form" method="post" action="{{ url_for('gearflip.dismiss') }}">
+          <input type="hidden" name="url" value="{{ o.url }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="sort" value="{{ sort }}">
+          <strong>Why? Gear Flip learns from this.</strong>
+          {% for k, label in reasons.items() %}
+          <label><input type="radio" name="reason" value="{{ k }}" {{ 'checked' if loop.first }}> {{ label }}</label>
+          {% endfor %}
+          <input type="text" name="note" maxlength="300" placeholder="Anything else? (optional)">
+          <button type="submit">Remove it</button>
+        </form>
+      </details>
+    </div>
+  {% endfor %}
+  </div>
+  {% if res.funnel %}
+  <details style="margin-top:12px"><summary class="muted">Why only {{ res.found }} out of {{ res.rows }} ads?</summary>
+    <ul>{% for reason, n in res.funnel %}<li>{{ '{:,}'.format(n) }}: {{ reason }}</li>{% endfor %}</ul>
+    <p class="muted">Want more? Lower "Least profit" or "Least return" in Settings, or raise your budget.</p>
+  </details>
+  {% endif %}
+  {% if res.photo_dropped %}
+  <details style="margin-top:12px"><summary class="muted">Hidden by the photo check or your ✕s ({{ res.photo_dropped|length }})</summary>
+    <ul>{% for d in res.photo_dropped %}<li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.title }}</a>: {{ d.why }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% if not res.photo_ai %}<p class="muted">Picture analysis is off: add your free Gemini key in Gear Scout's Settings → AI and Gear Flip will look at each strong flip's photo (right item, right model, damage, missing parts) before it's pushed or planned.</p>{% endif %}
+  {% if total > opps|length %}<p class="muted">Showing the top {{ opps|length }} of {{ total }}.</p>{% endif %}
+  <p class="muted">* No sell-through history for this model yet, so the days are a typical figure for its price.</p>
+</section>
+
+{% if learned or n_dismissed %}
+<section class="panel" id="learned">
+  <h2>🧠 What Gear Flip learned from you</h2>
+  <p class="muted">From the {{ n_dismissed }} suggestion{{ 's' if n_dismissed != 1 }} you removed.{% if not learned %} Nothing to change yet: those were one-offs (sold, or something else).{% endif %}</p>
+  {% if learned %}
+  <ul>{% for rid, r in learned.items() %}
+    <li>{{ r.text }} <form method="post" action="{{ url_for('gearflip.learned_undo') }}" style="display:inline"><input type="hidden" name="rule" value="{{ rid }}"><button type="submit" title="Forget this">Undo</button></form></li>
+  {% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel" id="mine">
+  <h2>My flips</h2>
+  {% if book.open_items %}
+  <h3>Bought, not sold yet</h3>
+  <div class="gf-scroll"><table class="gf-table">
+    <tr><th>Item</th><th>Paid</th><th>Expected</th><th>Repair paid</th><th>Sold</th><th></th></tr>
+    {% for i in book.open_items %}
+    <tr>
+      <td>{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title or i.url }}</a>{% else %}{{ i.title }}{% endif %}<br><span class="muted">{{ i.source }} · {{ i.at[:10] }}</span></td>
+      <td>{{ i.paid|gf_money }}</td>
+      <td>{% if i.est and i.est.resale %}sell {{ i.est.resale|gf_money }}<br><span class="muted">+{{ i.est.expected|gf_money }} in ~{{ i.est.days }}d</span>{% else %}–{% endif %}</td>
+      <td><form class="gf-inline" method="post" action="{{ url_for('gearflip.repaired') }}"><input type="hidden" name="id" value="{{ i.id }}">
+        <input type="number" name="cost" min="0" step="any" value="{{ i.repair_paid if i.repair_paid is not none else '' }}" placeholder="est {{ i.repair_est }}"><button type="submit">Save</button></form></td>
+      <td><form class="gf-inline" method="post" action="{{ url_for('gearflip.sold') }}"><input type="hidden" name="id" value="{{ i.id }}">
+        <input type="number" name="price" min="1" step="any" placeholder="sold $" required>
+        <input type="number" name="ship" min="0" step="any" placeholder="ship $">
+        <select name="channel">{% for k, c in channels.items() %}<option value="{{ k }}" {{ 'selected' if i.est and i.est.channel == k }}>{{ c.label.split(' ')[0] }}</option>{% endfor %}</select>
+        <button type="submit">Sold</button></form></td>
+      <td><form method="post" action="{{ url_for('gearflip.remove') }}" onsubmit="return confirm('Remove this from your flips?')"><input type="hidden" name="id" value="{{ i.id }}"><button type="submit" title="Remove">✕</button></form></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  {% if book.sold_items %}
+  <h3>Sold</h3>
+  <div class="gf-scroll"><table class="gf-table">
+    <tr><th>Item</th><th>All-in cost</th><th>Sold</th><th>Profit</th><th>Estimate was</th></tr>
+    {% for i in book.sold_items %}
+    <tr><td>{{ i.title }}<br><span class="muted">{{ (i.sold_at or '')[:10] }}</span></td>
+      <td>{{ (i.paid + (i.repair_paid or 0))|gf_money }}</td>
+      <td>{{ i.sold_price|gf_money }}<br><span class="muted">fees {{ i.sold_fees|gf_money }}, ship {{ i.sold_ship|gf_money }}</span></td>
+      <td class="{{ 'gf-pos' if (i.profit or 0) >= 0 else 'gf-neg' }}"><strong>{{ i.profit|gf_money }}</strong></td>
+      <td>{% if i.est and i.est.expected is not none %}{{ i.est.expected|gf_money }}{% else %}–{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% if book.avg_days %}<p class="muted">Average {{ book.avg_days }} days from buying to selling.{% if book.vs_estimate is not none %} You've made {{ book.vs_estimate|gf_money }} {{ 'more' if book.vs_estimate >= 0 else 'less' }} than Gear Flip estimated.{% endif %}</p>{% endif %}
+  {% endif %}
+  {% if not book.open_items and not book.sold_items %}<p class="muted">Tap "I bought this" on a flip to track it here. Your bankroll updates as you buy and sell.</p>{% endif %}
+</section>
+
+<section class="panel" id="settings">
+  <h2>Settings</h2>
+  {% if saved %}<p class="gf-pos">Saved. Re-scanning with your new settings.</p>{% endif %}
+  <form method="post" action="{{ url_for('gearflip.save_settings') }}">
+    <div class="gf-form">
+      <label>Starting budget ($)<input type="number" name="budget" min="50" step="50" value="{{ st.budget }}"></label>
+      <label>Least profit per flip ($)<input type="number" name="min_profit" min="0" step="5" value="{{ st.min_profit }}"></label>
+      <label>Least return (ROI %)<input type="number" name="min_roi" min="0" step="1" value="{{ st.min_roi }}"></label>
+      <label>Least confidence (0-100)<input type="number" name="min_confidence" min="0" max="100" value="{{ st.min_confidence }}"></label>
+      <label>Most days to sell<input type="number" name="max_days" min="3" max="365" value="{{ st.max_days }}"></label>
+      <label>Resell on<select name="sell_on">{% for k, label in [('best', 'Wherever earns the most'), ('reverb', 'Reverb'), ('ebay', 'eBay'), ('local', 'Local pickup (FB/Craigslist)')] %}<option value="{{ k }}" {{ 'selected' if st.sell_on == k }}>{{ label }}</option>{% endfor %}</select></label>
+      <label>Sales tax you pay online (%)<input type="number" name="buy_tax_pct" min="0" max="20" step="0.1" value="{{ st.buy_tax_pct }}"></label>
+      <label>Cost of a local pickup trip ($)<input type="number" name="local_pickup_cost" min="0" step="1" value="{{ st.local_pickup_cost }}"></label>
+      <label>Same model in the plan (max)<input type="number" name="max_per_model" min="1" max="5" value="{{ st.max_per_model }}"></label>
+      <label class="chk"><input type="checkbox" name="include_repairs" {{ 'checked' if st.include_repairs }}> Include gear that needs repair</label>
+    </div>
+    <h3>Alerts</h3>
+    <div class="gf-form">
+      <label class="chk"><input type="checkbox" name="alerts" {{ 'checked' if st.alerts }}> Push new strong flips to my phone</label>
+      <label>Push when profit is at least ($)<input type="number" name="alert_min_profit" min="0" step="5" value="{{ st.alert_min_profit }}"></label>
+      <label>…and score is at least (0-100)<input type="number" name="alert_min_score" min="0" max="100" value="{{ st.alert_min_score }}"></label>
+      <label>Most pushes per scan<input type="number" name="max_pushes_per_scan" min="0" max="10" value="{{ st.max_pushes_per_scan }}"></label>
+      <label class="chk"><input type="checkbox" name="email_digest" {{ 'checked' if st.email_digest }}> Morning email with the plan</label>
+      <label>Separate phone topic (blank = Gear Scout's)<input type="text" name="ntfy_topic" value="{{ st.ntfy_topic }}" placeholder="same as Gear Scout"></label>
+    </div>
+    <h3>Scanning</h3>
+    <div class="gf-form">
+      <label class="chk"><input type="checkbox" name="scour" {{ 'checked' if st.scour }}> Extra Reverb and eBay searches for flip gear</label>
+      <label>Scan every (minutes)<input type="number" name="scan_minutes" min="10" max="240" value="{{ st.scan_minutes }}"></label>
+    </div>
+    <p><button type="submit">Save settings</button></p>
+  </form>
+  <p class="muted">Extra searches: {{ sc.runs }} runs so far, {{ (sc.totals.new or 0) }} new ads added from {{ (sc.totals.requests or 0) }} requests. It works through {{ sc.terms }} flip-friendly models (whole list about every {{ cover_hours }} hours) plus the newest broken gear on Reverb.{% if job.at %} Last background pass {{ ago(job.at) }}{% if job.alerts %}: {{ job.alerts.pushed }} push{{ 'es' if job.alerts.pushed != 1 }} sent{% endif %}.{% endif %}{% if job.error %} <span class="gf-neg">Last pass hit a problem: {{ job.error }}</span>{% endif %}</p>
+</section>
+
+<section class="panel">
+  <details>
+    <summary><strong>How the numbers work</strong></summary>
+    <ul>
+      <li><b>All-in buy</b>: the asking price + their shipping + sales tax ({{ st.buy_tax_pct }}%) when you buy online, or + {{ st.local_pickup_cost|gf_money }} for a local pickup trip (no tax on private sales).</li>
+      <li><b>Sell for</b>: a realistic quick-sale price, not the typical ask (most ads sit unsold at that). Last 6 months first: real Reverb sales when there are 3+, otherwise the lower quarter of recent asking prices; with less recent data, the lower quarter of the year's asks. Never above Gear Scout's usual value. Condition words (mint, rough) count. eBay sold prices aren't available (eBay only shares them with approved partners). Tap ✕ → "Resale estimate too high" on any card to push a model's estimate lower.</li>
+      <li><b>Where to sell</b>: whichever earns the most after a small cost for money tied up. {% for k, c in channels.items() %}{{ c.label }}: {{ (c.pct * 100)|round(1) }}% fees{% if c.fixed %} + ${{ c.fixed }}{% endif %}{% if c.price != 1 %}, sells ~{{ ((1 - c.price) * 100)|round|int }}% lower{% endif %}{{ '; ' if not loop.last else '.' }}{% endfor %}</li>
+      <li><b>Shipping</b>: by size (mic box $28, rack unit $48, monitors/synths $70, consoles and tape machines $160) plus 1% insurance.</li>
+      <li><b>Repairs</b>: typical bench cost and the odds the fix works: {% for k, r in repairs.items() %}{{ k }} ${{ r[0] }} ({{ (r[1] * 100)|int }}%){{ ', ' if not loop.last else '.' }}{% endfor %} If it can't be fixed you still sell it for parts (about 30% of its value). Net profit is the average of the two outcomes; "worst realistic case" is the bad one.</li>
+      <li><b>Picture analysis</b>: with your free Gemini key, an AI looks at each strong flip's photo. A box, case, accessory or different model is hidden. Worn or damaged gear gets a lower resale price (damage on "working" gear adds a check-over), and missing parts lower it too. A stock photo lowers confidence; a real photo of the right unit raises it. Pushes and the plan wait for this check.</li>
+      <li><b>Not the real thing</b>: ads for just the box or manual, look-alikes ("C414 style", "like a U87", "vs", "clone") and prices far under value are left out before any math.</li>
+      <li><b>Confidence</b>: more comparable ads, real sales, low-risk repairs and believable prices raise it; prices far under value and warning signs lower it.</li>
+      <li><b>Score</b>: profit, ROI and speed, scaled by confidence. <b>Walk-away price</b>: the most you can pay and still hit your {{ st.min_roi }}% / {{ st.min_profit|gf_money }} minimums. Use it for offers.</li>
+      <li><b>Best buys</b>: the set that makes the most confidence-weighted profit with the cash you have free (budget + profits − money in unsold flips).</li>
+    </ul>
+  </details>
+</section>
+{% endblock %}
